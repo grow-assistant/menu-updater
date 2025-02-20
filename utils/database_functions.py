@@ -1,5 +1,9 @@
 import psycopg2
+import re
+import json
+import streamlit as st
 from utils.config import db_credentials
+from utils.menu_operations import add_operation_to_history
 
 # Establish connection with PostgreSQL
 try:
@@ -77,29 +81,95 @@ database_schema_string = "\n".join(
 def ask_postgres_database(connection, query):
     """ Execute the SQL query provided by OpenAI and return the results """
     try:
-        cursor = connection.cursor()
-        cursor.execute(query)
-        results = str(cursor.fetchall())
-        cursor.close()
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            results = str(cursor.fetchall())
+        return results
     except Exception as e:
-        results = f"Query failed with error: {e}"
-    return results
+        return f"Query failed with error: {e}"
 
-def execute_menu_update(connection, query):
-    """Execute menu update operations with validation"""
+def get_location_settings(connection, location_id):
+    """Get location settings including common operations"""
     try:
-        cursor = connection.cursor()
-        # For price updates, validate non-negative values
-        if "UPDATE items SET price" in query.lower():
-            cursor.execute("SELECT COUNT(*) FROM (" + query.replace(";", "") + ") as q WHERE price < 0")
-            if cursor.fetchone()[0] > 0:
-                raise ValueError("Price updates must be non-negative")
-        
-        cursor.execute(query)
-        affected = cursor.rowcount
-        connection.commit()
-        cursor.close()
-        return f"Update successful. {affected} rows affected."
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT settings FROM locations WHERE id = %s", (location_id,))
+            result = cursor.fetchone()
+        return json.loads(result[0]) if result and result[0] else {}
     except Exception as e:
-        connection.rollback()
+        return f"Failed to get location settings: {e}"
+
+def update_location_settings(connection, location_id, settings):
+    """Update location settings"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("UPDATE locations SET settings = %s WHERE id = %s", 
+                         (json.dumps(settings), location_id))
+        return "Settings updated successfully"
+    except Exception as e:
+        return f"Failed to update settings: {e}"
+
+def extract_item_id(query):
+    """Extract item ID from update query"""
+    match = re.search(r'WHERE\s+(?:items\.)?id\s*=\s*(\d+)', query, re.IGNORECASE)
+    if not match:
+        raise ValueError("Update queries must include item ID in WHERE clause")
+    return int(match.group(1))
+
+def validate_time_range(time_str):
+    """Validate time range format (0000-2359)"""
+    if not re.match(r'^([01]\d|2[0-3])([0-5]\d)$', time_str):
+        raise ValueError("Time must be in 24-hour format (0000-2359)")
+    return True
+
+def execute_menu_update(connection, query, operation_name=None):
+    """Execute menu update with row-level locking and validation"""
+    try:
+        with connection:  # Auto-commits or rolls back
+            with connection.cursor() as cursor:
+                # Set transaction isolation level
+                cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+                
+                # Extract and validate item ID for item updates
+                item_id = None
+                if "UPDATE items" in query.lower():
+                    item_id = extract_item_id(query)
+                    # Acquire row-level lock
+                    cursor.execute("SELECT * FROM items WHERE id = %s FOR UPDATE", (item_id,))
+                    
+                    # Validate query plan
+                    cursor.execute("EXPLAIN " + query)
+                    plan = cursor.fetchall()
+                    if not any('Index Scan' in str(row) for row in plan):
+                        raise ValueError("Query must use index for updates")
+                
+                # Validate price updates
+                if "UPDATE items SET price" in query.lower():
+                    cursor.execute("SELECT COUNT(*) FROM (" + query.replace(";", "") + ") as q WHERE price < 0")
+                    if cursor.fetchone()[0] > 0:
+                        raise ValueError("Price updates must be non-negative")
+                
+                # Validate time ranges
+                if "UPDATE categories" in query.lower() and ("start_time" in query or "end_time" in query):
+                    time_matches = re.findall(r'(?:start|end)_time\s*=\s*(\d{4})', query, re.IGNORECASE)
+                    for time_str in time_matches:
+                        validate_time_range(time_str)
+                
+                # Execute update
+                cursor.execute(query)
+                affected = cursor.rowcount
+                
+                # Record operation in history if name provided
+                if operation_name and "location_id" in st.session_state:
+                    settings = get_location_settings(connection, st.session_state["location_id"])
+                    settings = add_operation_to_history(settings, {
+                        "operation_type": "update",
+                        "operation_name": operation_name,
+                        "query_template": query,
+                        "result_summary": f"Updated {affected} rows"
+                    })
+                    update_location_settings(connection, st.session_state["location_id"], settings)
+                
+                return f"Update successful. {affected} rows affected."
+    except Exception as e:
+        # Transaction will automatically rollback
         return f"Update failed: {e}"
