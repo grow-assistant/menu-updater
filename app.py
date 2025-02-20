@@ -5,6 +5,7 @@ from utils.chat_functions import run_chat_sequence, clear_chat_history, count_to
 from utils.database_functions import database_schema_dict
 from utils.function_calling_spec import functions
 from utils.helper_functions import save_conversation
+from utils.search import render_search_filters, search_menu_items, render_search_results
 from utils.ui_components import (
     render_price_input,
     render_time_input,
@@ -36,6 +37,10 @@ if __name__ == "__main__":
     # Create tabs
     tabs = st.tabs(["📊 Dashboard", "🔧 Operations", "🔍 Search"])
     
+    # Initialize operation type in session state
+    if "operation_type" not in st.session_state:
+        st.session_state.operation_type = "Price Updates"
+    
     # Dashboard tab
     with tabs[0]:
         if st.session_state.get("show_dashboard", True):
@@ -46,10 +51,16 @@ if __name__ == "__main__":
     with tabs[1]:
         st.subheader("Menu Operations")
         
+        # Operation type selection
+        operation_type = st.radio(
+            "Operation Type",
+            ["Price Updates", "Time Ranges", "Enable/Disable", "Copy Options"],
+            horizontal=True,
+            key="operation_type"
+        )
+        
         # Price update section
-        if st.button("💰 Update Prices"):
-            operation = "update"
-            st.session_state["operation"] = "update"
+        if operation_type == "Price Updates":
             update_type = st.radio(
                 "Update Type",
                 ["Single Item", "Bulk Update"],
@@ -92,9 +103,7 @@ if __name__ == "__main__":
                         st.success(result)
         
         # Time range section
-        if st.button("⏰ Update Time Range"):
-            operation = "time"
-            st.session_state["operation"] = "time"
+        elif operation_type == "Time Ranges":
             category_id = st.number_input("Category ID", min_value=1, step=1)
             start_time = render_time_input("Start Time", f"start_{category_id}")
             end_time = render_time_input("End Time", f"end_{category_id}")
@@ -105,9 +114,7 @@ if __name__ == "__main__":
                 st.error("\n".join(errors))
         
         # Enable/disable section
-        if st.button("⚡ Enable/Disable Items"):
-            operation = "toggle"
-            st.session_state["operation"] = "toggle"
+        elif operation_type == "Enable/Disable":
             item_id = st.number_input("Item ID", min_value=1, step=1)
             current_state = st.checkbox("Enabled", key=f"toggle_{item_id}")
             
@@ -119,6 +126,15 @@ if __name__ == "__main__":
                     )
                     st.session_state["postgres_connection"].commit()
                     st.success(f"Item {item_id} {'enabled' if current_state else 'disabled'}")
+        
+        # Option copying section
+        elif operation_type == "Copy Options":
+            from utils.option_operations import render_option_copy_interface
+            render_option_copy_interface(st.session_state["postgres_connection"])
+        
+    # Search tab
+    with tabs[2]:
+        st.subheader("Search Menu Items")
         
         # Get available categories for filter
         with st.session_state["postgres_connection"].cursor() as cursor:
