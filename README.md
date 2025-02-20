@@ -1,149 +1,159 @@
-![image](https://github.com/user-attachments/assets/dc827a8f-2921-43e9-8d24-dc5edca1679f)
+# Menu Updater
 
-## AI-Powered Database Query Chatbot: Effortless Data Access and Insights
+An AI-powered tool for Swoop customers to manage their restaurant menus through natural language queries and updates.
 
-### **Table of Contents**
+## System Overview
 
-1. [Project Overview](#overview)
-2. [Key Features](#key-features)
-3. [Tools & Technologies](#tools--technologies)
-4. [Folder Structure](#folder-structure)
-5. [Installation Guide](#installation-guide)
-6. [Usage Instructions](#usage-instructions)
-7. [Contribution Guidelines](#contribution-guidelines)
-8. [Conclusion](#conclusion)
+### Core Components
 
+1. **Frontend (Streamlit)**
+   - Interactive web interface with sidebar navigation
+   - Common operations quick-access panel
+   - Operation history display (last 5 operations)
+   - Dark/light theme support
+   - Real-time chat interface for natural language interactions
 
----
+2. **Database (PostgreSQL)**
+   - Hierarchical menu structure:
+     ```
+     Location
+     └── Menu
+         └── Category (with time ranges)
+             └── Item
+                 └── Option Group
+                     └── Option Items
+     ```
+   - All entities include:
+     - Timestamps (created_at, updated_at, deleted_at)
+     - Soft deletion via 'disabled' flag
+     - Sequential ordering (seq_num) where applicable
 
-### Overview
-The **AI Database Chatbot** is an innovative project to transform users' interactions with relational databases. At its core, this chatbot is powered by advanced AI models from OpenAI, enabling it to understand and respond to natural language queries about data stored in a Postgres database. This project was built to simplify data retrieval processes, allowing users to access and understand complex database information effortlessly regardless of their technical background.
+3. **AI Integration (OpenAI)**
+   - Natural language understanding for menu queries
+   - Context-aware responses using operation history
+   - Function calling for structured operations
+   - Token management and conversation history
 
-Traditionally, extracting insights from databases required proficiency in SQL or other querying languages. The **AI Database Chatbot** eliminates this barrier by providing a conversational interface where users can ask questions in plain English. Whether you’re a business analyst needing quick data insights or a developer testing database queries, this chatbot offers a user-friendly platform to interact with your data. Integrating Streamlit further enhances the user experience, delivering a clean, responsive, and interactive web application that can be easily deployed and accessed from any browser.
-
-
----
+4. **Operation Management**
+   - Location-specific operation storage
+   - Common queries and updates
+   - Operation history tracking (50 entries)
+   - Template-based query generation
 
 ### Key Features
 
-- **Interactive User Interface:** The chatbot provides a seamless and engaging user experience through a web-based interface developed with Streamlit. This interface is designed to be intuitive and user-friendly, allowing users to interact with the chatbot effortlessly. The UI supports various themes and is customizable to suit different user preferences.
+1. **Menu Structure**
+   - Multi-location support
+   - Time-based menu categories
+   - Hierarchical item organization
+   - Flexible option configurations
+   - Price and availability management
 
-- **AI-Powered Responses:** The core of the chatbot's functionality is powered by OpenAI's advanced language models. These models are trained to understand and generate human-like responses, ensuring that users receive accurate, contextually relevant answers to their queries. The AI's natural language processing capabilities enable it to handle complex questions and provide meaningful insights.
+2. **Operation Types**
+   - View all active menu items
+   - Search items by name/category
+   - View time-based menu items
+   - Update item prices
+   - Enable/disable items
+   - Modify descriptions
+   - Manage option configurations
 
-- **Database Integration:** The chatbot is integrated with a Postgres relational database, allowing it to access and retrieve real-time data. This integration ensures that the information provided is current and reflects any updates or changes made to the database. The chatbot can perform sophisticated queries to extract and present data based on user input.
+3. **Data Storage**
+   - Location Settings (JSON)
+     ```json
+     {
+       "common_operations": {
+         "queries": [...],
+         "updates": [...]
+       },
+       "operation_history": [
+         {
+           "timestamp": "2025-02-20T22:07:06Z",
+           "operation_type": "query",
+           "operation_name": "View Menu Items",
+           "query_template": "SELECT ...",
+           "result_summary": "Found 15 items"
+         }
+       ]
+     }
+     ```
 
-- **Conversation History:** To enhance user experience and provide a record of interactions, the chatbot saves conversation history in markdown format. This feature allows users to review past interactions, track queries, and analyze responses. The markdown format ensures that the saved conversations are easily readable and can be used for future reference or documentation.
+4. **Validation Rules**
+   - Non-negative prices
+   - Valid time ranges (0-2359)
+   - Required relationships maintained
+   - Soft deletion preferred
+   - Option constraints enforced
 
----
-
-### **Tools & Technologies**
-
-| **Tool**      | **Purpose**                                                   | **Details**                                                                                               |
-|---------------|---------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
-| **Streamlit** | Creates an interactive and user-friendly web-based interface. | Streamlit is a Python library that enables rapid development of web applications with minimal code. It is used here to build the chatbot’s front end, providing an interactive and visually appealing user experience. |
-| **OpenAI**    | Powers the chatbot’s intelligent and contextual responses.    | OpenAI’s models, such as GPT-4, are employed to generate responses based on user queries. These models are renowned for their ability to understand context and provide accurate, coherent answers. |
-| **Postgres**  | Hosts the relational database containing the core data.       | PostgreSQL is a powerful open-source relational database system used to store and manage the data accessed by the chatbot. It supports complex queries and transactions, ensuring reliable data management and retrieval. |
-
----
-
-
-### **Folder Structure**
-The project is organized as follows:
-
-```plaintext
-│   .env
-│   .gitignore
-│   app.py
-│   README.md
-│   requirements.txt
-│
-├───assets
-│   │   dark_theme.py
-│   │   light_theme.py
-│   │   made_by_sdw.py
-│   │
-│   └───__pycache__
-│           ...
-│
-├───chatlogs
-│       ...
-│
-└───utils
-    │   api_functions.py
-    │   chat_functions.py
-    │   config.py
-    │   database_functions.py
-    │   function_calling_spec.py
-    │   helper_functions.py
-    │   system_prompts.py
-    │
-    └───__pycache__
-            ...
-```
-
----
-
-### **Installation Guide**
-Follow these steps to set up and run the AI Database Chatbot on your local machine:
+## Development Setup
 
 1. **Clone the Repository:**
    ```bash
-   git clone https://github.com/your-username/AI-Powered-Database-Query-Chatbot.git
-   cd AI-Powered Database Query Chatbot
+   git clone https://github.com/grow-assistant/menu-updater.git
+   cd menu-updater
    ```
 
-2. **Install Required Packages:**
-   Use the following command to install the necessary Python packages:
+2. **Set Up Python Environment:**
+   - Use Python 3.8 or higher
+   - Create and activate a virtual environment (recommended)
+
+3. **Set Up PostgreSQL:**
+   - Install PostgreSQL
+   - Create a new database for the project
+
+4. **Configure Environment Variables:**
+   Create a `.env` file with:
+   ```
+   DB_NAME=your_db_name
+   DB_USER=your_db_user
+   DB_PASSWORD=your_db_password
+   DB_SERVER=localhost
+   OPENAI_API_KEY=your_openai_key
+   ```
+
+5. **Install Dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Development Setup:**
-   - Install a linting tool of your choice (e.g., flake8, pylint)
-   - Configure your linting settings according to project standards
-
-4. **Configure Environment Variables:**
-   - Add your database credentials and OpenAI API key in the `.env` file.
-
----
-
-### **Usage Instructions**
-After completing the installation, follow these steps to run the chatbot:
-
-1. **Run the Application:**
+6. **Run the App:**
    ```bash
    streamlit run app.py
    ```
+   The app will be available at http://localhost:8501
 
-2. **Interacting with the Chatbot:**
-   - Upon running the application, the chatbot interface will automatically open in your default web browser.
-   - You can begin by entering your queries related to the database directly into the chat interface. The chatbot will generate intelligent and well-structured responses based on your input.
-   - Additionally, you have the option to save your interactions as markdown files, allowing you to review and reference previous conversations at your convenience.
+## Database Schema
+
+### Key Tables
+
+1. **locations**
+   - id, name, description, timezone
+   - settings (JSON for operations/history)
+   - tax_rate, active/disabled flags
+
+2. **menus**
+   - id, name, description, location_id
+   - disabled flag
+
+3. **categories**
+   - id, name, description, menu_id
+   - start_time/end_time for availability
+   - seq_num for ordering
+   - disabled flag
+
+4. **items**
+   - id, name, description, price
+   - category_id, seq_num
+   - disabled flag
+
+5. **options**
+   - id, name, description
+   - min/max selections
+   - item_id, disabled flag
+
+6. **option_items**
+   - id, name, description, price
+   - option_id, disabled flag
 
 ---
-
-
-
-
-### **Contribution Guidelines**
-
-We welcome contributions from the community! Whether it's enhancing features, fixing bugs, or providing feedback, your involvement is valuable. To contribute, please follow these steps:
-
-1. **Fork the Repository:** Click the "Fork" button at the top right of this repository to create your copy.
-2. **Create a New Branch:** From your forked repository, create a new branch for your feature or bug fix. Ensure your branch name is descriptive.
-3. **Submit a Pull Request:** After committing your changes to your branch, submit a pull request to the main repository. Provide a detailed description of your changes and the purpose of your pull request.
-
----
-
-### **Conclusion**
-In today's data-driven world, accessing and interpreting vast amounts of information stored in databases can be challenging, particularly for those who are not well-versed in querying languages. The **AI Database Chatbot** was created to bridge this gap by providing an intuitive, AI-powered interface that allows users to interact with their data naturally and efficiently. By integrating advanced AI models with a robust database system like Postgres, we’ve developed a solution that democratizes data access, making it easier for users to extract meaningful insights without the need for deep technical expertise.
-
-This project has successfully demonstrated how AI can be harnessed to enhance data accessibility and user engagement. From setting up a seamless interface to ensuring accurate and context-aware responses, the **AI Database Chatbot** embodies the potential of modern technology in transforming how we interact with and understand data. This tool not only simplifies database querying but also paves the way for more innovative applications in AI-driven data analysis.
-
----
-
-
-### Connect With Me 
-
-**[![LinkedIn](https://img.shields.io/badge/LinkedIn-Viraj%20Bhutada-blue?logo=linkedin)](https://www.linkedin.com/in/virajnbhutada24/) [![GitHub](https://img.shields.io/badge/GitHub-Viraj%20Bhutada-2b3137?logo=github)](https://github.com/virajbhutada)**
 
