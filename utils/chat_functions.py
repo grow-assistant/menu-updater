@@ -2,6 +2,12 @@ import tiktoken
 import streamlit as st
 from utils.config import AI_MODEL
 from utils.api_functions import send_api_request_to_openai_api, execute_function_call
+from utils.menu_analytics import (
+    get_recent_operations,
+    get_popular_items,
+    analyze_time_patterns,
+    get_category_relationships
+)
 
 
 
@@ -15,6 +21,63 @@ def run_chat_sequence(messages, functions):
         # st.session_state["live_chat_history"] = []
 
     internal_chat_history = st.session_state["live_chat_history"].copy()
+    
+    # Make a copy of messages to avoid modifying the original
+    messages = messages.copy()
+
+    # Add enhanced context if location_id available
+    if "location_id" in st.session_state and "postgres_connection" in st.session_state:
+        location_id = st.session_state["location_id"]
+        connection = st.session_state["postgres_connection"]
+        
+        # Get context data
+        context = {
+            'recent_operations': get_recent_operations(connection, location_id, limit=10),
+            'popular_items': get_popular_items(connection, location_id),
+            'time_patterns': analyze_time_patterns(connection, location_id),
+            'category_relationships': get_category_relationships(connection, location_id)
+        }
+        
+        # Format context sections
+        context_sections = []
+        
+        # Format operations
+        if context['recent_operations']:
+            ops = "\n".join(f"- {op['operation_type']}: {op['operation_name']} ({op['result_summary']})"
+                          for op in context['recent_operations'])
+            context_sections.append(f"Recent operations:\n{ops}")
+        
+        # Format popular items
+        if context['popular_items']:
+            items = "\n".join(f"- {item['name']} (${item['price']:.2f}, {item['orders']} orders)"
+                           for item in context['popular_items'])
+            context_sections.append(f"Popular items:\n{items}")
+        
+        # Format time patterns
+        if 'time_based_categories' in context['time_patterns']:
+            patterns = "\n".join(f"- {p['category']} ({p['time_range']}: {p['orders']} orders)"
+                              for p in context['time_patterns']['time_based_categories'])
+            context_sections.append(f"Time-based patterns:\n{patterns}")
+        
+        # Format category relationships
+        if context['category_relationships']:
+            relationships = []
+            for cat1, related in context['category_relationships'].items():
+                related_str = ", ".join(f"{r['category']} ({r['frequency']} orders)" 
+                                      for r in related[:3])
+                relationships.append(f"- {cat1} often ordered with: {related_str}")
+            if relationships:
+                context_sections.append("Category relationships:\n" + "\n".join(relationships))
+        
+        # Add context to message
+        if context_sections:
+            context_str = "Context:\n" + "\n\n".join(context_sections)
+            messages[-1]["content"] = context_str + "\n\nUser query: " + messages[-1]["content"]
+
+    # Add query template context if available
+    if "query_template" in st.session_state:
+        messages[-1]["content"] += f"\nUse this query template: {st.session_state['query_template']}"
+        del st.session_state["query_template"]
 
     chat_response = send_api_request_to_openai_api(messages, functions)
     assistant_message = chat_response.json()["choices"][0]["message"]

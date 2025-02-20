@@ -2,6 +2,7 @@
 import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
+from utils.database_functions import get_location_settings
 
 def get_recent_operations(connection, location_id: int, limit: int = 10) -> List[Dict[str, Any]]:
     """Get recent menu operations for a location"""
