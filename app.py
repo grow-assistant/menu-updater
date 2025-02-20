@@ -5,7 +5,12 @@ from utils.chat_functions import run_chat_sequence, clear_chat_history, count_to
 from utils.database_functions import database_schema_dict
 from utils.function_calling_spec import functions
 from utils.helper_functions import save_conversation
-from utils.ui_components import render_price_input, render_time_input, render_option_limits
+from utils.ui_components import (
+    render_price_input,
+    render_time_input,
+    render_option_limits,
+    validate_menu_update
+)
 from assets.dark_theme import dark
 from assets.light_theme import light
 from assets.made_by_sdw import made_by_sdw
