@@ -78,16 +78,49 @@ if __name__ == "__main__":
     if st.sidebar.button("💰 Update Prices"):
         operation = "update"
         st.session_state["operation"] = "update"
-        # Show price input when update is selected
+        # Show price input options
         if "operation" in st.session_state and st.session_state["operation"] == "update":
             st.sidebar.subheader("Update Price")
-            item_id = st.sidebar.number_input("Item ID", min_value=1, step=1)
-            new_price = render_price_input("New Price", f"price_{item_id}")
+            update_type = st.sidebar.radio(
+                "Update Type",
+                ["Single Item", "Bulk Update"],
+                key="price_update_type"
+            )
             
-            # Validate price input
-            validation_data = {'price': new_price}
-            if errors := validate_menu_update(validation_data):
-                st.sidebar.error("\n".join(errors))
+            if update_type == "Single Item":
+                item_id = st.sidebar.number_input("Item ID", min_value=1, step=1)
+                new_price = render_price_input("New Price", f"price_{item_id}")
+                
+                # Validate price input
+                validation_data = {'price': new_price}
+                if errors := validate_menu_update(validation_data):
+                    st.sidebar.error("\n".join(errors))
+            else:
+                from utils.bulk_operations import render_bulk_editor, apply_bulk_updates
+                with st.spinner("Loading items..."):
+                    cursor = st.session_state["postgres_connection"].cursor()
+                    cursor.execute("""
+                        SELECT i.*, c.name as category_name
+                        FROM items i
+                        JOIN categories c ON i.category_id = c.id
+                        WHERE i.disabled = false
+                        ORDER BY c.name, i.name
+                    """)
+                    items = [dict(zip([col[0] for col in cursor.description], row))
+                            for row in cursor.fetchall()]
+                    cursor.close()
+                
+                updates = render_bulk_editor(items, 'price')
+                if updates and st.button("Apply Updates"):
+                    result = apply_bulk_updates(
+                        st.session_state["postgres_connection"],
+                        updates,
+                        'price'
+                    )
+                    if "Error" in result:
+                        st.error(result)
+                    else:
+                        st.success(result)
     
     # Time range section
     if st.sidebar.button("⏰ Update Time Range"):
