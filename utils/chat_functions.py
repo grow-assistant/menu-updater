@@ -2,6 +2,8 @@ import tiktoken
 import streamlit as st
 from utils.config import AI_MODEL
 from utils.api_functions import send_api_request_to_openai_api, execute_function_call
+from utils.database_functions import get_location_settings
+from utils.menu_operations import get_operation_history
 
 
 
@@ -16,10 +18,23 @@ def run_chat_sequence(messages, functions):
 
     internal_chat_history = st.session_state["live_chat_history"].copy()
 
+    # Make a copy of messages to avoid modifying the original
+    messages = messages.copy()
+
+    # Add operation history context if available
+    if "location_id" in st.session_state and "postgres_connection" in st.session_state:
+        settings = get_location_settings(st.session_state["postgres_connection"], st.session_state["location_id"])
+        history = get_operation_history(settings)
+        if history:
+            # Add last 5 operations as context
+            context = "Recent operations:\n" + "\n".join(
+                f"- {op['operation_type']}: {op['operation_name']} ({op['result_summary']})"
+                for op in history[:5]
+            )
+            messages[-1]["content"] = context + "\n\n" + messages[-1]["content"]
+
     # Add query template context if available
     if "query_template" in st.session_state:
-        # Make a copy of messages to avoid modifying the original
-        messages = messages.copy()
         # Add template to the last user message
         messages[-1]["content"] += f"\nUse this query template: {st.session_state['query_template']}"
         # Clear template after adding to prevent reuse

@@ -87,8 +87,11 @@ def ask_postgres_database(connection, query):
         results = f"Query failed with error: {e}"
     return results
 
-def execute_menu_update(connection, query):
-    """Execute menu update operations with validation"""
+import streamlit as st
+from utils.menu_operations import add_operation_to_history
+
+def execute_menu_update(connection, query, operation_name=None):
+    """Execute menu update operations with validation and history"""
     try:
         cursor = connection.cursor()
         # For price updates, validate non-negative values
@@ -101,6 +104,18 @@ def execute_menu_update(connection, query):
         affected = cursor.rowcount
         connection.commit()
         cursor.close()
+        
+        # Record operation in history if name provided
+        if operation_name and "location_id" in st.session_state:
+            settings = get_location_settings(connection, st.session_state["location_id"])
+            settings = add_operation_to_history(settings, {
+                "operation_type": "update",
+                "operation_name": operation_name,
+                "query_template": query,
+                "result_summary": f"Updated {affected} rows"
+            })
+            update_location_settings(connection, st.session_state["location_id"], settings)
+        
         return f"Update successful. {affected} rows affected."
     except Exception as e:
         connection.rollback()

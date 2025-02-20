@@ -104,6 +104,8 @@ def get_location_operations(location_settings):
         return DEFAULT_COMMON_OPERATIONS
     return location_settings['common_operations']
 
+from datetime import datetime
+
 def add_operation_to_location(location_settings, operation_type, operation):
     """Add a new common operation to a location's settings."""
     if not location_settings:
@@ -120,3 +122,26 @@ def add_operation_to_location(location_settings, operation_type, operation):
     
     location_settings['common_operations'][operation_type].append(operation)
     return location_settings
+
+def add_operation_to_history(location_settings, operation_entry):
+    """Add a new operation to location history"""
+    if not location_settings:
+        location_settings = {}
+    if 'operation_history' not in location_settings:
+        location_settings['operation_history'] = []
+    
+    # Add timestamp if not provided
+    if 'timestamp' not in operation_entry:
+        operation_entry['timestamp'] = datetime.utcnow().isoformat() + 'Z'
+    
+    # Add to front of list and maintain max size
+    location_settings['operation_history'].insert(0, operation_entry)
+    location_settings['operation_history'] = location_settings['operation_history'][:50]
+    
+    return location_settings
+
+def get_operation_history(location_settings):
+    """Get operation history for a location"""
+    if not location_settings or 'operation_history' not in location_settings:
+        return []
+    return location_settings['operation_history']

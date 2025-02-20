@@ -4,7 +4,7 @@ import psycopg2
 from utils.system_prompts import get_final_system_prompt
 from utils.chat_functions import run_chat_sequence, clear_chat_history, count_tokens, prepare_sidebar_data
 from utils.database_functions import database_schema_dict, get_location_settings
-from utils.menu_operations import get_location_operations
+from utils.menu_operations import get_location_operations, get_operation_history
 from utils.function_calling_spec import functions
 from utils.helper_functions import  save_conversation
 from assets.dark_theme import dark
@@ -35,6 +35,15 @@ if __name__ == "__main__":
     if location_id:
         settings = get_location_settings(postgres_connection, location_id)
         operations = get_location_operations(settings)
+        
+        # Operation history section
+        st.sidebar.subheader("📜 Recent Operations")
+        history = get_operation_history(settings)
+        for entry in history[:5]:
+            st.sidebar.text(
+                f"{entry['operation_type'].title()}: {entry['operation_name']}\n"
+                f"Result: {entry['result_summary']}"
+            )
         
         # Queries section
         st.sidebar.write("📊 Common Queries")
