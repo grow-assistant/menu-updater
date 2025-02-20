@@ -8,10 +8,16 @@ from utils.operation_patterns import match_operation
 def test_patterns():
     """Test all operation patterns"""
     test_queries = [
-        # Price updates
+        # Single item price updates
         "update price for Cheeseburger to 9.99",
         "change price of French Fries to 4.50",
         "set price for Caesar Salad to 12.99",
+        # Bulk price updates
+        "update price for French Fries everywhere to 4.99",
+        "change price of Side Salad everywhere to 3.99",
+        # Option item price updates
+        "update price for option Extra Cheese to 1.50",
+        "change price of option Large Size to 2.00",
         
         # Time ranges
         "set time for Lunch Menu to 1100-1500",
@@ -28,7 +34,14 @@ def test_patterns():
         
         # Option copying
         "copy options from Classic Burger to Deluxe Burger",
-        "duplicate options from Caesar Salad to Greek Salad"
+        "duplicate options from Caesar Salad to Greek Salad",
+        
+        # Side item updates
+        "update side items to French Fries, Sweet Potato Fries, Onion Rings",
+        "change list of side items to Salad, Soup, Coleslaw",
+        "set side items to Chips, Fruit Cup, Cottage Cheese",
+        "add side items French Fries, Sweet Potato Fries, Onion Rings",
+        "replace side items with Salad, Soup, Coleslaw"
     ]
     
     print("\nTesting Operation Patterns\n" + "="*50)

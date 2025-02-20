@@ -1,5 +1,6 @@
 """Bulk operations for menu items"""
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
+import re
 import streamlit as st
 from utils.ui_components import render_price_input, render_time_input
 
@@ -87,13 +88,51 @@ def render_bulk_editor(items: List[Dict[str, Any]], operation: str) -> Dict[int,
     
     return updates
 
-def apply_bulk_updates(connection, updates: Dict[int, Any], operation: str) -> str:
-    """Apply bulk updates to menu items
+def update_side_items(connection, items: List[str]) -> str:
+    """Update side items list
+    
+    Args:
+        connection: Database connection
+        items: List of side item names
+        
+    Returns:
+        Status message
+    """
+    try:
+        with connection.cursor() as cursor:
+            # Set transaction isolation level
+            cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            
+            # Lock the options table
+            cursor.execute("SELECT id FROM options WHERE name = 'Choice of Side' FOR UPDATE")
+            
+            # Disable existing side items
+            cursor.execute(
+                "UPDATE option_items oi SET disabled = true FROM options o "
+                "WHERE o.id = oi.option_id AND o.name = 'Choice of Side'"
+            )
+            
+            # Create new side items
+            for item in items:
+                cursor.execute(
+                    "INSERT INTO option_items (name, option_id, price, disabled) "
+                    "SELECT %s, id, 0, false FROM options WHERE name = 'Choice of Side'",
+                    (item,))
+            
+            connection.commit()
+            return f"Successfully updated side items: {', '.join(items)}"
+    except Exception as e:
+        connection.rollback()
+        return f"Error updating side items: {str(e)}"
+
+def apply_bulk_updates(connection, updates: Dict[int, Any], operation: str, is_option: bool = False) -> str:
+    """Apply bulk updates to menu items or option items
     
     Args:
         connection: Database connection
         updates: Dict mapping item IDs to new values
         operation: Type of update ('price' or 'time')
+        is_option: Whether updating option items instead of menu items
     
     Returns:
         Status message
@@ -105,13 +144,15 @@ def apply_bulk_updates(connection, updates: Dict[int, Any], operation: str) -> s
             
             # Build update query
             if operation == 'price':
+                table = "option_items" if is_option else "items"
                 query = """
-                    UPDATE items 
+                    UPDATE {} 
                     SET price = CASE id 
                         {}
                     END
                     WHERE id IN ({})
                 """.format(
+                    table,
                     ' '.join(f"WHEN {id} THEN {val}" for id, val in updates.items()),
                     ','.join(str(id) for id in updates.keys())
                 )
@@ -128,7 +169,29 @@ def apply_bulk_updates(connection, updates: Dict[int, Any], operation: str) -> s
                 )
             
             # Execute update with row-level locking
-            cursor.execute(f"SELECT id FROM items WHERE id IN ({','.join(str(id) for id in updates.keys())}) FOR UPDATE")
+            table = "option_items" if is_option else "items"
+            
+            # Lock related records
+            if is_option:
+                # Lock option items and their parent options
+                cursor.execute("""
+                    SELECT oi.id 
+                    FROM option_items oi
+                    JOIN options o ON oi.option_id = o.id
+                    WHERE oi.id IN ({})
+                    FOR UPDATE OF oi, o
+                """.format(','.join(str(id) for id in updates.keys())))
+            else:
+                # Lock items and their categories
+                cursor.execute("""
+                    SELECT i.id 
+                    FROM items i
+                    JOIN categories c ON i.category_id = c.id
+                    WHERE i.id IN ({})
+                    FOR UPDATE OF i, c
+                """.format(','.join(str(id) for id in updates.keys())))
+            
+            # Execute the update
             cursor.execute(query)
             affected = cursor.rowcount
             

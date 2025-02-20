@@ -5,14 +5,23 @@ import re
 OPERATION_PATTERNS = {
     'price_update': {
         'patterns': [
+            # Single item price updates
             r'(?i)update.*price.*(?:for|of)\s+(.+?)\s+to\s+(\d+\.?\d*)',
             r'(?i)change.*price.*(?:for|of)\s+(.+?)\s+to\s+(\d+\.?\d*)',
             r'(?i)set.*price.*(?:for|of)\s+(.+?)\s+to\s+(\d+\.?\d*)',
+            # Bulk price updates
+            r'(?i)update.*price.*(?:for|of)\s+(.+?)\s+everywhere\s+to\s+(\d+\.?\d*)',
+            r'(?i)change.*price.*(?:for|of)\s+(.+?)\s+everywhere\s+to\s+(\d+\.?\d*)',
+            # Option item price updates
+            r'(?i)update.*price.*(?:for|of)\s+option\s+(.+?)\s+to\s+(\d+\.?\d*)',
+            r'(?i)change.*price.*(?:for|of)\s+option\s+(.+?)\s+to\s+(\d+\.?\d*)',
         ],
         'operation': 'Price Updates',
         'extract_params': lambda match: {
             'item_name': match.group(1),
-            'price': float(match.group(2)) if len(match.groups()) > 1 else None
+            'price': float(match.group(2)) if len(match.groups()) > 1 else None,
+            'is_bulk': bool(re.search(r'everywhere', match.string)),
+            'is_option': bool(re.search(r'option', match.string))
         }
     },
     'time_range': {
@@ -49,6 +58,21 @@ OPERATION_PATTERNS = {
         'extract_params': lambda match: {
             'source_item': match.group(1),
             'target_item': match.group(2)
+        }
+    },
+    'side_items': {
+        'patterns': [
+            r'(?i)update.*(?:list\s+of\s+)?side\s+items?\s+to\s+(.+)',
+            r'(?i)change.*(?:list\s+of\s+)?side\s+items?\s+to\s+(.+)',
+            r'(?i)set.*(?:list\s+of\s+)?side\s+items?\s+to\s+(.+)',
+            r'(?i)add.*(?:list\s+of\s+)?side\s+items?\s+(.+)',
+            r'(?i)replace.*(?:list\s+of\s+)?side\s+items?\s+with\s+(.+)',
+        ],
+        'operation': 'Side Items',
+        'extract_params': lambda match: {
+            'items': [item.strip() for item in match.group(1).split(',')],
+            'operation_type': 'side_items',
+            'is_bulk': True
         }
     }
 }
