@@ -4,7 +4,8 @@ from utils.system_prompts import get_final_system_prompt
 from utils.chat_functions import run_chat_sequence, clear_chat_history, count_tokens, prepare_sidebar_data
 from utils.database_functions import database_schema_dict
 from utils.function_calling_spec import functions
-from utils.helper_functions import  save_conversation
+from utils.helper_functions import save_conversation
+from utils.ui_components import render_price_input, render_time_input, render_option_limits
 from assets.dark_theme import dark
 from assets.light_theme import light
 from assets.made_by_sdw import made_by_sdw
@@ -24,14 +25,93 @@ if __name__ == "__main__":
     ### MENU OPERATIONS ###
     st.sidebar.title("🍽️ Menu Operations")
     
+    # Add custom CSS for tooltips
+    st.markdown("""
+        <style>
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            padding: 5px;
+            border-radius: 6px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -60px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
     # Add menu operation buttons
     operation = None
     if st.sidebar.button("🔍 View Menu Items"):
         operation = "query"
         st.session_state["operation"] = "query"
+    
+    # Price update section
     if st.sidebar.button("💰 Update Prices"):
         operation = "update"
         st.session_state["operation"] = "update"
+        # Show price input when update is selected
+        if "operation" in st.session_state and st.session_state["operation"] == "update":
+            st.sidebar.subheader("Update Price")
+            item_id = st.sidebar.number_input("Item ID", min_value=1, step=1)
+            new_price = render_price_input("New Price", f"price_{item_id}")
+            
+            # Validate price input
+            validation_data = {'price': new_price}
+            if errors := validate_menu_update(validation_data):
+                st.sidebar.error("\n".join(errors))
+    
+    # Time range section
+    if st.sidebar.button("⏰ Update Time Range"):
+        operation = "time"
+        st.session_state["operation"] = "time"
+        # Show time inputs when time range update is selected
+        if "operation" in st.session_state and st.session_state["operation"] == "time":
+            st.sidebar.subheader("Update Time Range")
+            category_id = st.sidebar.number_input("Category ID", min_value=1, step=1)
+            start_time = render_time_input("Start Time", f"start_{category_id}")
+            end_time = render_time_input("End Time", f"end_{category_id}")
+            
+            # Validate time inputs
+            validation_data = {'start_time': start_time, 'end_time': end_time}
+            if errors := validate_menu_update(validation_data):
+                st.sidebar.error("\n".join(errors))
+    
+    # Option limits section
+    if st.sidebar.button("🔢 Update Option Limits"):
+        operation = "limits"
+        st.session_state["operation"] = "limits"
+        # Show option limit inputs when selected
+        if "operation" in st.session_state and st.session_state["operation"] == "limits":
+            st.sidebar.subheader("Update Option Limits")
+            option_id = st.sidebar.number_input("Option ID", min_value=1, step=1)
+            min_val, max_val = render_option_limits(
+                "Minimum Selections",
+                "Maximum Selections",
+                f"option_{option_id}"
+            )
+            
+            # Validate option limits
+            validation_data = {'min_selections': min_val, 'max_selections': max_val}
+            if errors := validate_menu_update(validation_data):
+                st.sidebar.error("\n".join(errors))
+    
+    # Enable/disable section
     if st.sidebar.button("⚡ Enable/Disable Items"):
         operation = "toggle"
         st.session_state["operation"] = "toggle"
@@ -100,7 +180,7 @@ if __name__ == "__main__":
     # Add a button to toggle the UI colour theme
     if st.sidebar.button("Toggle Theme🚨"):
         st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
-        st.experimental_rerun()
+        st.rerun()
 
 
 

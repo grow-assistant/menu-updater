@@ -1,6 +1,45 @@
 """UI components for menu operations with validation"""
 import re
+from typing import Dict, Any, List, Optional
 import streamlit as st
+
+def validate_menu_update(data: Dict[str, Any]) -> List[str]:
+    """Validate menu updates in real-time"""
+    errors = []
+    
+    # Price validation
+    if 'price' in data:
+        try:
+            price = float(data['price'])
+            if price < 0:
+                errors.append("Price must be non-negative")
+            if price > 500:
+                errors.append("Price cannot exceed $500.00")
+            if len(str(price).split('.')[-1]) > 2:
+                errors.append("Price cannot have more than 2 decimal places")
+        except ValueError:
+            errors.append("Invalid price format")
+    
+    # Time range validation
+    if 'start_time' in data or 'end_time' in data:
+        for key in ['start_time', 'end_time']:
+            if key in data and data[key]:
+                time_str = str(data[key])
+                if not re.match(r'^([01]\d|2[0-3])([0-5]\d)$', time_str):
+                    errors.append(f"{key.replace('_', ' ').title()} must be in 24-hour format (0000-2359)")
+    
+    # Option limits validation
+    if 'min_selections' in data and 'max_selections' in data:
+        min_val = data['min_selections']
+        max_val = data['max_selections']
+        if min_val > max_val:
+            errors.append("Minimum selections cannot exceed maximum")
+        if max_val > 10:
+            errors.append("Maximum selections cannot exceed 10")
+        if min_val < 0:
+            errors.append("Minimum selections cannot be negative")
+    
+    return errors
 
 def render_price_input(label: str, key: str, default: float = 0.0) -> float:
     """Render price input with validation"""
