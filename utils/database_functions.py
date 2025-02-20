@@ -84,3 +84,22 @@ def ask_postgres_database(connection, query):
     except Exception as e:
         results = f"Query failed with error: {e}"
     return results
+
+def execute_menu_update(connection, query):
+    """Execute menu update operations with validation"""
+    try:
+        cursor = connection.cursor()
+        # For price updates, validate non-negative values
+        if "UPDATE items SET price" in query.lower():
+            cursor.execute("SELECT COUNT(*) FROM (" + query.replace(";", "") + ") as q WHERE price < 0")
+            if cursor.fetchone()[0] > 0:
+                raise ValueError("Price updates must be non-negative")
+        
+        cursor.execute(query)
+        affected = cursor.rowcount
+        connection.commit()
+        cursor.close()
+        return f"Update successful. {affected} rows affected."
+    except Exception as e:
+        connection.rollback()
+        return f"Update failed: {e}"
