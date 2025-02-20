@@ -98,7 +98,11 @@ Follow these steps to set up and run the AI Database Chatbot on your local machi
    pip install -r requirements.txt
    ```
 
-3. **Configure Environment Variables:**
+3. **Development Setup:**
+   - Install a linting tool of your choice (e.g., flake8, pylint)
+   - Configure your linting settings according to project standards
+
+4. **Configure Environment Variables:**
    - Add your database credentials and OpenAI API key in the `.env` file.
 
 ---

@@ -3,19 +3,65 @@ from utils.database_functions import database_schema_string
 # Specify function descriptions for OpenAI function calling 
 functions = [
     {
-        "name": "ask_postgres_database",
-        "description": "Use this function to answer user questions about the database. Output should be a fully formed SQL query.",
+        "name": "query_menu_items",
+        "description": "Query menu items and their details",
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": f""" The SQL query that extracts the information that answers the user's question from the Postgres database. Write the SQL in the following schema structure:
-                            {database_schema_string}. Write the query in SQL format only, not in JSON. Do not include any line breaks or characters that cannot be executed in Postgres.  
-                            """,
+                    "description": """SQL query to fetch menu items. Available tables and relationships:
+                        - locations (id, name, description, disabled)
+                        - menus (id, name, description, location_id, disabled)
+                        - categories (id, name, description, menu_id, disabled, start_time, end_time)
+                        - items (id, name, description, price, category_id, disabled)
+                        - options (id, name, description, min, max, item_id, disabled)
+                        - option_items (id, name, description, price, option_id, disabled)
+                        
+                        Join through proper hierarchy: locations -> menus -> categories -> items.
+                        Write SQL only, no JSON. No line breaks."""
                 }
             },
-            "required": ["query"],
-        },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "update_menu_item",
+        "description": "Update menu item properties like price or description",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": """SQL query to update menu items. Validation rules:
+                        - Prices must be non-negative
+                        - Items should be disabled rather than deleted
+                        - Time-based menu categories must have valid time ranges (0-2359)
+                        
+                        Example: UPDATE items SET price = 12.99 WHERE id = 123 AND price >= 0
+                        Write SQL only, no JSON. No line breaks."""
+                }
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "toggle_menu_item",
+        "description": "Enable or disable menu items",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": """SQL query to update item.disabled flag. Rules:
+                        - Use UPDATE items SET disabled = true/false
+                        - Must include WHERE clause for safety
+                        
+                        Example: UPDATE items SET disabled = true WHERE id = 123
+                        Write SQL only, no JSON. No line breaks."""
+                }
+            },
+            "required": ["query"]
+        }
     }
 ]

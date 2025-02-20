@@ -21,12 +21,28 @@ if __name__ == "__main__":
     sidebar_data = prepare_sidebar_data(database_schema_dict)
     st.sidebar.markdown("<div class='made_by'>Made by SDW🔋</div>", unsafe_allow_html=True)
 
+    ### MENU OPERATIONS ###
+    st.sidebar.title("🍽️ Menu Operations")
     
+    # Add menu operation buttons
+    operation = None
+    if st.sidebar.button("🔍 View Menu Items"):
+        operation = "query"
+        st.session_state["operation"] = "query"
+    if st.sidebar.button("💰 Update Prices"):
+        operation = "update"
+        st.session_state["operation"] = "update"
+    if st.sidebar.button("⚡ Enable/Disable Items"):
+        operation = "toggle"
+        st.session_state["operation"] = "toggle"
+    
+    # Display current operation
+    if "operation" in st.session_state:
+        st.sidebar.info(f"Current Operation: {st.session_state['operation'].title()}")
 
     ### POSTGRES DB OBJECTS VIEWER ###
-
     st.markdown(made_by_sdw, unsafe_allow_html=True)
-    st.sidebar.title("🔍 Postgres DB Objects Viewer")
+    st.sidebar.title("📊 Database Structure")
 
 
     # Dropdown for schema selection
@@ -154,6 +170,17 @@ if __name__ == "__main__":
         with st.spinner("⌛Connecting to AI model..."):
             # Send only the most recent messages to OpenAI from api_chat_history
             recent_messages = st.session_state["api_chat_history"][-MAX_MESSAGES_TO_OPENAI:]
+            
+            # Add operation context if set
+            if "operation" in st.session_state:
+                operation_context = {
+                    "query": "I want to view menu items. ",
+                    "update": "I want to update menu prices. ",
+                    "toggle": "I want to enable or disable menu items. "
+                }.get(st.session_state["operation"], "")
+                if operation_context:
+                    recent_messages[-1]["content"] = operation_context + recent_messages[-1]["content"]
+            
             new_message = run_chat_sequence(recent_messages, functions)  # Get the latest message
 
             # Add this latest message to both api_chat_history and full_chat_history
