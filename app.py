@@ -30,6 +30,14 @@ if __name__ == "__main__":
     ### MENU OPERATIONS ###
     st.sidebar.title("🍽️ Menu Operations")
     
+    # Location selector
+    location_id = st.sidebar.number_input("Location ID", min_value=1, step=1)
+    
+    # Analytics dashboard
+    if st.sidebar.button("📊 View Analytics"):
+        from utils.visualization import render_analytics_dashboard
+        render_analytics_dashboard(st.session_state.get("postgres_connection"), location_id)
+    
     # Add custom CSS for tooltips
     st.markdown("""
         <style>
