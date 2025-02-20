@@ -1,5 +1,6 @@
 import tiktoken
 import streamlit as st
+from typing import Dict, Optional, Any
 from utils.config import AI_MODEL
 from utils.api_functions import send_api_request_to_openai_api, execute_function_call
 from utils.menu_analytics import (
@@ -8,6 +9,19 @@ from utils.menu_analytics import (
     analyze_time_patterns,
     get_category_relationships
 )
+from utils.operation_patterns import match_operation
+
+def preprocess_operation(query: str) -> Optional[Dict[str, Any]]:
+    """Preprocess query to identify common operations
+    
+    Args:
+        query: User query string
+        
+    Returns:
+        Dict with operation type and parameters if matched,
+        None otherwise
+    """
+    return match_operation(query)
 
 
 
@@ -24,6 +38,18 @@ def run_chat_sequence(messages, functions):
     
     # Make a copy of messages to avoid modifying the original
     messages = messages.copy()
+    
+    # Try to match common operation in the last user message
+    if messages and messages[-1]["role"] == "user":
+        query = messages[-1]["content"]
+        if operation := preprocess_operation(query):
+            # Set operation type in session state
+            st.session_state.operation_type = operation['operation']
+            
+            # Add operation context
+            context = f"Identified operation: {operation['type']}\n"
+            context += f"Parameters: {operation['params']}\n\n"
+            messages[-1]["content"] = context + messages[-1]["content"]
 
     # Add enhanced context if location_id available
     if "location_id" in st.session_state and "postgres_connection" in st.session_state:

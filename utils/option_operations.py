@@ -89,12 +89,21 @@ def render_option_copy_interface(connection):
     
     # Source item selection
     st.write("Source Item")
+    default_source = None
+    if source_name := st.session_state.get('source_item_name'):
+        # Find item ID by name
+        for item in items:
+            if item['name'].lower() == source_name.lower():
+                default_source = item['id']
+                break
+    
     source_id = st.selectbox(
         "Copy options from",
         options=[i['id'] for i in items],
         format_func=lambda x: next(i['name'] + f" (Category: {i['category']})" 
                                  for i in items if i['id'] == x),
-        key="source_item"
+        key="source_item",
+        index=([i['id'] for i in items].index(default_source) if default_source else 0)
     )
     
     # Get source item options
@@ -113,12 +122,21 @@ def render_option_copy_interface(connection):
     
     # Target item selection
     st.write("Target Item")
+    default_target = None
+    if target_name := st.session_state.get('target_item_name'):
+        # Find item ID by name
+        for item in items:
+            if item['name'].lower() == target_name.lower():
+                default_target = item['id']
+                break
+    
     target_id = st.selectbox(
         "Copy options to",
         options=[i['id'] for i in items if i['id'] != source_id],
         format_func=lambda x: next(i['name'] + f" (Category: {i['category']})" 
                                  for i in items if i['id'] == x),
-        key="target_item"
+        key="target_item",
+        index=([i['id'] for i in items if i['id'] != source_id].index(default_target) if default_target else 0)
     )
     
     # Copy button

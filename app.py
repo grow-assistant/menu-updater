@@ -6,6 +6,7 @@ from utils.database_functions import database_schema_dict
 from utils.function_calling_spec import functions
 from utils.helper_functions import save_conversation
 from utils.search import render_search_filters, search_menu_items, render_search_results
+from utils.operation_patterns import match_operation
 from utils.ui_components import (
     render_price_input,
     render_time_input,
@@ -37,9 +38,17 @@ if __name__ == "__main__":
     # Create tabs
     tabs = st.tabs(["📊 Dashboard", "🔧 Operations", "🔍 Search"])
     
-    # Initialize operation type in session state
+    # Set active tab from session state
+    if st.session_state.active_tab != 0:
+        st.session_state.active_tab = 0  # Reset after switching
+    
+    # Initialize session state
     if "operation_type" not in st.session_state:
         st.session_state.operation_type = "Price Updates"
+    if "last_operation" not in st.session_state:
+        st.session_state.last_operation = None
+    if "active_tab" not in st.session_state:
+        st.session_state.active_tab = 0
     
     # Dashboard tab
     with tabs[0]:
@@ -66,6 +75,27 @@ if __name__ == "__main__":
                 ["Single Item", "Bulk Update"],
                 key="price_update_type"
             )
+            
+            # Auto-fill from matched operation
+            if operation := st.session_state.get('last_operation'):
+                if (
+                    isinstance(operation, dict) 
+                    and operation.get('operation') == st.session_state.operation_type
+                    and operation.get('type') == 'price_update'
+                    and isinstance(operation.get('params'), dict)
+                    and (item_name := operation['params'].get('item_name'))
+                ):
+                    st.info(f"Auto-filling price update for: {item_name}")
+                    # Query item ID from name
+                    with st.session_state["postgres_connection"].cursor() as cursor:
+                        cursor.execute(
+                            "SELECT id FROM items WHERE name ILIKE %s AND disabled = false",
+                            (item_name,)
+                        )
+                        if result := cursor.fetchone():
+                            item_id = result[0]
+                            if new_price := operation['params'].get('price'):
+                                st.session_state[f"price_{item_id}"] = new_price
             
             if update_type == "Single Item":
                 item_id = st.number_input("Item ID", min_value=1, step=1)
@@ -104,6 +134,29 @@ if __name__ == "__main__":
         
         # Time range section
         elif operation_type == "Time Ranges":
+            # Auto-fill from matched operation
+            if operation := st.session_state.get('last_operation'):
+                if (
+                    isinstance(operation, dict)
+                    and operation.get('operation') == st.session_state.operation_type
+                    and operation.get('type') == 'time_range'
+                    and isinstance(operation.get('params'), dict)
+                    and (category_name := operation['params'].get('category_name'))
+                ):
+                    st.info(f"Auto-filling time range for: {category_name}")
+                    # Query category ID from name
+                    with st.session_state["postgres_connection"].cursor() as cursor:
+                        cursor.execute(
+                            "SELECT id FROM categories WHERE name ILIKE %s AND disabled = false",
+                            (category_name,)
+                        )
+                        if result := cursor.fetchone():
+                            category_id = result[0]
+                            if start_time := operation['params'].get('start_time'):
+                                st.session_state[f"start_{category_id}"] = start_time
+                            if end_time := operation['params'].get('end_time'):
+                                st.session_state[f"end_{category_id}"] = end_time
+            
             category_id = st.number_input("Category ID", min_value=1, step=1)
             start_time = render_time_input("Start Time", f"start_{category_id}")
             end_time = render_time_input("End Time", f"end_{category_id}")
@@ -115,6 +168,28 @@ if __name__ == "__main__":
         
         # Enable/disable section
         elif operation_type == "Enable/Disable":
+            # Auto-fill from matched operation
+            if operation := st.session_state.get('last_operation'):
+                if (
+                    isinstance(operation, dict)
+                    and operation.get('operation') == st.session_state.operation_type
+                    and operation.get('type') == 'enable_disable'
+                    and isinstance(operation.get('params'), dict)
+                    and (item_name := operation['params'].get('item_name'))
+                    and (action := operation['params'].get('action'))
+                ):
+                    st.info(f"Auto-filling {action} for: {item_name}")
+                    # Query item ID from name
+                    with st.session_state["postgres_connection"].cursor() as cursor:
+                        cursor.execute(
+                            "SELECT id FROM items WHERE name ILIKE %s",
+                            (item_name,)
+                        )
+                        if result := cursor.fetchone():
+                            item_id = result[0]
+                            enable = action in ('enable', 'activate', 'on')
+                            st.session_state[f"toggle_{item_id}"] = enable
+            
             item_id = st.number_input("Item ID", min_value=1, step=1)
             current_state = st.checkbox("Enabled", key=f"toggle_{item_id}")
             
@@ -129,6 +204,21 @@ if __name__ == "__main__":
         
         # Option copying section
         elif operation_type == "Copy Options":
+            # Auto-fill from matched operation
+            if operation := st.session_state.get('last_operation'):
+                if (
+                    isinstance(operation, dict)
+                    and operation.get('operation') == st.session_state.operation_type
+                    and operation.get('type') == 'copy_options'
+                    and isinstance(operation.get('params'), dict)
+                    and (source_item := operation['params'].get('source_item'))
+                    and (target_item := operation['params'].get('target_item'))
+                ):
+                    st.info(f"Auto-filling option copy from {source_item} to {target_item}")
+                    # Store source and target for option_operations.py
+                    st.session_state['source_item_name'] = source_item
+                    st.session_state['target_item_name'] = target_item
+            
             from utils.option_operations import render_option_copy_interface
             render_option_copy_interface(st.session_state["postgres_connection"])
         
@@ -395,6 +485,13 @@ if __name__ == "__main__":
 
     # Start the chat
     if (prompt := st.chat_input("What do you want to know?")) is not None:
+        # Try to match operation first
+        if operation := match_operation(prompt):
+            st.session_state.operation_type = operation['operation']
+            st.session_state.last_operation = operation
+            st.session_state.active_tab = 1  # Switch to operations tab
+            st.rerun()
+            
         st.session_state.full_chat_history.append({"role": "user", "content": prompt})
 
         # Limit the number of messages sent to OpenAI by token count
