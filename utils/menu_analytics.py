@@ -7,10 +7,11 @@ from utils.database_functions import get_location_settings
 def get_recent_operations(connection, location_id: int, limit: int = 10) -> List[Dict[str, Any]]:
     """Get recent menu operations for a location"""
     try:
-        with connection.cursor() as cursor:
-            settings = get_location_settings(connection, location_id)
-            history = settings.get('operation_history', [])
-            return history[:limit]
+        settings = get_location_settings(connection, location_id)
+        if isinstance(settings, str):  # Error message returned
+            return []
+        history = settings.get('operation_history', [])
+        return history[:limit]
     except Exception as e:
         return []
 
