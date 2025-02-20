@@ -33,10 +33,116 @@ if __name__ == "__main__":
     # Location selector
     location_id = st.sidebar.number_input("Location ID", min_value=1, step=1)
     
-    # Analytics dashboard
-    if st.sidebar.button("📊 View Analytics"):
-        from utils.visualization import render_analytics_dashboard
-        render_analytics_dashboard(st.session_state.get("postgres_connection"), location_id)
+    # Create tabs
+    tabs = st.tabs(["📊 Dashboard", "🔧 Operations", "🔍 Search"])
+    
+    # Dashboard tab
+    with tabs[0]:
+        if st.session_state.get("show_dashboard", True):
+            from utils.visualization import render_analytics_dashboard
+            render_analytics_dashboard(st.session_state.get("postgres_connection"), location_id)
+    
+    # Operations tab
+    with tabs[1]:
+        st.subheader("Menu Operations")
+        
+        # Price update section
+        if st.button("💰 Update Prices"):
+            operation = "update"
+            st.session_state["operation"] = "update"
+            update_type = st.radio(
+                "Update Type",
+                ["Single Item", "Bulk Update"],
+                key="price_update_type"
+            )
+            
+            if update_type == "Single Item":
+                item_id = st.number_input("Item ID", min_value=1, step=1)
+                new_price = render_price_input("New Price", f"price_{item_id}")
+                
+                # Validate price input
+                validation_data = {'price': new_price}
+                if errors := validate_menu_update(validation_data):
+                    st.error("\n".join(errors))
+            else:
+                from utils.bulk_operations import render_bulk_editor, apply_bulk_updates
+                with st.spinner("Loading items..."):
+                    cursor = st.session_state["postgres_connection"].cursor()
+                    cursor.execute("""
+                        SELECT i.*, c.name as category_name
+                        FROM items i
+                        JOIN categories c ON i.category_id = c.id
+                        WHERE i.disabled = false
+                        ORDER BY c.name, i.name
+                    """)
+                    items = [dict(zip([col[0] for col in cursor.description], row))
+                            for row in cursor.fetchall()]
+                    cursor.close()
+                
+                updates = render_bulk_editor(items, 'price')
+                if updates and st.button("Apply Updates"):
+                    result = apply_bulk_updates(
+                        st.session_state["postgres_connection"],
+                        updates,
+                        'price'
+                    )
+                    if "Error" in result:
+                        st.error(result)
+                    else:
+                        st.success(result)
+        
+        # Time range section
+        if st.button("⏰ Update Time Range"):
+            operation = "time"
+            st.session_state["operation"] = "time"
+            category_id = st.number_input("Category ID", min_value=1, step=1)
+            start_time = render_time_input("Start Time", f"start_{category_id}")
+            end_time = render_time_input("End Time", f"end_{category_id}")
+            
+            # Validate time inputs
+            validation_data = {'start_time': start_time, 'end_time': end_time}
+            if errors := validate_menu_update(validation_data):
+                st.error("\n".join(errors))
+        
+        # Enable/disable section
+        if st.button("⚡ Enable/Disable Items"):
+            operation = "toggle"
+            st.session_state["operation"] = "toggle"
+            item_id = st.number_input("Item ID", min_value=1, step=1)
+            current_state = st.checkbox("Enabled", key=f"toggle_{item_id}")
+            
+            if st.button("Save Status"):
+                with st.session_state["postgres_connection"].cursor() as cursor:
+                    cursor.execute(
+                        "UPDATE items SET disabled = %s WHERE id = %s",
+                        (not current_state, item_id)
+                    )
+                    st.session_state["postgres_connection"].commit()
+                    st.success(f"Item {item_id} {'enabled' if current_state else 'disabled'}")
+        
+        # Get available categories for filter
+        with st.session_state["postgres_connection"].cursor() as cursor:
+            cursor.execute("""
+                SELECT DISTINCT c.name 
+                FROM categories c 
+                JOIN menus m ON c.menu_id = m.id 
+                WHERE m.location_id = %s
+                ORDER BY c.name
+            """, (location_id,))
+            categories = [row[0] for row in cursor.fetchall()]
+        
+        # Render filters and search
+        filters = render_search_filters()
+        filters['category'] = st.sidebar.multiselect(
+            "Categories",
+            options=categories,
+            help="Filter by category"
+        )
+        
+        # Execute search
+        with st.spinner("Searching..."):
+            results = search_menu_items(st.session_state["postgres_connection"], filters)
+            render_search_results(results)
     
     # Add custom CSS for tooltips
     st.markdown("""
