@@ -16,6 +16,15 @@ def run_chat_sequence(messages, functions):
 
     internal_chat_history = st.session_state["live_chat_history"].copy()
 
+    # Add query template context if available
+    if "query_template" in st.session_state:
+        # Make a copy of messages to avoid modifying the original
+        messages = messages.copy()
+        # Add template to the last user message
+        messages[-1]["content"] += f"\nUse this query template: {st.session_state['query_template']}"
+        # Clear template after adding to prevent reuse
+        del st.session_state["query_template"]
+
     chat_response = send_api_request_to_openai_api(messages, functions)
     assistant_message = chat_response.json()["choices"][0]["message"]
     

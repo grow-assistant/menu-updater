@@ -1,7 +1,50 @@
 from utils.database_functions import database_schema_string
+from utils.menu_operations import DEFAULT_COMMON_OPERATIONS
 
 # Specify function descriptions for OpenAI function calling 
 functions = [
+    {
+        "name": "manage_common_operations",
+        "description": "Add or update common operations for a location",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location_id": {
+                    "type": "integer",
+                    "description": "ID of the location"
+                },
+                "operation_type": {
+                    "type": "string",
+                    "enum": ["queries", "updates"],
+                    "description": "Type of operation to manage"
+                },
+                "operation": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "description": {"type": "string"},
+                        "query_template": {"type": "string"}
+                    },
+                    "required": ["name", "description", "query_template"]
+                }
+            },
+            "required": ["location_id", "operation_type", "operation"]
+        }
+    },
+    {
+        "name": "get_common_operations",
+        "description": "Get the list of common menu operations for a location",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location_id": {
+                    "type": "integer",
+                    "description": "ID of the location to get operations for"
+                }
+            },
+            "required": ["location_id"]
+        }
+    },
     {
         "name": "query_menu_items",
         "description": "Query menu items and their details",

@@ -74,6 +74,8 @@ database_schema_string = "\n".join(
 
 
 
+import json
+
 def ask_postgres_database(connection, query):
     """ Execute the SQL query provided by OpenAI and return the results """
     try:
@@ -103,3 +105,27 @@ def execute_menu_update(connection, query):
     except Exception as e:
         connection.rollback()
         return f"Update failed: {e}"
+
+def get_location_settings(connection, location_id):
+    """Get location settings including common operations"""
+    try:
+        cursor = connection.cursor()
+        cursor.execute("SELECT settings FROM locations WHERE id = %s", (location_id,))
+        result = cursor.fetchone()
+        cursor.close()
+        return json.loads(result[0]) if result and result[0] else {}
+    except Exception as e:
+        return f"Failed to get location settings: {e}"
+
+def update_location_settings(connection, location_id, settings):
+    """Update location settings"""
+    try:
+        cursor = connection.cursor()
+        cursor.execute("UPDATE locations SET settings = %s WHERE id = %s", 
+                      (json.dumps(settings), location_id))
+        connection.commit()
+        cursor.close()
+        return "Settings updated successfully"
+    except Exception as e:
+        connection.rollback()
+        return f"Failed to update settings: {e}"

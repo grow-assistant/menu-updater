@@ -1,8 +1,10 @@
 import streamlit as st
 from utils.config import db_credentials, MAX_TOKENS_ALLOWED, MAX_MESSAGES_TO_OPENAI, TOKEN_BUFFER
+import psycopg2
 from utils.system_prompts import get_final_system_prompt
 from utils.chat_functions import run_chat_sequence, clear_chat_history, count_tokens, prepare_sidebar_data
-from utils.database_functions import database_schema_dict
+from utils.database_functions import database_schema_dict, get_location_settings
+from utils.menu_operations import get_location_operations
 from utils.function_calling_spec import functions
 from utils.helper_functions import  save_conversation
 from assets.dark_theme import dark
@@ -14,6 +16,8 @@ from assets.made_by_sdw import made_by_sdw
 
 
 if __name__ == "__main__":
+    # Initialize database connection
+    postgres_connection = psycopg2.connect(**db_credentials)
 
     ########### A. SIDEBAR ###########
 
@@ -24,9 +28,31 @@ if __name__ == "__main__":
     ### MENU OPERATIONS ###
     st.sidebar.title("🍽️ Menu Operations")
     
-    # Add menu operation buttons
-    operation = None
-    if st.sidebar.button("🔍 View Menu Items"):
+    # Common operations section
+    st.sidebar.subheader("⭐ Common Operations")
+    location_id = st.sidebar.number_input("Location ID", min_value=1, step=1)
+    
+    if location_id:
+        settings = get_location_settings(postgres_connection, location_id)
+        operations = get_location_operations(settings)
+        
+        # Queries section
+        st.sidebar.write("📊 Common Queries")
+        for query in operations["queries"]:
+            if st.sidebar.button(f"🔍 {query['name']}", key=f"query_{query['name']}"): 
+                st.session_state["operation"] = "query"
+                st.session_state["query_template"] = query["query_template"]
+        
+        # Updates section
+        st.sidebar.write("✏️ Common Updates")
+        for update in operations["updates"]:
+            if st.sidebar.button(f"✏️ {update['name']}", key=f"update_{update['name']}"): 
+                st.session_state["operation"] = "update"
+                st.session_state["query_template"] = update["query_template"]
+    
+    # Quick actions
+    st.sidebar.subheader("🚀 Quick Actions")
+    if st.sidebar.button("🔍 View All Items"):
         operation = "query"
         st.session_state["operation"] = "query"
     if st.sidebar.button("💰 Update Prices"):
@@ -197,3 +223,7 @@ if __name__ == "__main__":
         st.write(f"Tokens Used: {current_tokens}/{max_tokens}")
         if current_tokens > max_tokens:
             st.warning("Note: Due to character limits, some older messages might not be considered in ongoing conversations with the AI.")
+    
+    # Close database connection when app exits
+    if "postgres_connection" in locals():
+        postgres_connection.close()
