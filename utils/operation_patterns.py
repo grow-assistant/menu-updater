@@ -113,7 +113,7 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                     start, end = match.span(1)
                     original_text = query[start:end]
                     # For options, extract just the item name
-                    if "options" in pattern.lower():
+                    if "options" in query.lower():
                         # Extract item name after "for"
                         parts = query.split(" for ")
                         if len(parts) > 1:
