@@ -129,6 +129,10 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                             }
                     # For regular items, use lowercase
                     operation["params"]["pattern"] = original_text.lower()
+                    if "options" not in pattern:
+                        operation["type"] = "disable_bulk"
+                        operation["function"] = "disable_by_pattern"
+                        operation["item_type"] = "Menu Item"
                 return operation
     return None
 
