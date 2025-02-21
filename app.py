@@ -26,6 +26,19 @@ import pandas as pd
 
 if __name__ == "__main__":
 
+    # Initialize session state variables
+    if "operation" not in st.session_state:
+        st.session_state["operation"] = None
+
+    if "selected_location_id" not in st.session_state:
+        st.session_state["selected_location_id"] = None
+
+    if "full_chat_history" not in st.session_state:
+        st.session_state["full_chat_history"] = [{"role": "system", "content": get_final_system_prompt(db_credentials=db_credentials)}]
+
+    if "api_chat_history" not in st.session_state:
+        st.session_state["api_chat_history"] = [{"role": "system", "content": get_final_system_prompt(db_credentials=db_credentials)}]
+
     ########### A. SIDEBAR ###########
 
     # Add location selector at the top of sidebar
@@ -116,15 +129,6 @@ if __name__ == "__main__":
     
     ### TITLE ###
     st.title("Swoop AI Assistant")
-
-    ### SESSION STATE ###
-    # Initialize the full chat messages history for UI
-    if "full_chat_history" not in st.session_state:
-        st.session_state["full_chat_history"] = [{"role": "system", "content": get_final_system_prompt(db_credentials=db_credentials)}]
-
-    # Initialize the API chat messages history for OpenAI requests
-    if "api_chat_history" not in st.session_state:
-        st.session_state["api_chat_history"] = [{"role": "system", "content": get_final_system_prompt(db_credentials=db_credentials)}]
 
     ### CHAT FACILITATION ###
     # Start the chat
