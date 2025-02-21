@@ -162,3 +162,127 @@ def disable_by_name(
                 
     except Exception as e:
         return False, f"Error disabling {disable_type}: {e}"
+
+def disable_by_pattern(
+    connection,
+    pattern: str
+) -> Tuple[bool, str]:
+    """Disable items matching a pattern with transaction safety"""
+    try:
+        with connection:
+            with connection.cursor() as cursor:
+                # Set transaction isolation
+                cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+                
+                # Find matching items
+                cursor.execute("""
+                    SELECT i.id, i.name, c.name as category
+                    FROM items i
+                    JOIN categories c ON i.category_id = c.id
+                    WHERE LOWER(i.name) LIKE %s 
+                    AND i.deleted_at IS NULL
+                    AND i.disabled = false
+                    FOR UPDATE
+                """, (f"%{pattern.lower()}%",))
+                items = cursor.fetchall()
+                
+                if not items:
+                    return False, f"No active items found matching '{pattern}'"
+                    
+                # Format items for confirmation
+                items_str = "\n".join(f"- {item[1]} (in {item[2]})" for item in items)
+                
+                # Disable matching items
+                cursor.execute("""
+                    UPDATE items 
+                    SET disabled = true 
+                    WHERE id = ANY(%s)
+                """, ([item[0] for item in items],))
+                
+                return True, f"Disabled {len(items)} items:\n{items_str}"
+                
+    except Exception as e:
+        return False, f"Error disabling items: {str(e)}"
+
+def disable_options_by_pattern(
+    connection,
+    pattern: str
+) -> Tuple[bool, str]:
+    """Disable options for items matching a pattern with transaction safety"""
+    try:
+        with connection:
+            with connection.cursor() as cursor:
+                # Set transaction isolation
+                cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+                
+                # Find matching options
+                cursor.execute("""
+                    SELECT o.id, o.name, i.name as item
+                    FROM options o
+                    JOIN items i ON o.item_id = i.id
+                    WHERE LOWER(i.name) LIKE %s 
+                    AND o.deleted_at IS NULL
+                    AND o.disabled = false
+                    FOR UPDATE
+                """, (f"%{pattern.lower()}%",))
+                options = cursor.fetchall()
+                
+                if not options:
+                    return False, f"No active options found for items matching '{pattern}'"
+                    
+                # Format options for confirmation
+                options_str = "\n".join(f"- {option[1]} (for {option[2]})" for option in options)
+                
+                # Disable matching options
+                cursor.execute("""
+                    UPDATE options 
+                    SET disabled = true 
+                    WHERE id = ANY(%s)
+                """, ([option[0] for option in options],))
+                
+                return True, f"Disabled {len(options)} options:\n{options_str}"
+                
+    except Exception as e:
+        return False, f"Error disabling options: {str(e)}"
+
+def disable_option_items_by_pattern(
+    connection,
+    pattern: str
+) -> Tuple[bool, str]:
+    """Disable option items for items matching a pattern with transaction safety"""
+    try:
+        with connection:
+            with connection.cursor() as cursor:
+                # Set transaction isolation
+                cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+                
+                # Find matching option items
+                cursor.execute("""
+                    SELECT oi.id, oi.name, o.name as option, i.name as item
+                    FROM option_items oi
+                    JOIN options o ON oi.option_id = o.id
+                    JOIN items i ON o.item_id = i.id
+                    WHERE LOWER(i.name) LIKE %s 
+                    AND oi.deleted_at IS NULL
+                    AND oi.disabled = false
+                    FOR UPDATE
+                """, (f"%{pattern.lower()}%",))
+                option_items = cursor.fetchall()
+                
+                if not option_items:
+                    return False, f"No active option items found for items matching '{pattern}'"
+                    
+                # Format option items for confirmation
+                items_str = "\n".join(f"- {item[1]} (in {item[2]} for {item[3]})" for item in option_items)
+                
+                # Disable matching option items
+                cursor.execute("""
+                    UPDATE option_items 
+                    SET disabled = true 
+                    WHERE id = ANY(%s)
+                """, ([item[0] for item in option_items],))
+                
+                return True, f"Disabled {len(option_items)} option items:\n{items_str}"
+                
+    except Exception as e:
+        return False, f"Error disabling option items: {str(e)}"
