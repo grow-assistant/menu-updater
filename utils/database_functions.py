@@ -17,17 +17,7 @@ def get_db_connection():
 
 
 
-# Create a database cursor function
-def get_cursor():
-    """Get database cursor, creating connection if needed"""
-    return get_db_connection().cursor()
-
-
 # Initialize database functions
-def get_cursor():
-    """Get database cursor"""
-    return get_db_connection().cursor()
-
 def init_db():
     """Initialize database connection"""
     try:
