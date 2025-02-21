@@ -135,20 +135,35 @@ def run_chat_sequence(messages, functions):
 
     # Only use OpenAI if no operation matched
     if not st.session_state.get("current_operation"):
-        chat_response = send_api_request_to_openai_api(messages, functions)
-        assistant_message = chat_response.json()["choices"][0]["message"]
-        
-        if assistant_message["role"] == "assistant":
-            internal_chat_history.append(assistant_message)
+        try:
+            chat_response = send_api_request_to_openai_api(messages, functions)
+            response_json = chat_response.json()
             
-            if assistant_message.get("function_call"):
-                results = execute_function_call(assistant_message)
-                internal_chat_history.append({"role": "function", "name": assistant_message["function_call"]["name"], "content": results})
-                internal_chat_history.append({"role": "user", "content": "You are a data analyst - provide personalized/customized explanations on what the results provided means and link them to the the context of the user query using clear, concise words in a user-friendly way. Or answer the question provided by the user in a helpful manner - either way, make sure your responses are human-like and relate to the initial user input. Your answers must not exceed 200 characters"})
-                chat_response = send_api_request_to_openai_api(internal_chat_history, functions)
-                assistant_message = chat_response.json()["choices"][0]["message"]
-                if assistant_message["role"] == "assistant":
-                    st.session_state["live_chat_history"].append(assistant_message)
+            if not response_json.get("choices"):
+                return {"role": "assistant", "content": "I apologize, but I encountered an error processing your request. Please try again."}
+                
+            assistant_message = response_json["choices"][0]["message"]
+            
+            if assistant_message["role"] == "assistant":
+                internal_chat_history.append(assistant_message)
+                
+                if assistant_message.get("function_call"):
+                    try:
+                        results = execute_function_call(assistant_message)
+                        internal_chat_history.append({"role": "function", "name": assistant_message["function_call"]["name"], "content": results})
+                        internal_chat_history.append({"role": "user", "content": "You are a data analyst - provide personalized/customized explanations on what the results provided means and link them to the the context of the user query using clear, concise words in a user-friendly way. Or answer the question provided by the user in a helpful manner - either way, make sure your responses are human-like and relate to the initial user input. Your answers must not exceed 200 characters"})
+                        chat_response = send_api_request_to_openai_api(internal_chat_history, functions)
+                        response_json = chat_response.json()
+                        if response_json.get("choices"):
+                            assistant_message = response_json["choices"][0]["message"]
+                            if assistant_message["role"] == "assistant":
+                                st.session_state["live_chat_history"].append(assistant_message)
+                    except Exception as e:
+                        return {"role": "assistant", "content": f"I encountered an error executing the operation: {str(e)}. Please try again or rephrase your request."}
+            
+            return assistant_message
+        except Exception as e:
+            return {"role": "assistant", "content": f"I apologize, but I encountered an error: {str(e)}. Please try again."}
 
     return st.session_state["live_chat_history"][-1]
 
