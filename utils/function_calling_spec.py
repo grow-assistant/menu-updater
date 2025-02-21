@@ -47,7 +47,7 @@ functions = [
     },
     {
         "name": "toggle_menu_item",
-        "description": "Enable or disable menu items",
+        "description": "Enable or disable menu items and their options",
         "parameters": {
             "type": "object",
             "properties": {
@@ -56,8 +56,11 @@ functions = [
                     "description": """SQL query to update item.disabled flag. Rules:
                         - Use UPDATE items SET disabled = true/false
                         - Must include WHERE clause for safety
+                        - Can enable/disable both items and their options
                         
-                        Example: UPDATE items SET disabled = true WHERE id = 123
+                        Examples: 
+                        - UPDATE items SET disabled = true WHERE id = 123
+                        - UPDATE items SET disabled = false WHERE name LIKE '%French Fries%'
                         Write SQL only, no JSON. No line breaks."""
                 }
             },
