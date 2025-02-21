@@ -115,9 +115,9 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                     # For options, extract just the item name
                     if "options" in pattern:
                         # Extract item name after "for"
-                        parts = query.lower().split(" for ")
+                        parts = query.split(" for ")
                         if len(parts) > 1:
-                            item_name = query[len(parts[0]) + 5:].strip()  # +5 for " for "
+                            item_name = parts[1].strip()
                             return {
                                 "type": "disable_bulk_options",
                                 "steps": ["confirm_items", "confirm_disable", "execute_disable"],
@@ -126,7 +126,7 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                                 "current_step": 0,
                                 "params": {"pattern": item_name}
                             }
-                    operation["params"]["pattern"] = original_text
+                    operation["params"]["pattern"] = original_text.lower()
                 return operation
     return None
 
