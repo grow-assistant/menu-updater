@@ -50,12 +50,12 @@ def test_bulk_operation_matching():
         "params": {"pattern": "Club Made Chips"}
     }
 
-@patch("psycopg2.connect")
-def test_bulk_operation_flow(mock_db):
+@patch("utils.database_functions.get_db_connection")
+def test_bulk_operation_flow(mock_get_conn):
     """Test bulk operation conversation flow"""
     # Set up mock database
     mock_connection, mock_cursor = mock_database()
-    mock_db.return_value = mock_connection
+    mock_get_conn.return_value = mock_connection
     
     # Mock item results
     mock_cursor.fetchall.return_value = [
@@ -102,11 +102,11 @@ def test_bulk_operation_flow(mock_db):
     assert response["name"] == "disable_by_pattern"
     assert response["params"]["pattern"] == "club made chips"
 
-@patch("psycopg2.connect")
-def test_error_handling(mock_db):
+@patch("utils.database_functions.get_db_connection")
+def test_error_handling(mock_get_conn):
     """Test error handling in bulk operations"""
     # Mock database error
-    mock_db.side_effect = Exception("Database error")
+    mock_get_conn.side_effect = Exception("Database error")
     
     # Test database error
     response = handle_operation_step({
