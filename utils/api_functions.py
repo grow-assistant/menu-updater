@@ -1,7 +1,7 @@
 import json
 import requests
 from utils.config import OPENAI_API_KEY, AI_MODEL
-from utils.database_functions import ask_postgres_database, postgres_connection
+from utils.database_functions import ask_postgres_database, get_db_connection
 from tenacity import retry, wait_random_exponential, stop_after_attempt
 
 
@@ -30,7 +30,7 @@ def execute_function_call(message):
     if message["function_call"]["name"] == "ask_postgres_database":
         query = json.loads(message["function_call"]["arguments"])["query"]
         print(f"SQL query: {query} \n")
-        results = ask_postgres_database(postgres_connection, query)
+        results = ask_postgres_database(get_db_connection, query)
         print(f"Results A: {results} \n")
     else:
         results = f"Error: function {message['function_call']['name']} does not exist"

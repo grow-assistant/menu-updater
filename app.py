@@ -3,9 +3,9 @@ from utils.config import db_credentials, MAX_TOKENS_ALLOWED, MAX_MESSAGES_TO_OPE
 from utils.system_prompts import get_final_system_prompt
 from utils.chat_functions import run_chat_sequence, clear_chat_history, count_tokens, prepare_sidebar_data
 from utils.database_functions import (
-    database_schema_dict,
+    get_db_connection,
     execute_menu_query,
-    postgres_connection
+    database_schema_dict
 )
 from utils.function_calling_spec import functions
 from utils.helper_functions import save_conversation
@@ -31,16 +31,17 @@ if __name__ == "__main__":
     # Add location selector at the top of sidebar
     st.sidebar.title("📍 Location Selection")
     try:
-        # Query to get locations, ordered by ID descending
         location_query = """
             SELECT id, name 
             FROM locations 
             WHERE deleted_at IS NULL 
             ORDER BY id DESC
         """
-        locations = execute_menu_query(location_query)
+        query_result = execute_menu_query(location_query)
         
-        if locations:
+        if query_result["success"] and query_result["results"]:
+            locations = query_result["results"]  # This is now a list of dicts with 'id' and 'name' keys
+            
             # Create a list of location options in "id - name" format
             location_options = ["All"] + [f"{loc['id']} - {loc['name']}" for loc in locations]
             
@@ -151,14 +152,13 @@ if __name__ == "__main__":
             recent_messages = st.session_state["api_chat_history"][-MAX_MESSAGES_TO_OPENAI:]
             
             # Add operation context if set
-            if "operation" in st.session_state:
-                operation_context = {
-                    "query": "I want to view menu items. ",
-                    "update": "I want to update menu prices. ",
-                    "toggle": "I want to enable or disable menu items. "
-                }.get(st.session_state["operation"], "")
-                if operation_context:
-                    recent_messages[-1]["content"] = operation_context + recent_messages[-1]["content"]
+            operation_context = {
+                "query": "I want to view menu items. ",
+                "update": "I want to update menu prices. ",
+                "toggle": "I want to enable or disable menu items. "
+            }.get(st.session_state["operation"], "")
+            if operation_context:
+                recent_messages[-1]["content"] = operation_context + recent_messages[-1]["content"]
             
             new_message = run_chat_sequence(recent_messages, functions)  # Get the latest message
 
