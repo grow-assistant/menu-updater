@@ -22,8 +22,10 @@ def get_db_connection():
 
 
 
-# Create a database cursor to execute PostgreSQL commands
-cursor = postgres_connection.cursor()
+# Create a database cursor function
+def get_cursor():
+    """Get database cursor, creating connection if needed"""
+    return get_db_connection().cursor()
 
 
 # Validate the PostgreSQL connection status

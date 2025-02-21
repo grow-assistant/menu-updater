@@ -121,9 +121,9 @@ def test_error_handling(mock_get_conn):
     assert "error" in response["content"].lower()
     
     # Test empty response
-    mock_db.side_effect = None
+    mock_get_conn.side_effect = None
     mock_connection, mock_cursor = mock_database()
-    mock_db.return_value = mock_connection
+    mock_get_conn.return_value = mock_connection
     mock_cursor.fetchall.return_value = []
     
     response = handle_operation_step({
