@@ -105,82 +105,8 @@ if __name__ == "__main__":
         </style>
     """, unsafe_allow_html=True)
     
-    # Add menu operation buttons
-    operation = None
-    
-    # Add direct disable section
-    if st.sidebar.button("🚫 Direct Disable"):
-        st.session_state["operation"] = "direct_disable"
-        
-    # Handle direct disable operation
-    if st.session_state.get("operation") == "direct_disable":
-        from utils.ui_components import render_disable_interface
-        from utils.menu_operations import disable_by_name
-        
-        if result := render_disable_interface(postgres_connection):
-            success, message = disable_by_name(
-                postgres_connection,
-                result["type"],
-                result["items"]
-            )
-            
-            if success:
-                st.success(message)
-                # Show updated state
-                st.write("Updated state:")
-                for item in result["items"]:
-                    if result["type"] == "Menu Item":
-                        st.info(f"Item: {item['name']} (Disabled) in category: {item['category']}")
-                    else:
-                        st.info(f"Option: {item['name']} (Disabled) for item: {item['item']}")
-            else:
-                st.error(message)
-    
-    if st.sidebar.button("🔍 View Menu Items"):
-        operation = "query"
-        st.session_state["operation"] = "query"
-        
-        try:
-            # Build the WHERE clause based on selections
-            where_clauses = ["i.deleted_at IS NULL"]
-            params = []
-            
-            if st.session_state.get("selected_location_id"):
-                where_clauses.append("i.location = %s")
-                params.append(st.session_state["selected_location_id"])
-            
-            where_clause = " AND ".join(where_clauses)
-            
-            query = f"""
-                SELECT 
-                    l.name as location_name,
-                    i.id as item_id,
-                    i.name as item_name,
-                    i.price,
-                    i.description,
-                    o.name as option_name,
-                    CASE WHEN i.disabled THEN 'Disabled' ELSE 'Enabled' END as status
-                FROM items i
-                JOIN locations l ON i.location = l.id
-                LEFT JOIN options o ON o.item_id = i.id
-                WHERE {where_clause}
-                ORDER BY l.name, i.name, o.name
-            """
-            
-            results = execute_menu_query(query, tuple(params))
-            
-            if results:
-                df = pd.DataFrame(results)
-                st.header("Menu Items")
-                search = st.text_input("Search items", "")
-                if search:
-                    df = df[df.apply(lambda x: x.astype(str).str.contains(search, case=False).any(), axis=1)]
-                st.dataframe(df, use_container_width=True)
-            else:
-                st.info("No menu items found for the selected filters.")
-                
-        except Exception as e:
-            st.error(f"Error retrieving menu items: {str(e)}")
+    # All operations are now handled through chat interface
+    # Users can query menu items by asking in the chat
 
     # Apply dark theme by default
     st.markdown(dark, unsafe_allow_html=True)
