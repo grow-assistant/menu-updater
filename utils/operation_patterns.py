@@ -1,8 +1,7 @@
 """Operation patterns for menu management"""
-from typing import Dict, Optional, Any, List
+from typing import Dict, Optional, Any
 from datetime import datetime
 import re
-import json
 
 # Common operation patterns
 COMMON_OPERATIONS = {
@@ -86,6 +85,7 @@ COMMON_OPERATIONS = {
     }
 }
 
+
 def match_operation(query: str) -> Optional[Dict[str, Any]]:
     """Match query against common operation patterns
     
@@ -152,6 +152,7 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                     }
                 return operation
     return None
+
 
 def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, Any]:
     """Handle operation step including bulk operations
@@ -257,6 +258,7 @@ def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, 
         "role": "assistant",
         "content": "I didn't understand that. Please try again."
     }
+
 
 def store_operation_history(settings: Dict[str, Any], operation: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
     """Store operation in history
