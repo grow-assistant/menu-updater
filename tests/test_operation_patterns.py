@@ -33,17 +33,45 @@ def test_match_operation():
     assert match_operation("disable the menu option")["type"] == "disable_option"
     assert match_operation("turn off option")["type"] == "disable_option"
     
-    assert match_operation("disable option item")["type"] == "disable_option_item"
-    assert match_operation("turn off option item")["type"] == "disable_option_item"
+    # Test option disable patterns
+    assert match_operation("disable the menu option") == {
+        "type": "disable_option",
+        "steps": ["get_option_name", "confirm_disable", "execute_disable"],
+        "function": "disable_by_name",
+        "item_type": "Item Option",
+        "current_step": 0,
+        "params": {}
+    }
+    
+    # Test option item disable patterns
+    assert match_operation("disable option item") == {
+        "type": "disable_option_item",
+        "steps": ["get_option_item_name", "confirm_disable", "execute_disable"],
+        "function": "disable_by_name",
+        "item_type": "Option Item",
+        "current_step": 0,
+        "params": {}
+    }
     
     # Test price update patterns
-    assert match_operation("update the price")["type"] == "update_price"
-    assert match_operation("change price")["type"] == "update_price"
-    assert match_operation("set price")["type"] == "update_price"
+    assert match_operation("update the price") == {
+        "type": "update_price",
+        "steps": ["get_item_name", "get_new_price", "confirm_price", "execute_price_update"],
+        "function": "update_menu_item_price",
+        "item_type": None,
+        "current_step": 0,
+        "params": {}
+    }
     
     # Test time range patterns
-    assert match_operation("update time range")["type"] == "update_time_range"
-    assert match_operation("change the time range")["type"] == "update_time_range"
+    assert match_operation("update time range") == {
+        "type": "update_time_range",
+        "steps": ["get_category_name", "get_start_time", "get_end_time", "confirm_time_range", "execute_time_update"],
+        "function": "update_category_time_range",
+        "item_type": None,
+        "current_step": 0,
+        "params": {}
+    }
     
     # Test no match
     assert match_operation("unknown command") is None
