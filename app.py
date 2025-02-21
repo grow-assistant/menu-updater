@@ -2,7 +2,11 @@ import streamlit as st
 from utils.config import db_credentials, MAX_TOKENS_ALLOWED, MAX_MESSAGES_TO_OPENAI, TOKEN_BUFFER
 from utils.system_prompts import get_final_system_prompt
 from utils.chat_functions import run_chat_sequence, clear_chat_history, count_tokens, prepare_sidebar_data
-from utils.database_functions import database_schema_dict, execute_menu_query
+from utils.database_functions import (
+    database_schema_dict,
+    execute_menu_query,
+    postgres_connection
+)
 from utils.function_calling_spec import functions
 from utils.helper_functions import save_conversation
 from utils.ui_components import (
