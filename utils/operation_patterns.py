@@ -112,8 +112,22 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                     # Extract pattern from original query
                     start, end = match.span(1)
                     original_text = query[start:end]
-                    # For options, extract just the item name
-                    if "options" in query.lower():
+                    # For options and option items, extract just the item name
+                    if "option items" in query.lower():
+                        # Extract item name after "for"
+                        parts = query.split(" for ")
+                        if len(parts) > 1:
+                            # Get original case item name
+                            item_name = parts[1].strip()
+                            return {
+                                "type": "disable_bulk_option_items",
+                                "steps": ["confirm_items", "confirm_disable", "execute_disable"],
+                                "function": "disable_option_items_by_pattern",
+                                "item_type": "Option Item",
+                                "current_step": 0,
+                                "params": {"pattern": item_name}
+                            }
+                    elif "options" in query.lower():
                         # Extract item name after "for"
                         parts = query.split(" for ")
                         if len(parts) > 1:
