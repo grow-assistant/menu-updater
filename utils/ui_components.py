@@ -1,7 +1,11 @@
+from typing import Dict, Any, List, Optional
+
 """UI components for menu operations with validation"""
 import re
 from typing import Dict, Any, List, Optional
 import streamlit as st
+
+from utils.database_functions import execute_menu_query
 
 def validate_menu_update(data: Dict[str, Any]) -> List[str]:
     """Validate menu updates in real-time"""
@@ -191,4 +195,79 @@ def render_marker_management():
                     "deleted_at": None
                 }
             }
+    return None
+
+def render_disable_interface(connection) -> Dict[str, Any]:
+    """Render interface for disabling items/options by name"""
+    st.subheader("Disable Item/Option")
+    
+    # Item/Option selection
+    disable_type = st.radio(
+        "Select type to disable",
+        ["Menu Item", "Item Option", "Option Item"],
+        help="Choose whether to disable a menu item, an option, or an option item"
+    )
+    
+    # Name input
+    item_name = st.text_input(
+        f"Enter {disable_type.lower()} name",
+        help="Enter the exact name to disable"
+    )
+    
+    if not item_name:
+        return None
+        
+    # Query current state
+    if disable_type == "Menu Item":
+        query = """
+            SELECT i.id, i.name, i.disabled, c.name as category
+            FROM items i
+            JOIN categories c ON i.category_id = c.id
+            WHERE i.name ILIKE %s AND i.deleted_at IS NULL
+        """
+    elif disable_type == "Item Option":
+        query = """
+            SELECT o.id, o.name, o.disabled, i.name as item
+            FROM options o
+            JOIN items i ON o.item_id = i.id
+            WHERE o.name ILIKE %s AND o.deleted_at IS NULL
+        """
+    else:  # Option Item
+        query = """
+            SELECT oi.id, oi.name, oi.disabled, o.name as option, i.name as item
+            FROM option_items oi
+            JOIN options o ON oi.option_id = o.id
+            JOIN items i ON o.item_id = i.id
+            WHERE oi.name ILIKE %s AND oi.deleted_at IS NULL
+        """
+    
+    results = execute_menu_query(query, (item_name,))
+    
+    if not results:
+        st.error(f"No {disable_type.lower()} found with name: {item_name}")
+        return None
+        
+    # Show current state
+    st.write("Current state:")
+    for item in results:
+        status = "Disabled" if item["disabled"] else "Enabled"
+        if disable_type == "Menu Item":
+            st.info(f"Item: {item['name']} ({status}) in category: {item['category']}")
+        elif disable_type == "Item Option":
+            st.info(f"Option: {item['name']} ({status}) for item: {item['item']}")
+        else:
+            st.info(f"Option Item: {item['name']} ({status}) for option: {item['option']} on item: {item['item']}")
+    
+    # Confirmation
+    if st.button(
+        f"Disable {disable_type}",
+        type="primary",
+        help=f"Click to disable {item_name}"
+    ):
+        return {
+            "type": disable_type,
+            "name": item_name,
+            "items": results
+        }
+    
     return None

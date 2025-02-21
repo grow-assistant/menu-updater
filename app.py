@@ -2,7 +2,11 @@ import streamlit as st
 from utils.config import db_credentials, MAX_TOKENS_ALLOWED, MAX_MESSAGES_TO_OPENAI, TOKEN_BUFFER
 from utils.system_prompts import get_final_system_prompt
 from utils.chat_functions import run_chat_sequence, clear_chat_history, count_tokens, prepare_sidebar_data
-from utils.database_functions import database_schema_dict, execute_menu_query
+from utils.database_functions import (
+    database_schema_dict,
+    execute_menu_query,
+    postgres_connection
+)
 from utils.function_calling_spec import functions
 from utils.helper_functions import save_conversation
 from utils.ui_components import (
@@ -175,6 +179,35 @@ if __name__ == "__main__":
     
     # Add menu operation buttons
     operation = None
+    
+    # Add direct disable section
+    if st.sidebar.button("🚫 Direct Disable"):
+        st.session_state["operation"] = "direct_disable"
+        
+    # Handle direct disable operation
+    if st.session_state.get("operation") == "direct_disable":
+        from utils.ui_components import render_disable_interface
+        from utils.menu_operations import disable_by_name
+        
+        if result := render_disable_interface(postgres_connection):
+            success, message = disable_by_name(
+                postgres_connection,
+                result["type"],
+                result["items"]
+            )
+            
+            if success:
+                st.success(message)
+                # Show updated state
+                st.write("Updated state:")
+                for item in result["items"]:
+                    if result["type"] == "Menu Item":
+                        st.info(f"Item: {item['name']} (Disabled) in category: {item['category']}")
+                    else:
+                        st.info(f"Option: {item['name']} (Disabled) for item: {item['item']}")
+            else:
+                st.error(message)
+    
     if st.sidebar.button("🔍 View Menu Items"):
         operation = "query"
         st.session_state["operation"] = "query"
