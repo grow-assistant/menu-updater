@@ -127,6 +127,8 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                                 "params": {"pattern": item_name}
                             }
                     operation["params"]["pattern"] = original_text.lower()
+                    operation["function"] = "disable_by_pattern"
+                    operation["item_type"] = "Menu Item"
                 return operation
     return None
 
