@@ -1,0 +1,49 @@
+
+-- Step 1: Display menu items with options
+WITH menu_items AS (
+    SELECT 
+        l.id AS location_id,
+        l.name AS location_name,
+        m.id AS menu_id,
+        m.name AS menu_name,
+        c.id as category_id, 
+        c.name as category_name, 
+        c.seq_num,
+        i.id AS item_id,
+        i.name AS item_name,
+        o.id AS option_id, 
+        o.name AS option_name,
+        oi.id AS option_item_id,
+        oi.name AS option_item_name
+    FROM locations l 
+    INNER JOIN menus m ON m.location_id = l.id
+    INNER JOIN categories c ON c.menu_id = m.id
+    INNER JOIN items i ON i.category_id = c.id
+    LEFT JOIN options o on o.item_id = i.id
+    LEFT JOIN option_items oi ON oi.option_id = o.id
+    WHERE l.id = 61
+    AND c.name = 'Signature Sandwiches'
+    ORDER BY c.seq_num, i.seq_num
+)
+SELECT * FROM menu_items;
+
+-- Step 2: Prompt for item selection (simulated with a variable)
+\set selected_item_id :PROMPT 'Enter the item_id you want to modify: '
+
+-- Step 3: Display options for the selected item
+SELECT option_id, option_name, option_item_id, option_item_name
+FROM menu_items
+WHERE item_id = :selected_item_id;
+
+-- Step 4: Prompt for option to disable (simulated with a variable)
+\set option_to_disable :PROMPT 'Enter the option_item_id you want to disable: '
+
+-- Step 5: Disable the selected option
+UPDATE option_items
+SET is_active = FALSE
+WHERE id = :option_to_disable;
+
+-- Step 6: Confirm the update
+SELECT *
+FROM option_items
+WHERE id = :option_to_disable;
