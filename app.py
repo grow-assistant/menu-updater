@@ -118,6 +118,10 @@ if __name__ == "__main__":
     st.title("Swoop AI Assistant")
 
     ### SESSION STATE ###
+    # Initialize session state variables
+    if "operation" not in st.session_state:
+        st.session_state["operation"] = ""
+        
     # Initialize the full chat messages history for UI
     if "full_chat_history" not in st.session_state:
         st.session_state["full_chat_history"] = [{"role": "system", "content": get_final_system_prompt(db_credentials=db_credentials)}]
