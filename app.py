@@ -19,10 +19,27 @@ from assets.dark_theme import dark
 from assets.light_theme import light
 from assets.made_by_sdw import made_by_sdw
 import pandas as pd
+from openai import OpenAI
+import os
+from itertools import takewhile
 
-
-
-
+def get_recent_messages():
+    """Get recent messages that fit within token limits"""
+    messages = st.session_state["api_chat_history"]
+    if not messages:
+        # Always include at least the system message
+        return [{"role": "system", "content": get_final_system_prompt(db_credentials=db_credentials)}]
+        
+    total_tokens = 0
+    
+    # Count tokens from newest to oldest until we hit the limit
+    for i in range(len(messages)-1, -1, -1):
+        tokens = count_tokens(messages[i]["content"])
+        if total_tokens + tokens > MAX_MESSAGES_TO_OPENAI - TOKEN_BUFFER:
+            return messages[i+1:] if i+1 < len(messages) else messages[-1:]
+        total_tokens += tokens
+    
+    return messages
 
 if __name__ == "__main__":
 
@@ -34,10 +51,23 @@ if __name__ == "__main__":
         st.session_state["selected_location_id"] = None
 
     if "full_chat_history" not in st.session_state:
-        st.session_state["full_chat_history"] = [{"role": "system", "content": get_final_system_prompt(db_credentials=db_credentials)}]
+        st.session_state["full_chat_history"] = [
+            {"role": "system", "content": get_final_system_prompt(db_credentials=db_credentials)},
+            {"role": "assistant", "content": "Hello! I'm your menu management assistant. How can I help you today? I can:\n\n"
+             "• Update menu item prices\n"
+             "• Enable/disable menu items\n"
+             "• Show menu information\n"
+             "\nWhat would you like to do?"}
+        ]
 
     if "api_chat_history" not in st.session_state:
-        st.session_state["api_chat_history"] = [{"role": "system", "content": get_final_system_prompt(db_credentials=db_credentials)}]
+        st.session_state["api_chat_history"] = [
+            {"role": "system", "content": get_final_system_prompt(db_credentials=db_credentials)},
+            {"role": "assistant", "content": "Hello! I'm your menu management assistant. How can I help you today?"}
+        ]
+
+    # Ensure openai_client is available in the global scope
+    openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     ########### A. SIDEBAR ###########
 
@@ -145,11 +175,11 @@ if __name__ == "__main__":
 
     if st.session_state["api_chat_history"][-1]["role"] != "assistant":
         with st.spinner("⌛Connecting to AI model..."):
-            # Send only the most recent messages to OpenAI from api_chat_history
-            recent_messages = st.session_state["api_chat_history"][-MAX_MESSAGES_TO_OPENAI:]
+            # Get recent messages
+            recent_messages = get_recent_messages()
             
-            # Let the AI model handle operation detection
-            new_message = run_chat_sequence(recent_messages, functions)
+            # Call run_chat_sequence with the OpenAI client
+            new_message = run_chat_sequence(recent_messages, functions, openai_client)
             
             # Add this latest message to both api_chat_history and full_chat_history
             st.session_state["api_chat_history"].append(new_message)
