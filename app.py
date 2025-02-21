@@ -60,78 +60,6 @@ if __name__ == "__main__":
             else:
                 st.session_state["selected_location_id"] = None
 
-            # Menu Dropdown
-            menu_query = """
-                SELECT id, name 
-                FROM menus 
-                WHERE deleted_at IS NULL 
-                AND location_id = %s
-                ORDER BY name
-            """
-            menus = execute_menu_query(menu_query, (st.session_state.get("selected_location_id"),)) if st.session_state.get("selected_location_id") else []
-            menu_options = ["All"] + [f"{menu['id']} - {menu['name']}" for menu in menus]
-            selected_menu = st.sidebar.selectbox("Select Menu", menu_options)
-            
-            if selected_menu != "All":
-                selected_menu_id = int(selected_menu.split(" - ")[0])
-                st.session_state["selected_menu_id"] = selected_menu_id
-            else:
-                st.session_state["selected_menu_id"] = None
-
-            # Category Dropdown
-            category_query = """
-                SELECT id, name 
-                FROM categories 
-                WHERE deleted_at IS NULL 
-                AND menu_id = %s
-                ORDER BY name
-            """
-            categories = execute_menu_query(category_query, (st.session_state.get("selected_menu_id"),)) if st.session_state.get("selected_menu_id") else []
-            category_options = ["All"] + [f"{cat['id']} - {cat['name']}" for cat in categories]
-            selected_category = st.sidebar.selectbox("Select Category", category_options)
-            
-            if selected_category != "All":
-                selected_category_id = int(selected_category.split(" - ")[0])
-                st.session_state["selected_category_id"] = selected_category_id
-            else:
-                st.session_state["selected_category_id"] = None
-
-            # Item Dropdown
-            item_query = """
-                SELECT id, name 
-                FROM items 
-                WHERE deleted_at IS NULL 
-                AND category_id = %s
-                ORDER BY name
-            """
-            items = execute_menu_query(item_query, (st.session_state.get("selected_category_id"),)) if st.session_state.get("selected_category_id") else []
-            item_options = ["All"] + [f"{item['id']} - {item['name']}" for item in items]
-            selected_item = st.sidebar.selectbox("Select Item", item_options)
-            
-            if selected_item != "All":
-                selected_item_id = int(selected_item.split(" - ")[0])
-                st.session_state["selected_item_id"] = selected_item_id
-            else:
-                st.session_state["selected_item_id"] = None
-
-            # Option Dropdown
-            option_query = """
-                SELECT id, name 
-                FROM options 
-                WHERE deleted_at IS NULL 
-                AND item_id = %s
-                ORDER BY name
-            """
-            options = execute_menu_query(option_query, (st.session_state.get("selected_item_id"),)) if st.session_state.get("selected_item_id") else []
-            option_options = ["All"] + [f"{opt['id']} - {opt['name']}" for opt in options]
-            selected_option = st.sidebar.selectbox("Select Option", option_options)
-            
-            if selected_option != "All":
-                selected_option_id = int(selected_option.split(" - ")[0])
-                st.session_state["selected_option_id"] = selected_option_id
-            else:
-                st.session_state["selected_option_id"] = None
-
         else:
             st.sidebar.error("No locations found in database")
             
@@ -218,32 +146,14 @@ if __name__ == "__main__":
             params = []
             
             if st.session_state.get("selected_location_id"):
-                where_clauses.append("l.id = %s")
+                where_clauses.append("i.location = %s")
                 params.append(st.session_state["selected_location_id"])
-            
-            if st.session_state.get("selected_menu_id"):
-                where_clauses.append("m.id = %s")
-                params.append(st.session_state["selected_menu_id"])
-            
-            if st.session_state.get("selected_category_id"):
-                where_clauses.append("c.id = %s")
-                params.append(st.session_state["selected_category_id"])
-            
-            if st.session_state.get("selected_item_id"):
-                where_clauses.append("i.id = %s")
-                params.append(st.session_state["selected_item_id"])
-            
-            if st.session_state.get("selected_option_id"):
-                where_clauses.append("o.id = %s")
-                params.append(st.session_state["selected_option_id"])
             
             where_clause = " AND ".join(where_clauses)
             
             query = f"""
                 SELECT 
                     l.name as location_name,
-                    m.name as menu_name,
-                    c.name as category_name,
                     i.id as item_id,
                     i.name as item_name,
                     i.price,
@@ -251,12 +161,10 @@ if __name__ == "__main__":
                     o.name as option_name,
                     CASE WHEN i.disabled THEN 'Disabled' ELSE 'Enabled' END as status
                 FROM items i
-                JOIN categories c ON i.category_id = c.id
-                JOIN menus m ON c.menu_id = m.id
-                JOIN locations l ON m.location_id = l.id
+                JOIN locations l ON i.location = l.id
                 LEFT JOIN options o ON o.item_id = i.id
                 WHERE {where_clause}
-                ORDER BY l.name, m.name, c.name, i.name, o.name
+                ORDER BY l.name, i.name, o.name
             """
             
             results = execute_menu_query(query, tuple(params))
@@ -280,7 +188,7 @@ if __name__ == "__main__":
     ########### B. CHAT INTERFACE ###########
     
     ### TITLE ###
-    st.title("🤖 AI Database Chatbot 🤓")
+    st.title("Swoop AI Assistant")
 
     ### SESSION STATE ###
     # Initialize the full chat messages history for UI
