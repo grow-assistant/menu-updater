@@ -30,9 +30,14 @@ def get_cursor():
 
 # Initialize cursor
 cursor = None
-    print(f"Connected successfully to {db_credentials['dbname']} database\nConnection Details: {postgres_connection.dsn}")
-else:
-    raise ConnectionError("Unable to connect to the database")
+
+def init_db():
+    """Initialize database connection"""
+    conn = get_db_connection()
+    if conn and not conn.closed:
+        print(f"Connected successfully to {db_credentials['dbname']} database")
+        return True
+    return False
 
 
 
