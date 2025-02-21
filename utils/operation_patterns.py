@@ -128,11 +128,14 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                                 "params": {"pattern": item_name}
                             }
                     # For regular items, use lowercase
-                    operation["params"]["pattern"] = original_text.lower()
-                    if "options" not in pattern:
-                        operation["type"] = "disable_bulk"
-                        operation["function"] = "disable_by_pattern"
-                        operation["item_type"] = "Menu Item"
+                    operation = {
+                        "type": "disable_bulk",
+                        "steps": ["confirm_items", "confirm_disable", "execute_disable"],
+                        "function": "disable_by_pattern",
+                        "item_type": "Menu Item",
+                        "current_step": 0,
+                        "params": {"pattern": original_text.lower()}
+                    }
                 return operation
     return None
 
@@ -146,6 +149,10 @@ def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, 
     Returns:
         Dict with response type and content
     """
+    # Convert pattern to lowercase for consistency
+    if "pattern" in operation.get("params", {}):
+        operation["params"]["pattern"] = operation["params"]["pattern"].lower()
+        
     step = operation["steps"][operation["current_step"]]
     
     if step == "confirm_items":
