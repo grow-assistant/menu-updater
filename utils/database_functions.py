@@ -15,7 +15,48 @@ def get_db_connection():
     except Exception as e:
         raise ConnectionError(f"Unable to connect to the database due to: {e}")
 
+def get_database_info(connection, schema_names):
+    """ Fetches information about the schemas, tables and columns in the database """
+    table_dicts = []
+    for schema in schema_names:
+        for table_name in get_table_names(connection, schema):
+            column_names = get_column_names(connection, table_name, schema)
+            table_dicts.append({"table_name": table_name, "column_names": column_names, "schema_name": schema})
+    return table_dicts
 
+def get_schema_names(database_connection):
+    """ Returns a list of schema names """
+    cursor = database_connection.cursor()
+    cursor.execute("SELECT schema_name FROM information_schema.schemata;")
+    schema_names = [row[0] for row in cursor.fetchall()]
+    cursor.close()
+    return schema_names
+
+def get_table_names(connection, schema_name):
+    """ Returns a list of table names """
+    cursor = connection.cursor()
+    cursor.execute(f"SELECT table_name FROM information_schema.tables WHERE table_schema = '{schema_name}';")
+    table_names = [table[0] for table in cursor.fetchall()]
+    cursor.close()
+    return table_names
+
+def get_column_names(connection, table_name, schema_name):
+    """ Returns a list of column names """
+    cursor = connection.cursor()
+    cursor.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}' AND table_schema = '{schema_name}';")
+    column_names = [col[0] for col in cursor.fetchall()]
+    cursor.close()
+    return column_names
+
+# Initialize database schema dict (moved to bottom)
+try:
+    conn = get_db_connection()
+    schemas = ['public']
+    database_schema_dict = get_database_info(conn, schemas)
+    conn.close()
+except Exception as e:
+    print(f"Error initializing database schema: {e}")
+    database_schema_dict = []
 
 # Initialize database functions
 def init_db():
@@ -28,46 +69,6 @@ def init_db():
         return False
     except Exception:
         return False
-
-
-
-
-def get_schema_names(database_connection):
-    """ Returns a list of schema names """
-    cursor = database_connection.cursor()
-    cursor.execute("SELECT schema_name FROM information_schema.schemata;")
-    schema_names = [row[0] for row in cursor.fetchall()]
-    cursor.close()
-    return schema_names
-
-
-def get_table_names(connection, schema_name):
-    """ Returns a list of table names """
-    cursor = connection.cursor()
-    cursor.execute(f"SELECT table_name FROM information_schema.tables WHERE table_schema = '{schema_name}';")
-    table_names = [table[0] for table in cursor.fetchall()]
-    cursor.close()
-    return table_names
-
-
-def get_column_names(connection, table_name, schema_name):
-    """ Returns a list of column names """
-    cursor = connection.cursor()
-    cursor.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}' AND table_schema = '{schema_name}';")
-    column_names = [col[0] for col in cursor.fetchall()]
-    cursor.close()
-    return column_names
-
-
-def get_database_info(connection, schema_names):
-    """ Fetches information about the schemas, tables and columns in the database """
-    table_dicts = []
-    for schema in schema_names:
-        for table_name in get_table_names(connection, schema):
-            column_names = get_column_names(connection, table_name, schema)
-            table_dicts.append({"table_name": table_name, "column_names": column_names, "schema_name": schema})
-    return table_dicts
-
 
 # Database schema info
 def get_schema_info():
@@ -82,7 +83,8 @@ def get_schema_info():
         ]
     )
 
-
+# Add this new property
+database_schema_string = get_schema_info()
 
 def ask_postgres_database(connection, query):
     """ Execute the SQL query provided by OpenAI and return the results """
@@ -250,10 +252,12 @@ def execute_menu_query(query, params=None):
             cursor.execute(query, params or ())
             if cursor.description:  # Check if query returns results
                 columns = [desc[0] for desc in cursor.description]
-                results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+                rows = cursor.fetchall()
+                results = []
+                for row in rows:
+                    results.append(dict(zip(columns, row)))
                 return {
                     "success": True,
-                    "columns": columns,
                     "results": results,
                     "query": query
                 }
@@ -268,6 +272,9 @@ def execute_menu_query(query, params=None):
             "error": str(e),
             "query": query
         }
+    finally:
+        if conn:
+            conn.close()
 
 def process_query_results(results):
     """Convert query results to natural language using OpenAI"""

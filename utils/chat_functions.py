@@ -4,7 +4,7 @@ from typing import Dict, List, Any
 from utils.config import AI_MODEL
 from utils.api_functions import send_api_request_to_openai_api, execute_function_call
 from utils.operation_patterns import match_operation, handle_operation_step
-from utils.database_functions import execute_menu_update, postgres_connection
+from utils.database_functions import execute_menu_update, get_db_connection
 from utils.menu_analytics import (
     get_recent_operations,
     get_popular_items,
@@ -41,7 +41,7 @@ def process_chat_message(message: str, history: List[Dict], functions: List[Dict
                     try:
                         # Execute operation
                         result = execute_menu_update(
-                            postgres_connection,
+                            get_db_connection,
                             response["params"]["query"],
                             operation["type"]
                         )
@@ -108,9 +108,9 @@ def run_chat_sequence(messages, functions):
         return response
         
     # Add enhanced context if location_id available
-    if "location_id" in st.session_state and "postgres_connection" in st.session_state:
+    if "location_id" in st.session_state and "get_db_connection" in st.session_state:
         location_id = st.session_state["location_id"]
-        connection = st.session_state["postgres_connection"]
+        connection = st.session_state["get_db_connection"]
         
         # Get context data
         context = {
