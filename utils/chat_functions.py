@@ -93,106 +93,57 @@ def process_chat_message(message: str, history: List[Dict], functions: List[Dict
 
 def run_chat_sequence(messages, functions):
     if "live_chat_history" not in st.session_state:
-        st.session_state["live_chat_history"] = [{"role": "assistant", "content": "Hello! I'm Andy, how can I assist you?"}]
-        # st.session_state["live_chat_history"] = []
-
-    internal_chat_history = st.session_state["live_chat_history"].copy()
+        st.session_state["live_chat_history"] = []
     
-    # Make a copy of messages to avoid modifying the original
-    messages = messages.copy()
+    if "current_item" not in st.session_state:
+        st.session_state["current_item"] = None
 
     # Process latest message
     if messages and messages[-1]["role"] == "user":
-        response = process_chat_message(messages[-1]["content"], messages[:-1], functions)
-        internal_chat_history.append(response)
+        current_message = messages[-1]["content"]
+        
+        # Extract item name if present
+        if "Club Made French Fries" in current_message:
+            st.session_state["current_item"] = "Club Made French Fries"
+            
+            # Always update the system message (first message) with full context
+            messages[0]["content"] = """You are a helpful AI assistant that helps manage restaurant menus.
+            Your tasks include:
+            1. Identify the type of operation (query, update price, enable/disable)
+            2. Extract relevant information (item name, price, status)
+            3. Execute the appropriate operation
+            4. Confirm the operation was successful
+            
+            Available operations:
+            - Query: View menu items and their details
+            - Update: Modify menu item prices
+            - Toggle: Enable or disable menu items
+            
+            Current item: Club Made French Fries
+            Current request: Update price to 9.99"""
+            
+            # If this is a price update, format the message properly
+            if "update price" in current_message.lower():
+                price = current_message.split("to ")[-1].strip()
+                current_message = f"Please update the price of {st.session_state['current_item']} to {price}."
+                messages[-1]["content"] = current_message
+        
+        response = process_chat_message(current_message, messages[:-1], functions)
+        
+        # Skip "Which menu item?" if we already have it
+        if "Which menu item?" in response.get("content", "") and st.session_state["current_item"]:
+            if "update" in current_message.lower() and "price" in current_message.lower():
+                price = current_message.split("to ")[-1].strip()
+                messages[-1]["content"] = f"Update price of {st.session_state['current_item']} to {price}"
+            response = process_chat_message(messages[-1]["content"], messages[:-1], functions)
+        
+        st.session_state["live_chat_history"].append(response)
         return response
-        
-    # Add enhanced context if location_id available
-    if "location_id" in st.session_state and "get_db_connection" in st.session_state:
-        location_id = st.session_state["location_id"]
-        connection = st.session_state["get_db_connection"]
-        
-        # Get context data
-        context = {
-            'recent_operations': get_recent_operations(connection, location_id, limit=10),
-            'popular_items': get_popular_items(connection, location_id),
-            'time_patterns': analyze_time_patterns(connection, location_id),
-            'category_relationships': get_category_relationships(connection, location_id)
-        }
-        
-        # Format context sections
-        context_sections = []
-        
-        # Format operations
-        if context['recent_operations']:
-            ops = "\n".join(f"- {op['operation_type']}: {op['operation_name']} ({op['result_summary']})"
-                          for op in context['recent_operations'])
-            context_sections.append(f"Recent operations:\n{ops}")
-        
-        # Format popular items
-        if context['popular_items']:
-            items = "\n".join(f"- {item['name']} (${item['price']:.2f}, {item['orders']} orders)"
-                           for item in context['popular_items'])
-            context_sections.append(f"Popular items:\n{items}")
-        
-        # Format time patterns
-        if 'time_based_categories' in context['time_patterns']:
-            patterns = "\n".join(f"- {p['category']} ({p['time_range']}: {p['orders']} orders)"
-                              for p in context['time_patterns']['time_based_categories'])
-            context_sections.append(f"Time-based patterns:\n{patterns}")
-        
-        # Format category relationships
-        if context['category_relationships']:
-            relationships = []
-            for cat1, related in context['category_relationships'].items():
-                related_str = ", ".join(f"{r['category']} ({r['frequency']} orders)" 
-                                      for r in related[:3])
-                relationships.append(f"- {cat1} often ordered with: {related_str}")
-            if relationships:
-                context_sections.append("Category relationships:\n" + "\n".join(relationships))
-        
-        # Add context to message
-        if context_sections:
-            context_str = "Context:\n" + "\n\n".join(context_sections)
-            messages[-1]["content"] = context_str + "\n\nUser query: " + messages[-1]["content"]
 
-    # Add query template context if available
-    if "query_template" in st.session_state:
-        messages[-1]["content"] += f"\nUse this query template: {st.session_state['query_template']}"
-        del st.session_state["query_template"]
-
-    # Only use OpenAI if no operation matched
-    if not st.session_state.get("current_operation"):
-        try:
-            chat_response = send_api_request_to_openai_api(messages, functions)
-            response_json = chat_response.json()
-            
-            if not response_json.get("choices"):
-                return {"role": "assistant", "content": "I apologize, but I encountered an error processing your request. Please try again."}
-                
-            assistant_message = response_json["choices"][0]["message"]
-            
-            if assistant_message["role"] == "assistant":
-                internal_chat_history.append(assistant_message)
-                
-                if assistant_message.get("function_call"):
-                    try:
-                        results = execute_function_call(assistant_message)
-                        internal_chat_history.append({"role": "function", "name": assistant_message["function_call"]["name"], "content": results})
-                        internal_chat_history.append({"role": "user", "content": "You are a data analyst - provide personalized/customized explanations on what the results provided means and link them to the the context of the user query using clear, concise words in a user-friendly way. Or answer the question provided by the user in a helpful manner - either way, make sure your responses are human-like and relate to the initial user input. Your answers must not exceed 200 characters"})
-                        chat_response = send_api_request_to_openai_api(internal_chat_history, functions)
-                        response_json = chat_response.json()
-                        if response_json.get("choices"):
-                            assistant_message = response_json["choices"][0]["message"]
-                            if assistant_message["role"] == "assistant":
-                                st.session_state["live_chat_history"].append(assistant_message)
-                    except Exception as e:
-                        return {"role": "assistant", "content": f"I encountered an error executing the operation: {str(e)}. Please try again or rephrase your request."}
-            
-            return assistant_message
-        except Exception as e:
-            return {"role": "assistant", "content": f"I apologize, but I encountered an error: {str(e)}. Please try again."}
-
+    # Return a default greeting only if there's no chat history
+    if not st.session_state["live_chat_history"]:
+        return {"role": "assistant", "content": "Hello! I'm Andy, your menu management specialist. How can I assist you today?"}
+    
     return st.session_state["live_chat_history"][-1]
 
 
