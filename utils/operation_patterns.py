@@ -18,9 +18,9 @@ COMMON_OPERATIONS = {
     },
     "disable_bulk_options": {
         "patterns": [
-            r"disable all options? (?:for|in|on) (.+)",
-            r"turn off all options? (?:for|in|on) (.+)",
-            r"deactivate all options? (?:for|in|on) (.+)"
+            r"disable all options? (?:for|in|on) (.+?)(?:\s|$)",
+            r"turn off all options? (?:for|in|on) (.+?)(?:\s|$)",
+            r"deactivate all options? (?:for|in|on) (.+?)(?:\s|$)"
         ],
         "steps": ["confirm_items", "confirm_disable", "execute_disable"],
         "function": "disable_options_by_pattern",
