@@ -96,10 +96,10 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
         Dict with operation type and parameters if matched,
         None otherwise
     """
-    query = query.lower()
+    query_lower = query.lower()
     for op_type, op_data in COMMON_OPERATIONS.items():
         for pattern in op_data["patterns"]:
-            if match := re.search(pattern, query):
+            if match := re.search(pattern, query_lower):
                 operation = {
                     "type": op_type,
                     "steps": op_data["steps"].copy(),
@@ -109,7 +109,7 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                     "params": {}
                 }
                 if len(match.groups()) > 0:
-                    # Preserve original case for pattern
+                    # Extract pattern from original query
                     start, end = match.span(1)
                     operation["params"]["pattern"] = query[start:end]
                 return operation
