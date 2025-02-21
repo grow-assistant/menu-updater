@@ -7,17 +7,13 @@ from tests.mocks import mock_streamlit, mock_database, mock_openai
 mock_streamlit()
 mock_openai()
 
-# Mock database connection during import
-with patch("psycopg2.connect") as mock_connect:
-    mock_connect.return_value = MagicMock()
-    import utils.database_functions
-    utils.database_functions.postgres_connection = mock_connect.return_value
-    from utils.operation_patterns import match_operation, handle_operation_step
-    from utils.menu_operations import (
-        disable_by_pattern,
-        disable_options_by_pattern,
-        disable_option_items_by_pattern
-    )
+# Import modules
+from utils.operation_patterns import match_operation, handle_operation_step
+from utils.menu_operations import (
+    disable_by_pattern,
+    disable_options_by_pattern,
+    disable_option_items_by_pattern
+)
 
 def test_bulk_operation_matching():
     """Test bulk operation pattern matching"""
