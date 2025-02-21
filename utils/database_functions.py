@@ -48,15 +48,8 @@ def get_column_names(connection, table_name, schema_name):
     cursor.close()
     return column_names
 
-# Initialize database schema dict (moved to bottom)
-try:
-    conn = get_db_connection()
-    schemas = ['public']
-    database_schema_dict = get_database_info(conn, schemas)
-    conn.close()
-except Exception as e:
-    print(f"Error initializing database schema: {e}")
-    database_schema_dict = []
+# Initialize database schema dict
+database_schema_dict = []
 
 # Initialize database functions
 def init_db():
@@ -83,8 +76,22 @@ def get_schema_info():
         ]
     )
 
-# Add this new property
-database_schema_string = get_schema_info()
+# Initialize schema string
+database_schema_string = ""
+
+def init_schema():
+    """Initialize database schema information"""
+    global database_schema_dict, database_schema_string
+    try:
+        conn = get_db_connection()
+        schemas = ['public']
+        database_schema_dict = get_database_info(conn, schemas)
+        database_schema_string = get_schema_info()
+        conn.close()
+    except Exception as e:
+        print(f"Error initializing database schema: {e}")
+        database_schema_dict = []
+        database_schema_string = ""
 
 def ask_postgres_database(connection, query):
     """ Execute the SQL query provided by OpenAI and return the results """
@@ -246,6 +253,7 @@ def cleanup_menu(connection, location_id: int, item_name: str, option_name: str)
 
 def execute_menu_query(query, params=None):
     """Execute a read-only query and return results with column names"""
+    conn = None
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
@@ -259,6 +267,7 @@ def execute_menu_query(query, params=None):
                 return {
                     "success": True,
                     "results": results,
+                    "columns": columns,
                     "query": query
                 }
             return {
