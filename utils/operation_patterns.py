@@ -5,6 +5,24 @@ import re
 
 # Common operation patterns
 COMMON_OPERATIONS = {
+    "disable_item": {
+        "patterns": [
+            r"disable (?:the )?(?:menu )?item(?: )?(.+)",
+            r"turn off (?:menu )?item(?: )?(.+)",
+            r"deactivate (?:menu )?item(?: )?(.+)"
+        ],
+        "steps": ["get_item_name", "confirm_disable", "execute_disable"],
+        "function": "disable_by_name",
+        "type": "Menu Item"
+    },
+    "disable_bulk": {
+        "patterns": [
+            r"disable all (.+)",
+        ],
+        "steps": ["confirm_items", "confirm_disable", "execute_disable"],
+        "function": "disable_by_pattern",
+        "type": "Menu Item"
+    },
     "disable_bulk": {
         "patterns": [
             r"disable (?:all|every) (.+)",
@@ -47,9 +65,9 @@ COMMON_OPERATIONS = {
     },
     "disable_option": {
         "patterns": [
-            r"disable (?:the )?(?:menu )?option",
-            r"turn off (?:the )?(?:menu )?option",
-            r"deactivate (?:the )?(?:menu )?option"
+            r"disable (?:the )?(?:menu )?option(?! item)",
+            r"turn off (?:the )?(?:menu )?option(?! item)",
+            r"deactivate (?:the )?(?:menu )?option(?! item)"
         ],
         "steps": ["get_option_name", "confirm_disable", "execute_disable"],
         "function": "disable_by_name",
@@ -112,6 +130,27 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                     # Extract pattern from original query
                     start, end = match.span(1)
                     original_text = query[start:end]
+                    
+                    # Handle toggle operations
+                    if op_type == "toggle_item":
+                        operation_type = "disable"
+                        if "enable" in query.lower():
+                            operation_type = "enable"
+                        elif "toggle" in query.lower():
+                            operation_type = "toggle"
+                            
+                        return {
+                            "type": "toggle_item",
+                            "steps": ["confirm_items", "confirm_toggle", "execute_toggle"],
+                            "function": "toggle_menu_item",
+                            "item_type": "Menu Item",
+                            "current_step": 0,
+                            "params": {
+                                "item_name": original_text,
+                                "operation": operation_type
+                            }
+                        }
+                    
                     # For options and option items, extract just the item name
                     if "option items" in query.lower():
                         # Extract item name after "for"
@@ -167,11 +206,29 @@ def handle_operation_step(
     Returns:
         Dict with response type and content
     """
+    # Validate step index
+    if operation["current_step"] >= len(operation["steps"]):
+        return {"role": "assistant", "content": "I didn't understand that command. Please try again."}
+        
     # Convert pattern to lowercase for consistency
     if "pattern" in operation.get("params", {}):
         operation["params"]["pattern"] = operation["params"]["pattern"].lower()
         
     step = operation["steps"][operation["current_step"]]
+    # Handle confirmation steps first
+    if step == "confirm_disable":
+        if message and message.lower() != "yes":
+            operation["params"]["item_name"] = message
+            return {
+                "role": "assistant",
+                "content": f"Are you sure you want to disable {message}? (yes/no)"
+            }
+        if message and message.lower() == "yes":
+            return {
+                "role": "assistant",
+                "content": "Are you absolutely sure? This operation cannot be undone. (yes/no)"
+            }
+        return {"role": "assistant", "content": "Operation cancelled"}
     
     if step == "confirm_items":
         # For bulk operations, show matching items
@@ -229,7 +286,7 @@ def handle_operation_step(
         
     elif step.startswith("confirm_"):
         # Confirm operation
-        if step == "confirm_disable":
+        if step in ["confirm_disable", "confirm_toggle"]:
             if message.lower() != "yes":
                 return {
                 "role": "assistant",
