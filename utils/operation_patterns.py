@@ -6,6 +6,36 @@ import json
 
 # Common operation patterns
 COMMON_OPERATIONS = {
+    "disable_bulk": {
+        "patterns": [
+            r"disable (?:all|every) (.+)",
+            r"turn off (?:all|every) (.+)",
+            r"deactivate (?:all|every) (.+)"
+        ],
+        "steps": ["confirm_items", "confirm_disable", "execute_disable"],
+        "function": "disable_by_pattern",
+        "type": "Menu Item"
+    },
+    "disable_bulk_options": {
+        "patterns": [
+            r"disable all options? (?:for|in|on) (.+)",
+            r"turn off all options? (?:for|in|on) (.+)",
+            r"deactivate all options? (?:for|in|on) (.+)"
+        ],
+        "steps": ["confirm_items", "confirm_disable", "execute_disable"],
+        "function": "disable_options_by_pattern",
+        "type": "Item Option"
+    },
+    "disable_bulk_option_items": {
+        "patterns": [
+            r"disable all option items? (?:for|in|on) (.+)",
+            r"turn off all option items? (?:for|in|on) (.+)",
+            r"deactivate all option items? (?:for|in|on) (.+)"
+        ],
+        "steps": ["confirm_items", "confirm_disable", "execute_disable"],
+        "function": "disable_option_items_by_pattern",
+        "type": "Option Item"
+    },
     "disable_item": {
         "patterns": [
             r"disable (?:the )?(?:menu )?item",
@@ -69,8 +99,8 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
     query = query.lower()
     for op_type, op_data in COMMON_OPERATIONS.items():
         for pattern in op_data["patterns"]:
-            if re.search(pattern, query):
-                return {
+            if match := re.search(pattern, query):
+                operation = {
                     "type": op_type,
                     "steps": op_data["steps"].copy(),
                     "function": op_data["function"],
@@ -78,6 +108,9 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                     "current_step": 0,
                     "params": {}
                 }
+                if len(match.groups()) > 0:
+                    operation["params"]["pattern"] = match.group(1)
+                return operation
     return None
 
 def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, Any]:
