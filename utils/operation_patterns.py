@@ -109,7 +109,9 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                     "params": {}
                 }
                 if len(match.groups()) > 0:
-                    operation["params"]["pattern"] = match.group(1)
+                    # Preserve original case for pattern
+                    start, end = match.span(1)
+                    operation["params"]["pattern"] = query[start:end]
                 return operation
     return None
 
