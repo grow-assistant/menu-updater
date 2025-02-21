@@ -138,3 +138,57 @@ def render_option_limits(min_label: str, max_label: str, key_prefix: str) -> tup
         """, unsafe_allow_html=True)
     
     return min_val, max_val
+
+def render_location_hours_editor():
+    """Render UI for location hours management"""
+    st.subheader("Location Hours Management")
+    
+    location_id = st.number_input("Location ID", min_value=1)
+    day_of_week = st.selectbox("Day of Week", 
+        ["Monday", "Tuesday", "Wednesday", "Thursday", 
+         "Friday", "Saturday", "Sunday"])
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        open_time = st.text_input("Open Time (HH:MM:SS)")
+    with col2:
+        close_time = st.text_input("Close Time (HH:MM:SS)")
+    
+    if st.button("Update Hours"):
+        if not all([location_id, day_of_week, open_time, close_time]):
+            st.error("All fields are required")
+        else:
+            return {
+                "operation": "update_location_hours",
+                "params": {
+                    "location_id": location_id,
+                    "day_of_week": day_of_week,
+                    "open_time": open_time,
+                    "close_time": close_time
+                }
+            }
+    return None
+
+def render_marker_management():
+    """Render UI for marker management"""
+    st.subheader("Marker Management")
+    
+    location_id = st.number_input("Location ID", min_value=1, key="marker_loc_id")
+    marker_name = st.text_input("Marker Name")
+    disabled = st.checkbox("Disabled")
+    
+    if st.button("Add Marker"):
+        if not all([location_id, marker_name]):
+            st.error("Location ID and Marker Name are required")
+        else:
+            return {
+                "operation": "add_marker",
+                "params": {
+                    "id": None,  # Will be auto-generated
+                    "name": marker_name,
+                    "disabled": disabled,
+                    "location_id": location_id,
+                    "deleted_at": None
+                }
+            }
+    return None

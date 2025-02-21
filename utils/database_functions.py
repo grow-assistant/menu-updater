@@ -4,6 +4,7 @@ import json
 import streamlit as st
 from utils.config import db_credentials
 from utils.menu_operations import add_operation_to_history
+from utils.query_templates import QUERY_TEMPLATES
 
 # Establish connection with PostgreSQL
 try:
@@ -173,3 +174,78 @@ def execute_menu_update(connection, query, operation_name=None):
     except Exception as e:
         # Transaction will automatically rollback
         return f"Update failed: {e}"
+
+def execute_template_query(connection, template_name: str, params: dict):
+    """Execute a predefined query template"""
+    try:
+        with connection.cursor() as cursor:
+            query = QUERY_TEMPLATES[template_name]
+            cursor.execute(query, params)
+            if template_name.startswith('select'):
+                return cursor.fetchall()
+            return f"{cursor.rowcount} rows affected"
+    except Exception as e:
+        return f"Query failed: {e}"
+
+def get_location_hours(connection, location_id: int):
+    """Get location hours using template"""
+    return execute_template_query(
+        connection,
+        "view_location_hours",
+        {"location_id": location_id}
+    )
+
+def update_location_hours(connection, location_id: int, day_of_week: str, 
+                        open_time: str, close_time: str):
+    """Update location hours using template"""
+    return execute_template_query(
+        connection,
+        "update_location_hours",
+        {
+            "location_id": location_id,
+            "day_of_week": day_of_week,
+            "open_time": open_time,
+            "close_time": close_time
+        }
+    )
+
+def get_markers(connection, location_id: int):
+    """Get markers using template"""
+    return execute_template_query(
+        connection,
+        "view_markers",
+        {"location_id": location_id}
+    )
+
+def add_marker(connection, marker_data: dict):
+    """Add marker using template"""
+    return execute_template_query(
+        connection,
+        "insert_marker",
+        marker_data
+    )
+
+def cleanup_menu(connection, location_id: int, item_name: str, option_name: str):
+    """Cleanup menu using template"""
+    return execute_template_query(
+        connection,
+        "menu_cleanup",
+        {
+            "location_id": location_id,
+            "item_name": item_name,
+            "option_name": option_name
+        }
+    )
+
+def execute_menu_query(query, params=None):
+    """Execute a read-only query and return results"""
+    try:
+        with postgres_connection.cursor() as cursor:
+            cursor.execute(query, params or ())
+            if cursor.description:  # Check if query returns results
+                columns = [desc[0] for desc in cursor.description]
+                results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+                return results
+            return None
+    except Exception as e:
+        raise Exception(f"Database error: {str(e)}")
