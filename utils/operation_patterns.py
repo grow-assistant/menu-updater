@@ -114,7 +114,7 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
     return None
 
 def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, Any]:
-    """Handle operation step
+    """Handle operation step including bulk operations
     
     Args:
         operation: Operation dict with type, steps, and params
@@ -125,7 +125,40 @@ def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, 
     """
     step = operation["steps"][operation["current_step"]]
     
-    if step.startswith("get_"):
+    if step == "confirm_items":
+        # For bulk operations, show matching items
+        try:
+            from utils.menu_operations import (
+                disable_by_pattern,
+                disable_options_by_pattern,
+                disable_option_items_by_pattern
+            )
+            from utils.database_functions import postgres_connection
+            
+            pattern = operation["params"]["pattern"]
+            
+            # Get current state
+            if operation["type"] == "disable_bulk":
+                success, result = disable_by_pattern(postgres_connection, pattern)
+            elif operation["type"] == "disable_bulk_options":
+                success, result = disable_options_by_pattern(postgres_connection, pattern)
+            elif operation["type"] == "disable_bulk_option_items":
+                success, result = disable_option_items_by_pattern(postgres_connection, pattern)
+            else:
+                return {"role": "assistant", "content": "Invalid operation type"}
+                
+            if not success:
+                return {"role": "assistant", "content": result}
+                
+            return {
+                "role": "assistant",
+                "content": f"Found these items:\n{result}\nWould you like to proceed with disabling them? (yes/no)"
+            }
+            
+        except Exception as e:
+            return {"role": "assistant", "content": f"Error finding items: {str(e)}"}
+    
+    elif step.startswith("get_"):
         # Get item/option name or value
         prompts = {
             "get_item_name": "Which menu item?",
@@ -143,16 +176,23 @@ def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, 
         
     elif step.startswith("confirm_"):
         # Confirm operation
-        operation["params"]["value"] = message
-        confirms = {
-            "confirm_disable": f"Are you sure you want to disable '{message}'? (yes/no)",
-            "confirm_price": f"Set price to ${message}? (yes/no)",
-            "confirm_time_range": f"Set time range to {operation['params'].get('start_time', '?')}-{message}? (yes/no)"
-        }
-        return {
-            "role": "assistant",
-            "content": confirms.get(step, "Please confirm (yes/no)")
-        }
+        if step == "confirm_disable":
+            if message.lower() != "yes":
+                return {"role": "assistant", "content": "Operation cancelled"}
+            return {
+                "role": "assistant",
+                "content": "Are you absolutely sure? This operation cannot be undone. (yes/no)"
+            }
+        else:
+            operation["params"]["value"] = message
+            confirms = {
+                "confirm_price": f"Set price to ${message}? (yes/no)",
+                "confirm_time_range": f"Set time range to {operation['params'].get('start_time', '?')}-{message}? (yes/no)"
+            }
+            return {
+                "role": "assistant",
+                "content": confirms.get(step, "Please confirm (yes/no)")
+            }
         
     elif step.startswith("execute_"):
         # Execute operation if confirmed
