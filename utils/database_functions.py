@@ -28,16 +28,21 @@ def get_cursor():
     return get_db_connection().cursor()
 
 
-# Initialize cursor
-cursor = None
+# Initialize database functions
+def get_cursor():
+    """Get database cursor"""
+    return get_db_connection().cursor()
 
 def init_db():
     """Initialize database connection"""
-    conn = get_db_connection()
-    if conn and not conn.closed:
-        print(f"Connected successfully to {db_credentials['dbname']} database")
-        return True
-    return False
+    try:
+        conn = get_db_connection()
+        if conn and not conn.closed:
+            print(f"Connected successfully to {db_credentials['dbname']} database")
+            return True
+        return False
+    except Exception:
+        return False
 
 
 
