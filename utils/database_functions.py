@@ -6,19 +6,14 @@ from utils.config import db_credentials
 from utils.menu_operations import add_operation_to_history
 from utils.query_templates import QUERY_TEMPLATES
 
-# Initialize connection as None
-postgres_connection = None
-
 def get_db_connection():
-    """Get database connection, creating it if needed"""
-    global postgres_connection
-    if postgres_connection is None:
-        try:
-            postgres_connection = psycopg2.connect(**db_credentials)
-            postgres_connection.set_session(autocommit=True)
-        except Exception as e:
-            raise ConnectionError(f"Unable to connect to the database due to: {e}")
-    return postgres_connection
+    """Get database connection"""
+    try:
+        conn = psycopg2.connect(**db_credentials)
+        conn.set_session(autocommit=True)
+        return conn
+    except Exception as e:
+        raise ConnectionError(f"Unable to connect to the database due to: {e}")
 
 
 
@@ -260,7 +255,8 @@ def cleanup_menu(connection, location_id: int, item_name: str, option_name: str)
 def execute_menu_query(query, params=None):
     """Execute a read-only query and return results"""
     try:
-        with postgres_connection.cursor() as cursor:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
             cursor.execute(query, params or ())
             if cursor.description:  # Check if query returns results
                 columns = [desc[0] for desc in cursor.description]
