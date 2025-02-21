@@ -19,7 +19,7 @@ from utils.menu_analytics import (
 
 
 def process_chat_message(message: str, history: List[Dict], functions: List[Dict]) -> Dict:
-    """Process chat message
+    """Process chat message with error handling
     
     Args:
         message: User message
@@ -29,39 +29,67 @@ def process_chat_message(message: str, history: List[Dict], functions: List[Dict
     Returns:
         Response dict with role and content
     """
-    # Check for operation in progress
-    if "current_operation" in st.session_state:
-        operation = st.session_state["current_operation"]
-        step = operation["steps"][operation["current_step"]]
-        response = handle_operation_step(operation, message)
+    try:
+        # Check for operation in progress
+        if "current_operation" in st.session_state:
+            operation = st.session_state["current_operation"]
+            step = operation["steps"][operation["current_step"]]
+            response = handle_operation_step(operation, message)
+            
+            if response:
+                if response["role"] == "function":
+                    try:
+                        # Execute operation
+                        result = execute_menu_update(
+                            postgres_connection,
+                            response["params"]["query"],
+                            operation["type"]
+                        )
+                        # Clear operation state
+                        del st.session_state["current_operation"]
+                        return {"role": "assistant", "content": result}
+                    except Exception as e:
+                        return {"role": "assistant", "content": f"Error executing operation: {str(e)}. Please try again."}
+                else:
+                    operation["current_step"] += 1
+                    st.session_state["current_operation"] = operation
+                    return response
         
-        if response:
-            if response["role"] == "function":
-                # Execute operation
-                result = execute_menu_update(
-                    postgres_connection,
-                    response["params"]["query"],
-                    operation["type"]
-                )
-                # Clear operation state
-                del st.session_state["current_operation"]
-                return {"role": "assistant", "content": result}
-            else:
-                operation["current_step"] += 1
-                st.session_state["current_operation"] = operation
-                return response
-    
-    # Try to match new operation
-    if operation := match_operation(message):
-        operation["current_step"] = 0
-        st.session_state["current_operation"] = operation
-        return handle_operation_step(operation, message)
-    
-    # Fallback to OpenAI
-    return send_api_request_to_openai_api(
-        history + [{"role": "user", "content": message}],
-        functions
-    )
+        # Try to match new operation
+        if operation := match_operation(message):
+            operation["current_step"] = 0
+            st.session_state["current_operation"] = operation
+            return handle_operation_step(operation, message)
+        
+        # Fallback to OpenAI
+        try:
+            response = send_api_request_to_openai_api(
+                history + [{"role": "user", "content": message}],
+                functions
+            )
+            response_json = response.json()
+            
+            if not response_json.get("choices"):
+                return {"role": "assistant", "content": "I encountered an error processing your request. Please try again."}
+                
+            assistant_message = response_json["choices"][0]["message"]
+            
+            if assistant_message["role"] == "assistant":
+                if assistant_message.get("function_call"):
+                    try:
+                        results = execute_function_call(assistant_message)
+                        return {"role": "assistant", "content": results}
+                    except Exception as e:
+                        return {"role": "assistant", "content": f"Error executing operation: {str(e)}. Please try again."}
+                return assistant_message
+            
+            return {"role": "assistant", "content": "I encountered an unexpected response. Please try again."}
+            
+        except Exception as e:
+            return {"role": "assistant", "content": f"Error communicating with AI: {str(e)}. Please try again."}
+            
+    except Exception as e:
+        return {"role": "assistant", "content": f"I encountered an error: {str(e)}. Please try again."}
 
 def run_chat_sequence(messages, functions):
     if "live_chat_history" not in st.session_state:
