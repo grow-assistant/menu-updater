@@ -1,10 +1,11 @@
 import tiktoken
 import streamlit as st
+import json
 from typing import Dict, List, Any
 from utils.config import AI_MODEL
 from utils.api_functions import send_api_request_to_openai_api, execute_function_call
 from utils.operation_patterns import match_operation, handle_operation_step
-from utils.database_functions import execute_menu_update, get_db_connection
+from utils.database_functions import execute_menu_update as db_execute_menu_update, get_db_connection
 from utils.menu_analytics import (
     get_recent_operations,
     get_popular_items,
@@ -91,61 +92,147 @@ def process_chat_message(message: str, history: List[Dict], functions: List[Dict
     except Exception as e:
         return {"role": "assistant", "content": f"I encountered an error: {str(e)}. Please try again."}
 
-def run_chat_sequence(messages, functions):
-    if "live_chat_history" not in st.session_state:
-        st.session_state["live_chat_history"] = []
+def run_chat_sequence(messages: List[Dict[str, str]], functions: List[Dict[str, Any]], openai_client) -> Dict[str, str]:
+    """
+    Process a chat sequence with function calling:
+    1. Categorize the user's request
+    2. Execute appropriate function based on request type
+    3. Handle unknown requests with clarifying questions
+    """
+    # Get the user's latest message
+    user_message = messages[-1]["content"] if messages else ""
+
+    # First, categorize the request
+    categorize_functions = [f for f in functions if f["name"] == "categorize_request"]
+    categorize_response = openai_client.chat.completions.create(
+        model="gpt-4-turbo-preview",
+        messages=messages,
+        functions=categorize_functions,
+        function_call={"name": "categorize_request"}
+    )
     
-    if "current_item" not in st.session_state:
-        st.session_state["current_item"] = None
+    assistant_message = categorize_response.choices[0].message
 
-    # Process latest message
-    if messages and messages[-1]["role"] == "user":
-        current_message = messages[-1]["content"]
-        
-        # Extract item name if present
-        if "Club Made French Fries" in current_message:
-            st.session_state["current_item"] = "Club Made French Fries"
-            
-            # Always update the system message (first message) with full context
-            messages[0]["content"] = """You are a helpful AI assistant that helps manage restaurant menus.
-            Your tasks include:
-            1. Identify the type of operation (query, update price, enable/disable)
-            2. Extract relevant information (item name, price, status)
-            3. Execute the appropriate operation
-            4. Confirm the operation was successful
-            
-            Available operations:
-            - Query: View menu items and their details
-            - Update: Modify menu item prices
-            - Toggle: Enable or disable menu items
-            
-            Current item: Club Made French Fries
-            Current request: Update price to 9.99"""
-            
-            # If this is a price update, format the message properly
-            if "update price" in current_message.lower():
-                price = current_message.split("to ")[-1].strip()
-                current_message = f"Please update the price of {st.session_state['current_item']} to {price}."
-                messages[-1]["content"] = current_message
-        
-        response = process_chat_message(current_message, messages[:-1], functions)
-        
-        # Skip "Which menu item?" if we already have it
-        if "Which menu item?" in response.get("content", "") and st.session_state["current_item"]:
-            if "update" in current_message.lower() and "price" in current_message.lower():
-                price = current_message.split("to ")[-1].strip()
-                messages[-1]["content"] = f"Update price of {st.session_state['current_item']} to {price}"
-            response = process_chat_message(messages[-1]["content"], messages[:-1], functions)
-        
-        st.session_state["live_chat_history"].append(response)
-        return response
+    # Parse the categorization result
+    if assistant_message.function_call:
+        args = json.loads(assistant_message.function_call.arguments)
+        request_type = args.get("request_type", "unknown")
+        item_name = args.get("item_name")
+        new_price = args.get("new_price")
 
-    # Return a default greeting only if there's no chat history
-    if not st.session_state["live_chat_history"]:
-        return {"role": "assistant", "content": "Hello! I'm Andy, your menu management specialist. How can I assist you today?"}
-    
-    return st.session_state["live_chat_history"][-1]
+        # Log the structured output
+        print(f"Recognized request structure:")
+        print(f"  Request Type: {request_type}")
+        print(f"  Item Name: {item_name}")
+        print(f"  New Price: {new_price}" if new_price is not None else "")
 
+        # Handle different request types
+        if request_type == "update_price" and item_name and new_price is not None:
+            try:
+                print(f"\nExecuting price update: Setting {item_name} to ${new_price:.2f}")
+                # Updated SQL query to match your database schema
+                sql_query = f"""
+                    UPDATE items 
+                    SET price = {new_price} 
+                    WHERE name ILIKE '%{item_name}%' 
+                        AND deleted_at IS NULL 
+                        AND price >= 0
+                """
+                return execute_menu_update(messages, functions, sql_query, "update_menu_item", openai_client)
+                
+            except Exception as e:
+                print(f"Error executing menu update: {e}")
+                return {
+                    "role": "assistant",
+                    "content": f"Sorry, I encountered an error while trying to update the price. Please try again or contact support if the issue persists."
+                }
+
+        elif request_type == "disable_item" and item_name:
+            sql_query = f"UPDATE items SET disabled = true WHERE name ILIKE '%{item_name}%';"
+            return execute_menu_update(messages, functions, sql_query, "toggle_menu_item", openai_client)
+
+        elif request_type == "enable_item" and item_name:
+            sql_query = f"UPDATE items SET disabled = false WHERE name ILIKE '%{item_name}%';"
+            return execute_menu_update(messages, functions, sql_query, "toggle_menu_item", openai_client)
+
+        elif request_type == "query_menu":
+            return {
+                "role": "assistant",
+                "content": "I can help you query the menu. What specific information would you like to know?"
+            }
+
+        else:
+            # Enhanced fallback logic with specific examples
+            help_message = (
+                "I'm not quite sure what you'd like to do. Here are the actions I can help with:\n\n"
+                "• Update prices (e.g., 'Update the price of French Fries to 9.99')\n"
+                "• Disable menu items (e.g., 'Disable the Chicken Wings')\n"
+                "• Enable menu items (e.g., 'Enable the Caesar Salad')\n"
+                "• Query the menu (e.g., 'Show me all active items')\n\n"
+                "Could you please rephrase your request using one of these formats?"
+            )
+            return {
+                "role": "assistant",
+                "content": help_message
+            }
+
+    # Final fallback for parsing errors
+    error_message = (
+        "I apologize, but I'm having trouble processing your request. "
+        "Please make sure your message includes:\n"
+        "• The action you want to take (update/enable/disable/query)\n"
+        "• The item name (if applicable)\n"
+        "• The new price (for price updates)\n\n"
+        "For example: 'Update the price of French Fries to 9.99'"
+    )
+    return {
+        "role": "assistant",
+        "content": error_message
+    }
+
+def execute_menu_update(messages: List[Dict[str, str]], 
+                       functions: List[Dict[str, Any]], 
+                       sql_query: str, 
+                       function_name: str,
+                       openai_client) -> Dict[str, str]:
+    """Helper function to execute menu updates with the appropriate function"""
+    try:
+        # Get database connection
+        conn = get_db_connection()
+        
+        # Execute the update query
+        result = db_execute_menu_update(conn, sql_query, operation_name=function_name)
+        
+        if "successful" in result.lower():
+            # Customize message based on operation type
+            if function_name == "update_menu_item":
+                return {
+                    "role": "assistant",
+                    "content": f"✅ Successfully updated the price. {result}"
+                }
+            elif function_name == "toggle_menu_item":
+                action = "enabled" if "disabled = false" in sql_query else "disabled"
+                return {
+                    "role": "assistant",
+                    "content": f"✅ Successfully {action} the menu item. {result}"
+                }
+        else:
+            operation_type = "price update" if function_name == "update_menu_item" else "status update"
+            return {
+                "role": "assistant",
+                "content": f"❌ Failed to perform {operation_type}: {result}"
+            }
+            
+    except Exception as e:
+        print(f"Database error: {e}")
+        operation_type = "price update" if function_name == "update_menu_item" else "status update"
+        return {
+            "role": "assistant",
+            "content": f"❌ Sorry, I encountered a database error during {operation_type}: {str(e)}"
+        }
+    finally:
+        if conn:
+            conn.close()
 
 def clear_chat_history():
     """ Clear the chat history stored in the Streamlit session state """

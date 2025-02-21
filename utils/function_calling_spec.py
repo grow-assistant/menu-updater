@@ -3,43 +3,37 @@ from utils.database_functions import database_schema_string
 # Specify function descriptions for OpenAI function calling 
 functions = [
     {
-        "name": "query_menu_items",
-        "description": "Query menu items and their details",
+        "name": "categorize_request",
+        "description": "Analyze the user's message and determine the request type, item name, new price, etc. If no known request type applies, set request_type='unknown'.",
         "parameters": {
             "type": "object",
             "properties": {
-                "query": {
+                "request_type": {
                     "type": "string",
-                    "description": """SQL query to fetch menu items. Available tables and relationships:
-                        - locations (id, name, description, disabled)
-                        - menus (id, name, description, location_id, disabled)
-                        - categories (id, name, description, menu_id, disabled, start_time, end_time)
-                        - items (id, name, description, price, category_id, disabled)
-                        - options (id, name, description, min, max, item_id, disabled)
-                        - option_items (id, name, description, price, option_id, disabled)
-                        
-                        Join through proper hierarchy: locations -> menus -> categories -> items.
-                        Write SQL only, no JSON. No line breaks."""
+                    "enum": ["update_price", "disable_item", "enable_item", "query_menu", "unknown"],
+                    "description": "The type of request being made"
+                },
+                "item_name": {
+                    "type": "string",
+                    "description": "Name of the item referenced, if any"
+                },
+                "new_price": {
+                    "type": "number",
+                    "description": "New price if request_type=update_price. Otherwise ignore."
                 }
             },
-            "required": ["query"]
+            "required": ["request_type"]
         }
     },
     {
         "name": "update_menu_item",
-        "description": "Update menu item properties like price or description",
+        "description": "Updates menu item properties like price or description.",
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": """SQL query to update menu items. Validation rules:
-                        - Prices must be non-negative
-                        - Items should be disabled rather than deleted
-                        - Time-based menu categories must have valid time ranges (0-2359)
-                        
-                        Example: UPDATE items SET price = 12.99 WHERE id = 123 AND price >= 0
-                        Write SQL only, no JSON. No line breaks."""
+                    "description": "SQL query for item updates. Price must be non-negative, item_name must match the user's intent."
                 }
             },
             "required": ["query"]
@@ -47,21 +41,13 @@ functions = [
     },
     {
         "name": "toggle_menu_item",
-        "description": "Enable or disable menu items and their options",
+        "description": "Enable or disable a menu item. Sets disabled=true or disabled=false on an item.",
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": """SQL query to update item.disabled flag. Rules:
-                        - Use UPDATE items SET disabled = true/false
-                        - Must include WHERE clause for safety
-                        - Can enable/disable both items and their options
-                        
-                        Examples: 
-                        - UPDATE items SET disabled = true WHERE id = 123
-                        - UPDATE items SET disabled = false WHERE name LIKE '%French Fries%'
-                        Write SQL only, no JSON. No line breaks."""
+                    "description": "SQL query to update item.disabled. Example: UPDATE items SET disabled = true WHERE name ILIKE '%French Fries%'"
                 }
             },
             "required": ["query"]
