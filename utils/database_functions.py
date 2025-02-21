@@ -243,7 +243,7 @@ def cleanup_menu(connection, location_id: int, item_name: str, option_name: str)
     )
 
 def execute_menu_query(query, params=None):
-    """Execute a read-only query and return results"""
+    """Execute a read-only query and return results with column names"""
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
@@ -251,7 +251,72 @@ def execute_menu_query(query, params=None):
             if cursor.description:  # Check if query returns results
                 columns = [desc[0] for desc in cursor.description]
                 results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-                return results
-            return None
+                return {
+                    "success": True,
+                    "columns": columns,
+                    "results": results,
+                    "query": query
+                }
+            return {
+                "success": True,
+                "affected_rows": cursor.rowcount,
+                "query": query
+            }
     except Exception as e:
-        raise Exception(f"Database error: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "query": query
+        }
+
+def process_query_results(results):
+    """Convert query results to natural language using OpenAI"""
+    import openai
+    import os
+    import json
+
+    if not results["success"]:
+        return f"Error executing query: {results['error']}"
+
+    # Prepare context for OpenAI
+    context = {
+        "query": results["query"],
+        "success": results["success"]
+    }
+    
+    if "results" in results:
+        context["data"] = results["results"]
+        context["columns"] = results["columns"]
+        result_type = "query results"
+    else:
+        context["affected_rows"] = results["affected_rows"]
+        result_type = "update results"
+
+    try:
+        # Configure OpenAI
+        openai.api_key = os.getenv("OPENAI_API_KEY")
+        model = os.getenv("MODEL_FOR_ANALYSIS", "gpt-3.5-turbo")
+        temp = float(os.getenv("ANALYSIS_TEMPERATURE", "0.3"))
+
+        # Create system prompt
+        system_prompt = f"""You are a helpful assistant that converts database {result_type} into natural language responses.
+For query results, describe what was found in a clear, concise way.
+For update results, describe what was changed and how many rows were affected.
+Be concise but informative."""
+
+        response = openai.ChatCompletion.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps(context, indent=2)}
+            ],
+            temperature=temp,
+            max_tokens=150
+        )
+        
+        if not response.choices:
+            return "Error: No response generated"
+            
+        return response.choices[0].message["content"]
+    except Exception as e:
+        return f"Error generating response: {str(e)}"
