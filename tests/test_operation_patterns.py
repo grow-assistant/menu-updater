@@ -84,6 +84,7 @@ def test_handle_operation_step():
         "type": "disable_item",
         "steps": ["get_item_name", "confirm_disable", "execute_disable"],
         "function": "disable_by_name",
+        "item_type": "Menu Item",
         "current_step": 0,
         "params": {}
     }
@@ -109,6 +110,39 @@ def test_handle_operation_step():
     response = handle_operation_step(operation, "no")
     assert response["role"] == "assistant"
     assert "cancelled" in response["content"]
+
+    # Test price update steps
+    operation = {
+        "type": "update_price",
+        "steps": ["get_item_name", "get_new_price", "confirm_price", "execute_price_update"],
+        "function": "update_menu_item_price",
+        "current_step": 0,
+        "params": {}
+    }
+    
+    response = handle_operation_step(operation, "")
+    assert response["role"] == "assistant"
+    assert "Which menu item?" in response["content"]
+    
+    operation["current_step"] = 1
+    response = handle_operation_step(operation, "Burger")
+    assert response["role"] == "assistant"
+    assert "new price" in response["content"].lower()
+    
+    operation["current_step"] = 2
+    response = handle_operation_step(operation, "12.99")
+    assert response["role"] == "assistant"
+    assert "12.99" in response["content"]
+    
+    # Test unknown command
+    assert match_operation("unknown command") is None
+    assert match_operation("") is None
+    
+    # Test invalid step
+    operation["current_step"] = 99
+    response = handle_operation_step(operation, "")
+    assert response["role"] == "assistant"
+    assert "didn't understand" in response["content"].lower()
 
 if __name__ == "__main__":
     pytest.main([__file__])
