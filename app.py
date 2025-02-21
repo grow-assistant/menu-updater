@@ -58,8 +58,8 @@ if __name__ == "__main__":
             # Create a list of location options in "id - name" format
             location_options = ["All"] + [f"{loc['id']} - {loc['name']}" for loc in locations]
             
-            # Find the index of location 62 in the options list
-            default_index = next((i for i, opt in enumerate(location_options) if opt.startswith("62 -")), 0)
+            # Find the index of location 16 in the options list
+            default_index = next((i for i, opt in enumerate(location_options) if opt.startswith("16 -")), 0)
             
             selected_location = st.sidebar.selectbox(
                 "Select Location",
@@ -131,16 +131,9 @@ if __name__ == "__main__":
     st.title("Swoop AI Assistant")
 
     ### CHAT FACILITATION ###
-    # Start the chat
     if (prompt := st.chat_input("What do you want to know?")) is not None:
+        # Add the user message to chat history
         st.session_state.full_chat_history.append({"role": "user", "content": prompt})
-
-        # Limit the number of messages sent to OpenAI by token count
-        total_tokens = sum(count_tokens(message["content"]) for message in st.session_state["api_chat_history"])
-        while total_tokens + count_tokens(prompt) + TOKEN_BUFFER > MAX_TOKENS_ALLOWED:
-            removed_message = st.session_state["api_chat_history"].pop(0)
-            total_tokens -= count_tokens(removed_message["content"])
-
         st.session_state.api_chat_history.append({"role": "user", "content": prompt})
 
     # Display previous chat messages from full_chat_history (ignore system prompt message)
@@ -155,17 +148,9 @@ if __name__ == "__main__":
             # Send only the most recent messages to OpenAI from api_chat_history
             recent_messages = st.session_state["api_chat_history"][-MAX_MESSAGES_TO_OPENAI:]
             
-            # Add operation context if set
-            operation_context = {
-                "query": "I want to view menu items. ",
-                "update": "I want to update menu prices. ",
-                "toggle": "I want to enable or disable menu items. "
-            }.get(st.session_state["operation"], "")
-            if operation_context:
-                recent_messages[-1]["content"] = operation_context + recent_messages[-1]["content"]
+            # Let the AI model handle operation detection
+            new_message = run_chat_sequence(recent_messages, functions)
             
-            new_message = run_chat_sequence(recent_messages, functions)  # Get the latest message
-
             # Add this latest message to both api_chat_history and full_chat_history
             st.session_state["api_chat_history"].append(new_message)
             st.session_state["full_chat_history"].append(new_message)
