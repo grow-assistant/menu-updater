@@ -2,6 +2,8 @@ from datetime import datetime
 import psycopg2
 from typing import Dict, List, Optional, Tuple, Union
 
+from typing import Dict, List, Any, Tuple, Union
+
 def add_operation_to_history(
     operation_type: str,
     details: Dict,
@@ -120,3 +122,41 @@ def toggle_item_availability(
         return False, f"Error toggling item availability: {e}"
     finally:
         cursor.close() 
+
+def disable_by_name(
+    connection,
+    disable_type: str,
+    items: List[Dict[str, Any]]
+) -> Tuple[bool, str]:
+    """Disable items or options by name with transaction safety"""
+    try:
+        with connection:
+            with connection.cursor() as cursor:
+                # Set transaction isolation
+                cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+                
+                # Prepare query based on type
+                if disable_type == "Menu Item":
+                    table = "items"
+                else:
+                    table = "options"
+                    
+                # Get IDs for locking
+                ids = [item["id"] for item in items]
+                id_list = ",".join(str(id) for id in ids)
+                
+                # Lock rows
+                cursor.execute(f"SELECT id FROM {table} WHERE id IN ({id_list}) FOR UPDATE")
+                
+                # Perform update
+                cursor.execute(f"""
+                    UPDATE {table}
+                    SET disabled = true
+                    WHERE id IN ({id_list})
+                """)
+                
+                affected = cursor.rowcount
+                return True, f"Successfully disabled {affected} {table}"
+                
+    except Exception as e:
+        return False, f"Error disabling {disable_type}: {e}"
