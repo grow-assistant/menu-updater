@@ -55,6 +55,8 @@ def test_bulk_operation_flow(mock_get_conn):
     """Test bulk operation conversation flow"""
     # Set up mock database
     mock_connection, mock_cursor = mock_database()
+    mock_connection.__enter__ = lambda x: mock_connection
+    mock_connection.__exit__ = lambda x, y, z, w: None
     mock_get_conn.return_value = mock_connection
     
     # Mock item results
@@ -107,6 +109,9 @@ def test_error_handling(mock_get_conn):
     """Test error handling in bulk operations"""
     # Mock database error
     mock_get_conn.side_effect = Exception("Database error")
+    mock_connection, mock_cursor = mock_database()
+    mock_connection.__enter__ = lambda x: mock_connection
+    mock_connection.__exit__ = lambda x, y, z, w: None
     
     # Test database error
     response = handle_operation_step({
