@@ -6,12 +6,19 @@ from utils.config import db_credentials
 from utils.menu_operations import add_operation_to_history
 from utils.query_templates import QUERY_TEMPLATES
 
-# Establish connection with PostgreSQL
-try:
-    postgres_connection = psycopg2.connect(**db_credentials)
-    postgres_connection.set_session(autocommit=True)
-except Exception as e:
-    raise ConnectionError(f"Unable to connect to the database due to: {e}")
+# Initialize connection as None
+postgres_connection = None
+
+def get_db_connection():
+    """Get database connection, creating it if needed"""
+    global postgres_connection
+    if postgres_connection is None:
+        try:
+            postgres_connection = psycopg2.connect(**db_credentials)
+            postgres_connection.set_session(autocommit=True)
+        except Exception as e:
+            raise ConnectionError(f"Unable to connect to the database due to: {e}")
+    return postgres_connection
 
 
 
