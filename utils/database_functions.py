@@ -6,24 +6,28 @@ from utils.config import db_credentials
 from utils.menu_operations import add_operation_to_history
 from utils.query_templates import QUERY_TEMPLATES
 
-# Establish connection with PostgreSQL
-try:
-    postgres_connection = psycopg2.connect(**db_credentials)
-    postgres_connection.set_session(autocommit=True)
-except Exception as e:
-    raise ConnectionError(f"Unable to connect to the database due to: {e}")
+def get_db_connection():
+    """Get database connection"""
+    try:
+        conn = psycopg2.connect(**db_credentials)
+        conn.set_session(autocommit=True)
+        return conn
+    except Exception as e:
+        raise ConnectionError(f"Unable to connect to the database due to: {e}")
 
 
 
-# Create a database cursor to execute PostgreSQL commands
-cursor = postgres_connection.cursor()
-
-
-# Validate the PostgreSQL connection status
-if postgres_connection.closed == 0:
-    print(f"Connected successfully to {db_credentials['dbname']} database\nConnection Details: {postgres_connection.dsn}")
-else:
-    raise ConnectionError("Unable to connect to the database")
+# Initialize database functions
+def init_db():
+    """Initialize database connection"""
+    try:
+        conn = get_db_connection()
+        if conn and not conn.closed:
+            print(f"Connected successfully to {db_credentials['dbname']} database")
+            return True
+        return False
+    except Exception:
+        return False
 
 
 
@@ -65,17 +69,18 @@ def get_database_info(connection, schema_names):
     return table_dicts
 
 
-# To print details to the console:
-# schemas = get_schema_names(postgres_connection)
-# here you need to set schema name from postgres by default the schema is public in postgres database. you can see in pgadmin
-schemas = ['public']
-database_schema_dict = get_database_info(postgres_connection, schemas)
-database_schema_string = "\n".join(
-    [
-        f"Schema: {table['schema_name']}\nTable: {table['table_name']}\nColumns: {', '.join(table['column_names'])}"
-        for table in database_schema_dict
-    ]
-)
+# Database schema info
+def get_schema_info():
+    """Get database schema information"""
+    conn = get_db_connection()
+    schemas = ['public']
+    database_schema_dict = get_database_info(conn, schemas)
+    return "\n".join(
+        [
+            f"Schema: {table['schema_name']}\nTable: {table['table_name']}\nColumns: {', '.join(table['column_names'])}"
+            for table in database_schema_dict
+        ]
+    )
 
 
 
@@ -238,14 +243,80 @@ def cleanup_menu(connection, location_id: int, item_name: str, option_name: str)
     )
 
 def execute_menu_query(query, params=None):
-    """Execute a read-only query and return results"""
+    """Execute a read-only query and return results with column names"""
     try:
-        with postgres_connection.cursor() as cursor:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
             cursor.execute(query, params or ())
             if cursor.description:  # Check if query returns results
                 columns = [desc[0] for desc in cursor.description]
                 results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-                return results
-            return None
+                return {
+                    "success": True,
+                    "columns": columns,
+                    "results": results,
+                    "query": query
+                }
+            return {
+                "success": True,
+                "affected_rows": cursor.rowcount,
+                "query": query
+            }
     except Exception as e:
-        raise Exception(f"Database error: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "query": query
+        }
+
+def process_query_results(results):
+    """Convert query results to natural language using OpenAI"""
+    import openai
+    import os
+    import json
+
+    if not results["success"]:
+        return f"Error executing query: {results['error']}"
+
+    # Prepare context for OpenAI
+    context = {
+        "query": results["query"],
+        "success": results["success"]
+    }
+    
+    if "results" in results:
+        context["data"] = results["results"]
+        context["columns"] = results["columns"]
+        result_type = "query results"
+    else:
+        context["affected_rows"] = results["affected_rows"]
+        result_type = "update results"
+
+    try:
+        # Configure OpenAI
+        openai.api_key = os.getenv("OPENAI_API_KEY")
+        model = os.getenv("MODEL_FOR_ANALYSIS", "gpt-3.5-turbo")
+        temp = float(os.getenv("ANALYSIS_TEMPERATURE", "0.3"))
+
+        # Create system prompt
+        system_prompt = f"""You are a helpful assistant that converts database {result_type} into natural language responses.
+For query results, describe what was found in a clear, concise way.
+For update results, describe what was changed and how many rows were affected.
+Be concise but informative."""
+
+        response = openai.ChatCompletion.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps(context, indent=2)}
+            ],
+            temperature=temp,
+            max_tokens=150
+        )
+        
+        if not response.choices:
+            return "Error: No response generated"
+            
+        return response.choices[0].message["content"]
+    except Exception as e:
+        return f"Error generating response: {str(e)}"
