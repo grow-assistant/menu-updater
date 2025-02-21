@@ -9,7 +9,7 @@ COMMON_OPERATIONS = {
         "patterns": [
             r"disable (?:all|every) (.+)",
             r"turn off (?:all|every) (.+)",
-            r"deactivate (?:all|every) (.+)"
+            r"deactivate (?:all|every) (.+)"  # Matches bulk disable patterns
         ],
         "steps": ["confirm_items", "confirm_disable", "execute_disable"],
         "function": "disable_by_pattern",
@@ -19,7 +19,7 @@ COMMON_OPERATIONS = {
         "patterns": [
             r"disable all options? (?:for|in|on) (.+)",
             r"turn off all options? (?:for|in|on) (.+)",
-            r"deactivate all options? (?:for|in|on) (.+)"
+            r"deactivate all options? (?:for|in|on) (.+)"  # Matches option disable patterns
         ],
         "steps": ["confirm_items", "confirm_disable", "execute_disable"],
         "function": "disable_options_by_pattern",
@@ -154,7 +154,10 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, Any]:
+def handle_operation_step(
+    operation: Dict[str, Any], 
+    message: str
+) -> Dict[str, Any]:
     """Handle operation step including bulk operations
     
     Args:
@@ -196,9 +199,13 @@ def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, 
             if not success:
                 return {"role": "assistant", "content": result}
                 
+            confirmation_msg = (
+                f"Found these items:\n{result}\n"
+                "Would you like to proceed with disabling them? (yes/no)"
+            )
             return {
                 "role": "assistant",
-                "content": f"Found these items:\n{result}\nWould you like to proceed with disabling them? (yes/no)"
+                "content": confirmation_msg
             }
             
         except Exception as e:
@@ -224,7 +231,10 @@ def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, 
         # Confirm operation
         if step == "confirm_disable":
             if message.lower() != "yes":
-                return {"role": "assistant", "content": "Operation cancelled"}
+                return {
+                "role": "assistant",
+                "content": "Operation cancelled"
+            }
             return {
                 "role": "assistant",
                 "content": "Are you absolutely sure? This operation cannot be undone. (yes/no)"
@@ -235,9 +245,10 @@ def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, 
                 "confirm_price": f"Set price to ${message}? (yes/no)",
                 "confirm_time_range": f"Set time range to {operation['params'].get('start_time', '?')}-{message}? (yes/no)"
             }
+            prompt = confirms.get(step, "Please confirm (yes/no)")
             return {
                 "role": "assistant",
-                "content": confirms.get(step, "Please confirm (yes/no)")
+                "content": prompt
             }
         
     elif step.startswith("execute_"):
@@ -260,7 +271,11 @@ def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, 
     }
 
 
-def store_operation_history(settings: Dict[str, Any], operation: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
+def store_operation_history(
+    settings: Dict[str, Any], 
+    operation: Dict[str, Any], 
+    result: Dict[str, Any]
+) -> Dict[str, Any]:
     """Store operation in history
     
     Args:
