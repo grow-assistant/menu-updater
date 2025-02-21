@@ -28,8 +28,8 @@ def get_cursor():
     return get_db_connection().cursor()
 
 
-# Validate the PostgreSQL connection status
-if postgres_connection.closed == 0:
+# Initialize cursor
+cursor = None
     print(f"Connected successfully to {db_credentials['dbname']} database\nConnection Details: {postgres_connection.dsn}")
 else:
     raise ConnectionError("Unable to connect to the database")
