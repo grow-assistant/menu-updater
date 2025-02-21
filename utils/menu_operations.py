@@ -102,26 +102,34 @@ def update_option_limits(
     finally:
         cursor.close()
 
-def toggle_item_availability(
-    item_id: int,
-    is_available: bool,
-    connection
+def toggle_menu_item(
+    item_name: str,
+    disabled: bool = True,
+    connection = None
 ) -> Tuple[bool, str]:
-    """
-    Toggle the availability status of a menu item
+    """Toggle menu item enabled/disabled state
+    
+    Args:
+        item_name: Name of the menu item
+        disabled: True to disable, False to enable
+        connection: Optional database connection
+        
+    Returns:
+        Tuple of (success, message)
     """
     try:
-        cursor = connection.cursor()
-        cursor.execute(
-            "UPDATE menu_items SET is_available = %s WHERE item_id = %s",
-            (is_available, item_id)
-        )
-        connection.commit()
-        return True, f"Item {'enabled' if is_available else 'disabled'} successfully"
+        # Use existing disable_by_name function for transaction safety
+        items = [{"id": None, "name": item_name}]
+        success, message = disable_by_name(connection, "Menu Item", items)
+        
+        if success:
+            action = "disabled" if disabled else "enabled"
+            return True, f"Successfully {action} menu item: {item_name}"
+        # Wrap error message to maintain consistent format
+        return False, f"Error toggling menu item: {message.split(': ')[1]}"
+        
     except Exception as e:
-        return False, f"Error toggling item availability: {e}"
-    finally:
-        cursor.close() 
+        return False, f"Error toggling menu item: {str(e)}"
 
 def disable_by_name(
     connection,
@@ -129,19 +137,19 @@ def disable_by_name(
     items: List[Dict[str, Any]]
 ) -> Tuple[bool, str]:
     """Disable items or options by name with transaction safety"""
+    # Prepare table name based on type
+    if disable_type == "Menu Item":
+        table = "items"
+    elif disable_type == "Item Option":
+        table = "options"
+    else:
+        table = "option_items"
+        
     try:
         with connection:
             with connection.cursor() as cursor:
                 # Set transaction isolation
                 cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-                
-                # Prepare query based on type
-                if disable_type == "Menu Item":
-                    table = "items"
-                elif disable_type == "Item Option":
-                    table = "options"
-                else:
-                    table = "option_items"
                     
                 # Get IDs for locking
                 ids = [item["id"] for item in items]
@@ -151,17 +159,13 @@ def disable_by_name(
                 cursor.execute(f"SELECT id FROM {table} WHERE id IN ({id_list}) FOR UPDATE")
                 
                 # Perform update
-                cursor.execute(f"""
-                    UPDATE {table}
-                    SET disabled = true
-                    WHERE id IN ({id_list})
-                """)
+                cursor.execute(f"UPDATE {table} SET disabled = true WHERE id IN ({id_list})")
                 
                 affected = cursor.rowcount
                 return True, f"Successfully disabled {affected} {table}"
                 
     except Exception as e:
-        return False, f"Error disabling {disable_type}: {e}"
+        return False, f"Error disabling {table}: {str(e)}"
 
 def disable_by_pattern(
     connection,

@@ -1,16 +1,33 @@
 """Operation patterns for menu management"""
-from typing import Dict, Optional, Any, List
+from typing import Dict, Optional, Any
 from datetime import datetime
 import re
-import json
 
 # Common operation patterns
 COMMON_OPERATIONS = {
+    "disable_item": {
+        "patterns": [
+            r"disable (?:the )?(?:menu )?item(?: )?(.+)",
+            r"turn off (?:menu )?item(?: )?(.+)",
+            r"deactivate (?:menu )?item(?: )?(.+)"
+        ],
+        "steps": ["get_item_name", "confirm_disable", "execute_disable"],
+        "function": "disable_by_name",
+        "type": "Menu Item"
+    },
+    "disable_bulk": {
+        "patterns": [
+            r"disable all (.+)",
+        ],
+        "steps": ["confirm_items", "confirm_disable", "execute_disable"],
+        "function": "disable_by_pattern",
+        "type": "Menu Item"
+    },
     "disable_bulk": {
         "patterns": [
             r"disable (?:all|every) (.+)",
             r"turn off (?:all|every) (.+)",
-            r"deactivate (?:all|every) (.+)"
+            r"deactivate (?:all|every) (.+)"  # Matches bulk disable patterns
         ],
         "steps": ["confirm_items", "confirm_disable", "execute_disable"],
         "function": "disable_by_pattern",
@@ -20,7 +37,7 @@ COMMON_OPERATIONS = {
         "patterns": [
             r"disable all options? (?:for|in|on) (.+)",
             r"turn off all options? (?:for|in|on) (.+)",
-            r"deactivate all options? (?:for|in|on) (.+)"
+            r"deactivate all options? (?:for|in|on) (.+)"  # Matches option disable patterns
         ],
         "steps": ["confirm_items", "confirm_disable", "execute_disable"],
         "function": "disable_options_by_pattern",
@@ -48,9 +65,9 @@ COMMON_OPERATIONS = {
     },
     "disable_option": {
         "patterns": [
-            r"disable (?:the )?(?:menu )?option",
-            r"turn off (?:the )?(?:menu )?option",
-            r"deactivate (?:the )?(?:menu )?option"
+            r"disable (?:the )?(?:menu )?option(?! item)",
+            r"turn off (?:the )?(?:menu )?option(?! item)",
+            r"deactivate (?:the )?(?:menu )?option(?! item)"
         ],
         "steps": ["get_option_name", "confirm_disable", "execute_disable"],
         "function": "disable_by_name",
@@ -86,6 +103,7 @@ COMMON_OPERATIONS = {
     }
 }
 
+
 def match_operation(query: str) -> Optional[Dict[str, Any]]:
     """Match query against common operation patterns
     
@@ -112,6 +130,27 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                     # Extract pattern from original query
                     start, end = match.span(1)
                     original_text = query[start:end]
+                    
+                    # Handle toggle operations
+                    if op_type == "toggle_item":
+                        operation_type = "disable"
+                        if "enable" in query.lower():
+                            operation_type = "enable"
+                        elif "toggle" in query.lower():
+                            operation_type = "toggle"
+                            
+                        return {
+                            "type": "toggle_item",
+                            "steps": ["confirm_items", "confirm_toggle", "execute_toggle"],
+                            "function": "toggle_menu_item",
+                            "item_type": "Menu Item",
+                            "current_step": 0,
+                            "params": {
+                                "item_name": original_text,
+                                "operation": operation_type
+                            }
+                        }
+                    
                     # For options and option items, extract just the item name
                     if "option items" in query.lower():
                         # Extract item name after "for"
@@ -153,7 +192,11 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                 return operation
     return None
 
-def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, Any]:
+
+def handle_operation_step(
+    operation: Dict[str, Any], 
+    message: str
+) -> Dict[str, Any]:
     """Handle operation step including bulk operations
     
     Args:
@@ -163,11 +206,29 @@ def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, 
     Returns:
         Dict with response type and content
     """
+    # Validate step index
+    if operation["current_step"] >= len(operation["steps"]):
+        return {"role": "assistant", "content": "I didn't understand that command. Please try again."}
+        
     # Convert pattern to lowercase for consistency
     if "pattern" in operation.get("params", {}):
         operation["params"]["pattern"] = operation["params"]["pattern"].lower()
         
     step = operation["steps"][operation["current_step"]]
+    # Handle confirmation steps first
+    if step == "confirm_disable":
+        if message and message.lower() != "yes":
+            operation["params"]["item_name"] = message
+            return {
+                "role": "assistant",
+                "content": f"Are you sure you want to disable {message}? (yes/no)"
+            }
+        if message and message.lower() == "yes":
+            return {
+                "role": "assistant",
+                "content": "Are you absolutely sure? This operation cannot be undone. (yes/no)"
+            }
+        return {"role": "assistant", "content": "Operation cancelled"}
     
     if step == "confirm_items":
         # For bulk operations, show matching items
@@ -195,9 +256,13 @@ def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, 
             if not success:
                 return {"role": "assistant", "content": result}
                 
+            confirmation_msg = (
+                f"Found these items:\n{result}\n"
+                "Would you like to proceed with disabling them? (yes/no)"
+            )
             return {
                 "role": "assistant",
-                "content": f"Found these items:\n{result}\nWould you like to proceed with disabling them? (yes/no)"
+                "content": confirmation_msg
             }
             
         except Exception as e:
@@ -221,9 +286,12 @@ def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, 
         
     elif step.startswith("confirm_"):
         # Confirm operation
-        if step == "confirm_disable":
+        if step in ["confirm_disable", "confirm_toggle"]:
             if message.lower() != "yes":
-                return {"role": "assistant", "content": "Operation cancelled"}
+                return {
+                "role": "assistant",
+                "content": "Operation cancelled"
+            }
             return {
                 "role": "assistant",
                 "content": "Are you absolutely sure? This operation cannot be undone. (yes/no)"
@@ -234,9 +302,10 @@ def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, 
                 "confirm_price": f"Set price to ${message}? (yes/no)",
                 "confirm_time_range": f"Set time range to {operation['params'].get('start_time', '?')}-{message}? (yes/no)"
             }
+            prompt = confirms.get(step, "Please confirm (yes/no)")
             return {
                 "role": "assistant",
-                "content": confirms.get(step, "Please confirm (yes/no)")
+                "content": prompt
             }
         
     elif step.startswith("execute_"):
@@ -258,7 +327,12 @@ def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, 
         "content": "I didn't understand that. Please try again."
     }
 
-def store_operation_history(settings: Dict[str, Any], operation: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
+
+def store_operation_history(
+    settings: Dict[str, Any], 
+    operation: Dict[str, Any], 
+    result: Dict[str, Any]
+) -> Dict[str, Any]:
     """Store operation in history
     
     Args:
