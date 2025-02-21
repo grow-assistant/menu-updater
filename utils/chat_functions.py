@@ -18,12 +18,13 @@ from utils.menu_analytics import (
 
 
 
-def process_chat_message(message: str, history: List[Dict]) -> Dict:
+def process_chat_message(message: str, history: List[Dict], functions: List[Dict]) -> Dict:
     """Process chat message
     
     Args:
         message: User message
         history: Chat history
+        functions: OpenAI function definitions
         
     Returns:
         Response dict with role and content
@@ -74,7 +75,7 @@ def run_chat_sequence(messages, functions):
 
     # Process latest message
     if messages and messages[-1]["role"] == "user":
-        response = process_chat_message(messages[-1]["content"], messages[:-1])
+        response = process_chat_message(messages[-1]["content"], messages[:-1], functions)
         internal_chat_history.append(response)
         return response
         
