@@ -5,9 +5,30 @@ from utils.operation_patterns import match_operation, handle_operation_step
 def test_match_operation():
     """Test operation pattern matching"""
     # Test disable patterns
-    assert match_operation("disable the menu item")["type"] == "disable_item"
-    assert match_operation("turn off item")["type"] == "disable_item"
-    assert match_operation("deactivate menu item")["type"] == "disable_item"
+    assert match_operation("disable the menu item") == {
+        "type": "disable_item",
+        "steps": ["get_item_name", "confirm_disable", "execute_disable"],
+        "function": "disable_by_name",
+        "item_type": "Menu Item",
+        "current_step": 0,
+        "params": {}
+    }
+    assert match_operation("turn off item") == {
+        "type": "disable_item",
+        "steps": ["get_item_name", "confirm_disable", "execute_disable"],
+        "function": "disable_by_name",
+        "item_type": "Menu Item",
+        "current_step": 0,
+        "params": {}
+    }
+    assert match_operation("deactivate menu item") == {
+        "type": "disable_item",
+        "steps": ["get_item_name", "confirm_disable", "execute_disable"],
+        "function": "disable_by_name",
+        "item_type": "Menu Item",
+        "current_step": 0,
+        "params": {}
+    }
     
     assert match_operation("disable the menu option")["type"] == "disable_option"
     assert match_operation("turn off option")["type"] == "disable_option"
