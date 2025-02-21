@@ -138,8 +138,10 @@ def disable_by_name(
                 # Prepare query based on type
                 if disable_type == "Menu Item":
                     table = "items"
-                else:
+                elif disable_type == "Item Option":
                     table = "options"
+                else:
+                    table = "option_items"
                     
                 # Get IDs for locking
                 ids = [item["id"] for item in items]

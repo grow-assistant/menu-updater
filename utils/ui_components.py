@@ -204,8 +204,8 @@ def render_disable_interface(connection) -> Dict[str, Any]:
     # Item/Option selection
     disable_type = st.radio(
         "Select type to disable",
-        ["Menu Item", "Item Option"],
-        help="Choose whether to disable a menu item or an option"
+        ["Menu Item", "Item Option", "Option Item"],
+        help="Choose whether to disable a menu item, an option, or an option item"
     )
     
     # Name input
@@ -225,12 +225,20 @@ def render_disable_interface(connection) -> Dict[str, Any]:
             JOIN categories c ON i.category_id = c.id
             WHERE i.name ILIKE %s AND i.deleted_at IS NULL
         """
-    else:
+    elif disable_type == "Item Option":
         query = """
             SELECT o.id, o.name, o.disabled, i.name as item
             FROM options o
             JOIN items i ON o.item_id = i.id
             WHERE o.name ILIKE %s AND o.deleted_at IS NULL
+        """
+    else:  # Option Item
+        query = """
+            SELECT oi.id, oi.name, oi.disabled, o.name as option, i.name as item
+            FROM option_items oi
+            JOIN options o ON oi.option_id = o.id
+            JOIN items i ON o.item_id = i.id
+            WHERE oi.name ILIKE %s AND oi.deleted_at IS NULL
         """
     
     results = execute_menu_query(query, (item_name,))
@@ -245,8 +253,10 @@ def render_disable_interface(connection) -> Dict[str, Any]:
         status = "Disabled" if item["disabled"] else "Enabled"
         if disable_type == "Menu Item":
             st.info(f"Item: {item['name']} ({status}) in category: {item['category']}")
-        else:
+        elif disable_type == "Item Option":
             st.info(f"Option: {item['name']} ({status}) for item: {item['item']}")
+        else:
+            st.info(f"Option Item: {item['name']} ({status}) for option: {item['option']} on item: {item['item']}")
     
     # Confirmation
     if st.button(

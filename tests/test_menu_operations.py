@@ -37,6 +37,17 @@ def test_disable_by_name():
         "UPDATE options SET disabled = true WHERE id IN (2)"
     )
     
+    # Test option item disable
+    items = [{"id": 3, "name": "Test Option Item"}]
+    success, message = disable_by_name(mock_connection, "Option Item", items)
+    assert success
+    assert "Successfully disabled" in message
+    mock_cursor.execute.assert_any_call("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+    mock_cursor.execute.assert_any_call("SELECT id FROM option_items WHERE id IN (3) FOR UPDATE")
+    mock_cursor.execute.assert_any_call(
+        "UPDATE option_items SET disabled = true WHERE id IN (3)"
+    )
+    
     # Test multiple items
     items = [{"id": 1, "name": "Item 1"}, {"id": 2, "name": "Item 2"}]
     success, message = disable_by_name(mock_connection, "Menu Item", items)
