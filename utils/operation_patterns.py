@@ -115,15 +115,16 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                     # For options, extract just the item name
                     if "options" in pattern:
                         # Extract item name after "for"
-                        parts = query.split(" for ")
+                        parts = query.lower().split(" for ")
                         if len(parts) > 1:
+                            item_name = query[len(parts[0]) + 5:].strip()  # +5 for " for "
                             return {
                                 "type": "disable_bulk_options",
                                 "steps": ["confirm_items", "confirm_disable", "execute_disable"],
                                 "function": "disable_options_by_pattern",
                                 "item_type": "Item Option",
                                 "current_step": 0,
-                                "params": {"pattern": parts[1].strip()}
+                                "params": {"pattern": item_name}
                             }
                     operation["params"]["pattern"] = original_text
                 return operation
@@ -149,17 +150,18 @@ def handle_operation_step(operation: Dict[str, Any], message: str) -> Dict[str, 
                 disable_options_by_pattern,
                 disable_option_items_by_pattern
             )
-            from utils.database_functions import postgres_connection
+            from utils.database_functions import get_db_connection
             
             pattern = operation["params"]["pattern"]
+            conn = get_db_connection()
             
             # Get current state
             if operation["type"] == "disable_bulk":
-                success, result = disable_by_pattern(postgres_connection, pattern)
+                success, result = disable_by_pattern(conn, pattern)
             elif operation["type"] == "disable_bulk_options":
-                success, result = disable_options_by_pattern(postgres_connection, pattern)
+                success, result = disable_options_by_pattern(conn, pattern)
             elif operation["type"] == "disable_bulk_option_items":
-                success, result = disable_option_items_by_pattern(postgres_connection, pattern)
+                success, result = disable_option_items_by_pattern(conn, pattern)
             else:
                 return {"role": "assistant", "content": "Invalid operation type"}
                 
