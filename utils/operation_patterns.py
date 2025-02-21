@@ -111,7 +111,12 @@ def match_operation(query: str) -> Optional[Dict[str, Any]]:
                 if len(match.groups()) > 0:
                     # Extract pattern from original query
                     start, end = match.span(1)
-                    operation["params"]["pattern"] = query[start:end]
+                    original_text = query[start:end]
+                    # For options, extract just the item name
+                    if "options" in pattern:
+                        operation["params"]["pattern"] = original_text.split(" for ")[-1]
+                    else:
+                        operation["params"]["pattern"] = original_text
                 return operation
     return None
 
