@@ -1,0 +1,17 @@
+2025-02-26 14:27:58,322 - openai_communications - INFO - === New OpenAI Session Started at 2025-02-26_14-27-58 ===
+2025-02-26 14:27:58,323 - openai_communications - INFO - OpenAI communication logging initialized
+2025-02-26 14:27:59,060 - openai_communications - INFO - RESPONSE FROM OpenAI:
+{
+  "request_type": "order_history",
+  "time_period": "last_year",
+  "analysis_type": "trend"
+}
+2025-02-26 14:27:59,060 - openai_communications - INFO - Model: gpt-4o-2024-08-06
+2025-02-26 14:27:59,060 - openai_communications - INFO - Tokens Used: 1374
+2025-02-26 14:27:59,081 - openai_communications - INFO - Valid categorization: request_type='order_history' time_period='last_year' analysis_type='trend' start_date=None end_date=None item_name=None new_price=None
+2025-02-26 14:28:03,697 - openai_communications - INFO - === New OpenAI Session Started at 2025-02-26_14-28-03 ===
+2025-02-26 14:28:03,699 - openai_communications - INFO - OpenAI communication logging initialized
+2025-02-26 14:28:06,160 - openai_communications - INFO - === New OpenAI Session Started at 2025-02-26_14-28-06 ===
+2025-02-26 14:28:06,160 - openai_communications - INFO - OpenAI communication logging initialized
+2025-02-26 14:28:10,022 - openai_communications - INFO - === New OpenAI Session Started at 2025-02-26_14-28-10 ===
+2025-02-26 14:28:10,023 - openai_communications - INFO - OpenAI communication logging initialized

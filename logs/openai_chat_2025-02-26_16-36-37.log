@@ -1,0 +1,8 @@
+2025-02-26 16:36:37,911 - INFO - === New Session Started at 2025-02-26_16-36-37 ===
+2025-02-26 16:36:37,911 - INFO - Logging initialized with fresh log file
+2025-02-26 16:36:38,115 - INFO - NumExpr defaulting to 14 threads.
+2025-02-26 16:36:38,400 - WARNING - Could not delete previous log file - it might be open in another process
+2025-02-26 16:36:38,401 - INFO - Starting app.py
+2025-02-26 16:36:38,402 - INFO - .env file loaded
+2025-02-26 16:36:38,626 - INFO - Debug mode set to: False
+2025-02-26 16:36:38,626 - INFO - End of app.py execution

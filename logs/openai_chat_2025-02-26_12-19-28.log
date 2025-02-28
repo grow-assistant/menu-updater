@@ -1,0 +1,6 @@
+2025-02-26 12:19:28,061 - INFO - === New Session Started at 2025-02-26_12-19-28 ===
+2025-02-26 12:19:28,061 - INFO - Logging initialized with fresh log file
+2025-02-26 12:19:28,947 - INFO - Starting app.py
+2025-02-26 12:19:28,950 - INFO - .env file loaded
+2025-02-26 12:19:29,178 - INFO - Debug mode set to: False
+2025-02-26 12:19:29,178 - INFO - End of app.py execution

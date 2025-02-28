@@ -1,0 +1,10 @@
+2025-02-26 12:46:30,949 - INFO - === New Session Started at 2025-02-26_12-46-30 ===
+2025-02-26 12:46:30,949 - INFO - Logging initialized with fresh log file
+2025-02-26 12:46:31,796 - INFO - Starting app.py
+2025-02-26 12:46:31,796 - INFO - .env file loaded
+2025-02-26 12:46:32,040 - INFO - Debug mode set to: False
+2025-02-26 12:46:32,040 - INFO - End of app.py execution
+2025-02-26 12:46:34,541 - INFO - HTTP Request: GET https://api.elevenlabs.io/v1/voices "HTTP/1.1 200 OK"
+2025-02-26 12:46:39,197 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-02-26 12:46:43,449 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-02-26 12:46:45,281 - INFO - HTTP Request: POST https://api.elevenlabs.io/v1/text-to-speech/UgBBYS2sOqTuMpoF3BR0?output_format=mp3_44100_128 "HTTP/1.1 200 OK"
