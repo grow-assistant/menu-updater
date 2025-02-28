@@ -553,4 +553,4 @@ WHERE l.id NOT IN (32,29)
   AND u.id NOT IN (19,644,928,174)
   AND o.status NOT IN (0,6)
   AND (o.updated_at - INTERVAL '7 hours')::date >= CURRENT_DATE - INTERVAL '1 day';
-""" 
+"""

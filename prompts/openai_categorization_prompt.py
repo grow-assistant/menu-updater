@@ -1,16 +1,19 @@
 import datetime
 from typing import Dict, Optional, Any, Union
 
+
 def create_categorization_prompt(cached_dates=None) -> Dict[str, Any]:
     """Create an optimized categorization prompt for OpenAI
-    
+
     Args:
         cached_dates: Optional previously cached date context
-        
+
     Returns:
         Dict containing the prompt string and context information
     """
-    yesterday_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    yesterday_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime(
+        "%Y-%m-%d"
+    )
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
 
     # Change arrows to text equivalents
@@ -19,7 +22,7 @@ def create_categorization_prompt(cached_dates=None) -> Dict[str, Any]:
     - Followup: "Total for those" -> use previous dates
     - New query: "Compare to last week" -> calculate new dates
     """
-    
+
     prompt = f"""You are an expert query categorization system for a restaurant management application. 
 Analyze user queries and classify them into the correct category from the following options.
 
@@ -121,6 +124,6 @@ Respond with a JSON object containing the categorized request information."""
             "current_date": current_date,
             "yesterday_date": yesterday_date,
             "cached_dates": cached_dates,
-            "date_context": cached_dates  # Include date_context for compatibility
-        }
+            "date_context": cached_dates,  # Include date_context for compatibility
+        },
     }

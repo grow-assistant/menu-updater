@@ -1,28 +1,28 @@
 QUERY_TEMPLATES = {
     "view_location_hours": """
-        SELECT * FROM location_hours 
+        SELECT * FROM location_hours
         WHERE location_id = %(location_id)s
     """,
     "update_location_hours": """
         UPDATE location_hours
-        SET 
+        SET
             updated_at = CURRENT_TIMESTAMP,
             open_time = %(open_time)s,
             close_time = %(close_time)s
-        WHERE 
+        WHERE
             location_id = %(location_id)s
             AND day_of_week = %(day_of_week)s
     """,
     "view_markers": """
-        SELECT * FROM markers 
+        SELECT * FROM markers
         WHERE location_id = %(location_id)s
         ORDER BY id DESC
     """,
     "insert_marker": """
-        INSERT INTO markers 
+        INSERT INTO markers
         (id, created_at, updated_at, deleted_at, name, disabled, location_id)
         VALUES
-        (%(id)s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %(deleted_at)s, 
+        (%(id)s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %(deleted_at)s,
          %(name)s, %(disabled)s, %(location_id)s)
     """,
     "menu_cleanup": """
@@ -33,10 +33,10 @@ QUERY_TEMPLATES = {
             v_option_name VARCHAR := %(option_name)s;
         BEGIN
             -- Delete option items first
-            DELETE FROM option_items 
+            DELETE FROM option_items
             WHERE id IN (
-                SELECT DISTINCT oi.id 
-                FROM locations l 
+                SELECT DISTINCT oi.id
+                FROM locations l
                 INNER JOIN menus m ON m.location_id = l.id
                 INNER JOIN categories c ON c.menu_id = m.id
                 INNER JOIN items i ON i.category_id = c.id
@@ -48,10 +48,10 @@ QUERY_TEMPLATES = {
             );
 
             -- Then delete the options
-            DELETE FROM options 
+            DELETE FROM options
             WHERE id IN (
-                SELECT DISTINCT o.id 
-                FROM locations l 
+                SELECT DISTINCT o.id
+                FROM locations l
                 INNER JOIN menus m ON m.location_id = l.id
                 INNER JOIN categories c ON c.menu_id = m.id
                 INNER JOIN items i ON i.category_id = c.id
@@ -61,5 +61,5 @@ QUERY_TEMPLATES = {
                 AND o.name = v_option_name
             );
         END $$;
-    """
-} 
+    """,
+}

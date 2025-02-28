@@ -1,4 +1,4 @@
-dark = '''
+dark = """
 <style>
     /* Main App styling */
     .stApp, .stApp .stMarkdown p, .stApp .sidebar .sidebar-content {
@@ -34,4 +34,4 @@ dark = '''
 
     /* Other stylings remain the same ... */
 </style>
-'''
+"""

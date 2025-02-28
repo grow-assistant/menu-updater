@@ -77,14 +77,15 @@ ORDER BY
   count DESC;
 """
 
+
 def get_sql_template(template_name, **kwargs):
     """
     Get a SQL template with the given parameters applied.
-    
+
     Args:
         template_name: The name of the template to retrieve
         **kwargs: Parameters to apply to the template
-        
+
     Returns:
         str: The formatted SQL query
     """
@@ -93,10 +94,10 @@ def get_sql_template(template_name, **kwargs):
         "fulfillment_time": FULFILLMENT_TIME_QUERY,
         "delivery_fulfillment_time": DELIVERY_FULFILLMENT_TIME_QUERY,
         "canceled_orders": CANCELED_ORDERS_QUERY,
-        "cancellation_reasons": CANCELLATION_REASONS_QUERY
+        "cancellation_reasons": CANCELLATION_REASONS_QUERY,
     }
-    
+
     if template_name not in templates:
         raise ValueError(f"Unknown SQL template: {template_name}")
-    
-    return templates[template_name].format(**kwargs) 
+
+    return templates[template_name].format(**kwargs)

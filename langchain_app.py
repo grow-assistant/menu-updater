@@ -12,13 +12,12 @@ st.set_page_config(
     page_icon="🦅",
     layout="wide",
     initial_sidebar_state="expanded",
-    menu_items={
-        'About': "# Swoop AI\nAI-powered restaurant data assistant"
-    }
+    menu_items={"About": "# Swoop AI\nAI-powered restaurant data assistant"},
 )
 
 # Add custom CSS for a modern look that matches Swoop Golf branding
-st.markdown("""
+st.markdown(
+    """
 <style>
     /* Import Google Fonts similar to Swoop website */
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
@@ -182,10 +181,13 @@ st.markdown("""
         white-space: normal !important;
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # Apply a second CSS overlay just to fix any leaking CSS issues
-st.markdown("""
+st.markdown(
+    """
 <style>
 /* This CSS will ensure no CSS code is visible in the main UI */
 .main pre,
@@ -208,7 +210,9 @@ st.markdown("""
     display: none !important;
 }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 from typing import Dict, List, Any, Optional, Tuple
 import json
@@ -231,11 +235,11 @@ pygame = None
 
 # Import from the existing codebase
 from integrate_app import (
-    load_application_context, 
+    load_application_context,
     initialize_voice_dependencies,
     MockSessionState,
     get_clients,
-    ElevenLabsVoice
+    ElevenLabsVoice,
 )
 from app import execute_menu_query, adjust_query_timezone
 
@@ -255,80 +259,78 @@ try:
         create_sql_database_tool,
         create_menu_update_tool,
         integrate_with_existing_flow,
-        clean_text_for_speech
+        clean_text_for_speech,
     )
+
     LANGCHAIN_AVAILABLE = True
 except ImportError as e:
     st.error(f"Error importing LangChain modules: {str(e)}")
-    st.error("Please install required packages: pip install langchain==0.0.150 langchain-community<0.1.0")
+    st.error(
+        "Please install required packages: pip install langchain==0.0.150 langchain-community<0.1.0"
+    )
 
 # Initialize session state for LangChain components
-if 'langchain_agent' not in st.session_state:
+if "langchain_agent" not in st.session_state:
     st.session_state.langchain_agent = None
-    
-if 'agent_memory' not in st.session_state:
+
+if "agent_memory" not in st.session_state:
     st.session_state.agent_memory = None
-    
-if 'chat_history' not in st.session_state:
+
+if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-    
-if 'voice_enabled' not in st.session_state:
+
+if "voice_enabled" not in st.session_state:
     st.session_state.voice_enabled = True  # Default to enabled
-    
-if 'voice_instance' not in st.session_state:
+
+if "voice_instance" not in st.session_state:
     st.session_state.voice_instance = None
 
-if 'clear_input' not in st.session_state:
+if "clear_input" not in st.session_state:
     st.session_state.clear_input = False
-    
-if 'selected_location_id' not in st.session_state:
+
+if "selected_location_id" not in st.session_state:
     st.session_state.selected_location_id = 62  # Default location ID
 
-if 'selected_location_ids' not in st.session_state:
-    st.session_state.selected_location_ids = [62]  # Default to list with single location
+if "selected_location_ids" not in st.session_state:
+    st.session_state.selected_location_ids = [
+        62
+    ]  # Default to list with single location
 
-if 'selected_club' not in st.session_state:
+if "selected_club" not in st.session_state:
     st.session_state.selected_club = "Idle Hour Country Club"  # Default club
 
-if 'context' not in st.session_state:
+if "context" not in st.session_state:
     st.session_state.context = {}
 # Define available locations organized by club
 club_locations = {
-    "Idle Hour Country Club": {
-        "locations": [62],
-        "default": 62
-    },
-    "Pinetree Country Club": {
-        "locations": [61, 66],
-        "default": 61
-    },
-    "East Lake Golf Club": {
-        "locations": [16],
-        "default": 16
-    }
+    "Idle Hour Country Club": {"locations": [62], "default": 62},
+    "Pinetree Country Club": {"locations": [61, 66], "default": 61},
+    "East Lake Golf Club": {"locations": [16], "default": 16},
 }
 
 # Initialize session state for voice persona
-if 'voice_persona' not in st.session_state:
+if "voice_persona" not in st.session_state:
     st.session_state.voice_persona = "casual"  # Default to casual
+
 
 def execute_sql_query(query: str) -> Dict[str, Any]:
     """
     Execute SQL query using the existing app functions.
-    
+
     Args:
         query: SQL query to execute
-        
+
     Returns:
         dict: Query result
     """
     # Adjust the query for timezone
     adjusted_query = adjust_query_timezone(query, st.session_state.selected_location_id)
-    
+
     # Execute the query
     result = execute_menu_query(adjusted_query)
-    
+
     return result
+
 
 def create_tools_for_agent():
     """
@@ -337,10 +339,10 @@ def create_tools_for_agent():
     if not LANGCHAIN_AVAILABLE:
         st.error("LangChain is not available. Please install required packages.")
         return []
-        
+
     # SQL database tool
     sql_tool = create_sql_database_tool(execute_query_func=execute_sql_query)
-    
+
     # Menu update tool
     def execute_menu_update(update_spec):
         # This function calls into the existing code for menu updates
@@ -348,15 +350,21 @@ def create_tools_for_agent():
             try:
                 update_spec = json.loads(update_spec)
             except json.JSONDecodeError:
-                return {"success": False, "error": "Invalid JSON in update specification"}
-                
-        item_name = update_spec.get('item_name')
-        new_price = update_spec.get('new_price')
-        disabled = update_spec.get('disabled')
-        
+                return {
+                    "success": False,
+                    "error": "Invalid JSON in update specification",
+                }
+
+        item_name = update_spec.get("item_name")
+        new_price = update_spec.get("new_price")
+        disabled = update_spec.get("disabled")
+
         if not item_name:
-            return {"success": False, "error": "Missing item_name in update specification"}
-            
+            return {
+                "success": False,
+                "error": "Missing item_name in update specification",
+            }
+
         if new_price is not None:
             # Update price query
             query = f"UPDATE items SET price = {new_price} WHERE name ILIKE '%{item_name}%' AND location_id = {st.session_state.selected_location_id} RETURNING *"
@@ -365,12 +373,15 @@ def create_tools_for_agent():
             disabled_value = str(disabled).lower()
             query = f"UPDATE items SET disabled = {disabled_value} WHERE name ILIKE '%{item_name}%' AND location_id = {st.session_state.selected_location_id} RETURNING *"
         else:
-            return {"success": False, "error": "Invalid update specification - must include either new_price or disabled"}
-        
+            return {
+                "success": False,
+                "error": "Invalid update specification - must include either new_price or disabled",
+            }
+
         return execute_sql_query(query)
-    
+
     menu_tool = create_menu_update_tool(execute_update_func=execute_menu_update)
-    
+
     # Return all tools
     return [sql_tool, menu_tool]
 
@@ -380,16 +391,16 @@ def setup_langchain_agent():
     if not LANGCHAIN_AVAILABLE:
         st.error("LangChain is not available. Please install required packages.")
         return None
-        
+
     if st.session_state.langchain_agent is None:
         try:
             # Create tools
             tools = create_tools_for_agent()
-            
+
             # Load context for the agent
             context = load_application_context()
-            business_context = context.get('business_rules', '')
-            
+            business_context = context.get("business_rules", "")
+
             # Create system message with context
             system_message = f"""
             You are an AI assistant for a restaurant management system.
@@ -406,163 +417,176 @@ def setup_langchain_agent():
             
             Use the provided tools to help answer questions and fulfill requests.
             """
-            
+
             # Create the agent
             from langchain.memory import ConversationBufferMemory
-            memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+
+            memory = ConversationBufferMemory(
+                memory_key="chat_history", return_messages=True
+            )
             st.session_state.agent_memory = memory
-            
+
             # Get OpenAI API key from environment
             openai_api_key = os.getenv("OPENAI_API_KEY")
             if not openai_api_key:
                 st.error("OpenAI API key not found in environment variables")
                 return None
-                
+
             # Verify API key functionality with OpenAI client (older version style)
             try:
                 # Set the API key
                 openai.api_key = openai_api_key
-                
+
                 # Make a minimal API call to verify the key works
                 # Just checking the models endpoint which requires minimal resources
                 openai.Model.list(limit=1)
             except Exception as e:
                 st.error(f"Error initializing OpenAI client: {str(e)}")
                 return None
-            
+
             # Create the agent
             agent = create_langchain_agent(
                 openai_api_key=openai_api_key,
                 tools=tools,
                 memory=memory,
                 verbose=True,
-                model_name="gpt-3.5-turbo", # Use a model available in older API
+                model_name="gpt-3.5-turbo",  # Use a model available in older API
                 temperature=0.3,
-                streaming=True
+                streaming=True,
             )
-            
+
             # Store in session state
             st.session_state.langchain_agent = agent
-            
+
         except Exception as e:
             st.error(f"Error setting up LangChain agent: {str(e)}")
             return None
-            
+
     return st.session_state.langchain_agent
 
 
 def process_query_with_langchain(query: str, output_container):
     """
     Process a query using the LangChain agent and display the results.
-    
+
     Args:
         query: User query
         output_container: Streamlit container to display output
     """
     if not LANGCHAIN_AVAILABLE:
-        output_container.error("LangChain is not available. Please install required packages.")
+        output_container.error(
+            "LangChain is not available. Please install required packages."
+        )
         return {"success": False, "error": "LangChain is not available"}
-    
+
     # Clear any previous content in the output container
     output_container.empty()
-    
+
     # Set up callback handler for streaming output
     callback_handler = StreamlitCallbackHandler(output_container)
-    
+
     # Get or create agent
     agent = setup_langchain_agent()
     if not agent:
         output_container.error("Failed to set up LangChain agent")
         return {"success": False, "error": "Failed to set up LangChain agent"}
-    
+
     # Create a mock session state for compatibility
     mock_session = MockSessionState()
     mock_session.selected_location_id = st.session_state.selected_location_id
     mock_session.selected_location_ids = st.session_state.selected_location_ids
     mock_session.selected_club = st.session_state.selected_club
-    
+
     # Get context
     context = {}
-    if 'context' in st.session_state:
+    if "context" in st.session_state:
         context = st.session_state.context
-    
+
     # Ensure location IDs are explicitly added to context
-    context['selected_location_id'] = st.session_state.selected_location_id
-    context['selected_location_ids'] = st.session_state.selected_location_ids
-    context['selected_club'] = st.session_state.selected_club
-    
+    context["selected_location_id"] = st.session_state.selected_location_id
+    context["selected_location_ids"] = st.session_state.selected_location_ids
+    context["selected_club"] = st.session_state.selected_club
+
     # Create tools
     tools = create_tools_for_agent()
-    
+
     try:
         # Run query through LangChain
         with st.spinner("Processing..."):
             # Show a thinking message
             output_container.markdown("_Thinking..._")
-            
+
             # Process the query
             result = integrate_with_existing_flow(
                 query=query,
                 tools=tools,
                 context=context,
                 agent=agent,
-                callback_handler=callback_handler
+                callback_handler=callback_handler,
             )
-        
+
         # Update chat history with the text answer if available, otherwise use summary
-        chat_message = result.get('text_answer', result.get('summary', ''))
-        
+        chat_message = result.get("text_answer", result.get("summary", ""))
+
         # Store both the query and a response object with verbal and text components
         response_entry = {
-            'summary': result.get('summary', ''),
-            'verbal_answer': result.get('verbal_answer', ''),
-            'text_answer': result.get('text_answer', ''),
-            'sql_query': result.get('sql_query', '')
+            "summary": result.get("summary", ""),
+            "verbal_answer": result.get("verbal_answer", ""),
+            "text_answer": result.get("text_answer", ""),
+            "sql_query": result.get("sql_query", ""),
         }
-        
+
         # Append both query and structured response to chat history
         st.session_state.chat_history.append((query, response_entry))
-        
+
         # Update context
-        if 'context' not in st.session_state:
+        if "context" not in st.session_state:
             st.session_state.context = {}
-        st.session_state.context = result.get('context', {})
-        
+        st.session_state.context = result.get("context", {})
+
         # Track if voice was used to determine if auto-listen should be triggered
         voice_was_used = False
-        
+
         # Process voice if enabled
         if st.session_state.voice_enabled and st.session_state.voice_instance:
             voice = st.session_state.voice_instance
             if voice.initialized and voice.enabled:
                 try:
                     # Use the verbal_answer specifically for voice if available
-                    verbal_text = result.get('verbal_answer', result.get('summary', ''))
+                    verbal_text = result.get("verbal_answer", result.get("summary", ""))
                     if verbal_text:
                         # Clean the text for better speech synthesis if clean_text_for_speech is available
-                        if 'clean_text_for_speech' in globals():
+                        if "clean_text_for_speech" in globals():
                             verbal_text = clean_text_for_speech(verbal_text)
-                        
+
                         # Get persona name for display
-                        persona_name = st.session_state.get('voice_persona', 'casual').title()
-                        
+                        persona_name = st.session_state.get(
+                            "voice_persona", "casual"
+                        ).title()
+
                         # Show voice indicator with Swoop branding and persona info
-                        with st.status(f"Processing voice output ({persona_name} style)...", state="running"):
-                            st.markdown(f'<div style="color: #FF8B00; font-weight: 500; font-family: Montserrat, sans-serif;">🔊 Speaking with {persona_name} voice style...</div>', unsafe_allow_html=True)
+                        with st.status(
+                            f"Processing voice output ({persona_name} style)...",
+                            state="running",
+                        ):
+                            st.markdown(
+                                f'<div style="color: #FF8B00; font-weight: 500; font-family: Montserrat, sans-serif;">🔊 Speaking with {persona_name} voice style...</div>',
+                                unsafe_allow_html=True,
+                            )
                             voice.speak(verbal_text)
                             st.success(f"✓ Voice response complete")
                             voice_was_used = True
                 except Exception as voice_error:
                     st.warning(f"Voice output error: {str(voice_error)}")
-        
+
         # Auto-listen after voice response if enabled
-        if voice_was_used and st.session_state.get('auto_listen_enabled', False):
+        if voice_was_used and st.session_state.get("auto_listen_enabled", False):
             st.info("Auto-listening for your next question...")
             # Start speech recognition in a new thread to avoid blocking the UI
             thread = threading.Thread(target=background_speech_recognition_with_timeout)
             thread.daemon = True
             thread.start()
-        
+
         return result
     except Exception as e:
         error_msg = f"Error: {str(e)}"
@@ -580,23 +604,26 @@ def clear_query_input():
 def init_voice():
     """Initialize voice functionality with direct API approach"""
     global ELEVENLABS_AVAILABLE, PYGAME_AVAILABLE
-    
-    if 'voice_instance' not in st.session_state or st.session_state.voice_instance is None:
+
+    if (
+        "voice_instance" not in st.session_state
+        or st.session_state.voice_instance is None
+    ):
         try:
             # Always set voice dependencies to be available
             ELEVENLABS_AVAILABLE = True
             PYGAME_AVAILABLE = True
-            
+
             # Get the current persona from session state (default to casual)
-            persona = st.session_state.get('voice_persona', 'casual')
-            
+            persona = st.session_state.get("voice_persona", "casual")
+
             # Create the voice instance with the selected persona
             voice = SimpleVoice(persona=persona)
-            
+
             # Set session state
             st.session_state.voice_instance = voice
             st.session_state.voice_enabled = True
-            
+
             # Initialize silently without showing status messages
             return voice
         except Exception as e:
@@ -606,7 +633,7 @@ def init_voice():
             st.session_state.voice_instance = None
             st.session_state.voice_enabled = True  # Keep enabled anyway
             return None
-    
+
     return st.session_state.voice_instance
 
 
@@ -614,68 +641,87 @@ def run_langchain_streamlit_app():
     """Main function to run the Streamlit app with LangChain integration"""
     # Initialize voice
     voice = init_voice()
-    
+
     # Main area - Set up the title with Swoop branding
-    st.markdown("""
+    st.markdown(
+        """
     <div style="display: flex; justify-content: center; margin-bottom: 20px;">
         <h1 style="color: white; margin: 0; font-family: 'Montserrat', sans-serif; font-weight: 700;">Swoop AI</h1>
     </div>
-    """, unsafe_allow_html=True)
-    
+    """,
+        unsafe_allow_html=True,
+    )
+
     # Define avatars for chat display
     avatars = {"user": "user", "assistant": "assistant"}
-    
+
     # Set up sidebar
     st.sidebar.title("")
-    
+
     # Club selection in sidebar
     selected_club = st.sidebar.selectbox(
         "Select Club",
         options=list(club_locations.keys()),
-        index=list(club_locations.keys()).index(st.session_state.selected_club) if st.session_state.selected_club in club_locations else 0
+        index=(
+            list(club_locations.keys()).index(st.session_state.selected_club)
+            if st.session_state.selected_club in club_locations
+            else 0
+        ),
     )
-    
+
     # Update selected club
     if selected_club != st.session_state.selected_club:
         st.session_state.selected_club = selected_club
         st.session_state.selected_location_id = club_locations[selected_club]["default"]
-        st.session_state.selected_location_ids = club_locations[selected_club]["locations"]
-        
+        st.session_state.selected_location_ids = club_locations[selected_club][
+            "locations"
+        ]
+
         # Clear chat history and context when switching clubs
         st.session_state.chat_history = []
         st.session_state.context = {}
-        
+
         # Show a notification that history was cleared
         st.sidebar.success(f"Switched to {selected_club}. Chat history cleared.")
-        
+
         # Reset the LangChain agent to start fresh
         st.session_state.langchain_agent = None
         st.session_state.agent_memory = None
-    
+
     # Voice settings expander
     with st.sidebar.expander("🔊 Voice Settings", expanded=False):
         voice_enabled = st.checkbox(
-            "Enable voice responses", 
+            "Enable voice responses",
             value=st.session_state.voice_enabled,
-            help="Turn on/off voice responses using ElevenLabs"
+            help="Turn on/off voice responses using ElevenLabs",
         )
-        
+
         # Add persona selector
-        available_personas = ["casual", "professional", "enthusiastic", "pro_caddy", "clubhouse_legend"]
+        available_personas = [
+            "casual",
+            "professional",
+            "enthusiastic",
+            "pro_caddy",
+            "clubhouse_legend",
+        ]
         selected_persona = st.selectbox(
             "Voice Persona",
             options=available_personas,
-            index=available_personas.index(st.session_state.voice_persona) if st.session_state.voice_persona in available_personas else 0,
-            help="Select voice persona style for responses"
+            index=(
+                available_personas.index(st.session_state.voice_persona)
+                if st.session_state.voice_persona in available_personas
+                else 0
+            ),
+            help="Select voice persona style for responses",
         )
-        
+
         # Update persona if changed
         if selected_persona != st.session_state.voice_persona:
             st.session_state.voice_persona = selected_persona
             if st.session_state.voice_instance:
                 st.session_state.voice_instance.change_persona(selected_persona)
                 st.success(f"Changed to {selected_persona} voice persona")
-        
+
         # Only update voice status if it changed
         if voice_enabled != st.session_state.voice_enabled:
             if voice_enabled and not voice:
@@ -692,21 +738,21 @@ def run_langchain_streamlit_app():
                     st.success("Voice responses enabled")
                 else:
                     st.info("Voice responses disabled")
-    
+
     # Add voice input settings
     with st.sidebar.expander("🎤 Voice Input Settings", expanded=False):
         st.write("Speech recognition settings:")
-        
+
         # Add auto-listen option - disabled by default
-        if 'auto_listen_enabled' not in st.session_state:
+        if "auto_listen_enabled" not in st.session_state:
             st.session_state.auto_listen_enabled = False
-            
+
         auto_listen = st.checkbox(
-            "Auto-listen after AI responds", 
+            "Auto-listen after AI responds",
             value=st.session_state.auto_listen_enabled,
-            help="Automatically listen for your next question after the AI finishes speaking"
+            help="Automatically listen for your next question after the AI finishes speaking",
         )
-        
+
         # Update auto-listen status if changed
         if auto_listen != st.session_state.auto_listen_enabled:
             st.session_state.auto_listen_enabled = auto_listen
@@ -714,42 +760,47 @@ def run_langchain_streamlit_app():
                 st.success("Auto-listen enabled")
             else:
                 st.info("Auto-listen disabled")
-        
+
         # Set timeout settings for auto-listen
         if st.session_state.auto_listen_enabled:
-            if 'auto_listen_timeout' not in st.session_state:
+            if "auto_listen_timeout" not in st.session_state:
                 st.session_state.auto_listen_timeout = 5
-                
+
             st.session_state.auto_listen_timeout = st.slider(
                 "Silence timeout (seconds)",
                 min_value=1,
                 max_value=10,
                 value=st.session_state.auto_listen_timeout,
-                help="Stop listening if no speech is detected after this many seconds"
+                help="Stop listening if no speech is detected after this many seconds",
             )
-        
+
         # Add button to test voice input
         if st.button("Test Voice Input", key="test_voice_input"):
             try:
                 # Attempt to import the speech recognition library to test if it's available
                 import speech_recognition as sr
-                
+
                 st.success("✅ Speech recognition library is available!")
-                
+
                 # Check if PyAudio is available
                 try:
                     import pyaudio
+
                     st.success("✅ PyAudio is available!")
                 except ImportError:
-                    st.error("❌ PyAudio is not available. Install with: pip install PyAudio")
+                    st.error(
+                        "❌ PyAudio is not available. Install with: pip install PyAudio"
+                    )
             except ImportError:
-                st.error("❌ Speech recognition library is not available. Install with: pip install SpeechRecognition")
-    
+                st.error(
+                    "❌ Speech recognition library is not available. Install with: pip install SpeechRecognition"
+                )
+
     # Clean up the voice test session state variables since we don't use those buttons anymore
-    for key in ['test_voice', 'diagnose_voice']:
+    for key in ["test_voice", "diagnose_voice"]:
         if key in st.session_state:
             del st.session_state[key]
-    
+
     # LangChain settings expander
     with st.sidebar.expander("LangChain Settings", expanded=False):
         # Reset LangChain agent button
@@ -757,113 +808,118 @@ def run_langchain_streamlit_app():
             st.session_state.langchain_agent = None
             st.session_state.agent_memory = None
             st.success("LangChain agent reset")
-    
+
     # Display chat history in native Streamlit chat components
     if not st.session_state.chat_history and not st.session_state.clear_input:
         # Show welcome message if no history
         with st.chat_message("assistant"):
-            st.markdown("""
+            st.markdown(
+                """
             <div style="font-family: 'Montserrat', sans-serif;">
             Hello! I'm your Swoop AI assistant. What would you like to know?
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
     else:
         # Display previous chat history
         for user_query, ai_response in st.session_state.chat_history:
             # User message
             with st.chat_message("user"):
                 st.markdown(user_query)
-            
+
             # Assistant message
             with st.chat_message("assistant"):
                 if isinstance(ai_response, dict):
                     # Display the text answer with improved formatting
-                    if 'text_answer' in ai_response and ai_response['text_answer']:
-                        st.markdown(ai_response['text_answer'])
-                    elif 'summary' in ai_response and ai_response['summary']:
-                        st.markdown(ai_response['summary'])
+                    if "text_answer" in ai_response and ai_response["text_answer"]:
+                        st.markdown(ai_response["text_answer"])
+                    elif "summary" in ai_response and ai_response["summary"]:
+                        st.markdown(ai_response["summary"])
                     else:
                         st.markdown("No response available")
-                    
+
                     # Show SQL query in an expander if available, with better styling
-                    if 'sql_query' in ai_response and ai_response['sql_query']:
+                    if "sql_query" in ai_response and ai_response["sql_query"]:
                         with st.expander("🔍 View SQL Query", expanded=False):
-                            st.code(ai_response['sql_query'], language="sql")
+                            st.code(ai_response["sql_query"], language="sql")
                 else:
                     # Handle legacy string responses
                     st.markdown(ai_response)
-    
+
     # Create an output container for streaming responses
     output_container = st.empty()
-    
+
     # Check if there's text from speech recognition ready to be processed
-    if st.session_state.get('speech_ready', False):
+    if st.session_state.get("speech_ready", False):
         query = st.session_state.speech_text
         st.session_state.speech_ready = False
         st.session_state.speech_text = ""
-        
+
         # Display user query in a chat message
         with st.chat_message("user"):
             st.write(query)
-        
+
         # Process query with the assistant
         with st.chat_message("assistant"):
             # Create a container for the streaming output
             stream_container = st.empty()
-            
+
             # Process the query
             result = process_query_with_langchain(query, stream_container)
-            
+
             # Clear the container after processing
             stream_container.empty()
-            
+
             # Display the text answer with proper markdown formatting
-            if 'text_answer' in result and result['text_answer']:
-                st.markdown(result['text_answer'])
+            if "text_answer" in result and result["text_answer"]:
+                st.markdown(result["text_answer"])
             else:
-                st.markdown(result.get('summary', 'No result available'))
-            
+                st.markdown(result.get("summary", "No result available"))
+
             # Show SQL query in an expander if available
-            if 'sql_query' in result and result['sql_query']:
+            if "sql_query" in result and result["sql_query"]:
                 with st.expander("🔍 View SQL Query", expanded=False):
-                    st.code(result['sql_query'], language="sql")
-        
+                    st.code(result["sql_query"], language="sql")
+
         # Clear input after processing
         if "clear_input" not in st.session_state:
             st.session_state.clear_input = True
             st.rerun()
-    
+
     # Use full width for chat input (no columns needed)
-    query = st.chat_input("Ask about orders, menu items, revenue, or other restaurant data...")
+    query = st.chat_input(
+        "Ask about orders, menu items, revenue, or other restaurant data..."
+    )
 
     # Process regular text input
     if query:
         # Display user query in a chat message
         with st.chat_message("user"):
             st.write(query)
-        
+
         # Process query with the assistant
         with st.chat_message("assistant"):
             # Create a container for the streaming output
             stream_container = st.empty()
-            
+
             # Process the query
             result = process_query_with_langchain(query, stream_container)
-            
+
             # Clear the container after processing
             stream_container.empty()
-            
+
             # Display the text answer with proper markdown formatting
-            if 'text_answer' in result and result['text_answer']:
-                st.markdown(result['text_answer'])
+            if "text_answer" in result and result["text_answer"]:
+                st.markdown(result["text_answer"])
             else:
-                st.markdown(result.get('summary', 'No result available'))
-            
+                st.markdown(result.get("summary", "No result available"))
+
             # Show SQL query in an expander if available
-            if 'sql_query' in result and result['sql_query']:
+            if "sql_query" in result and result["sql_query"]:
                 with st.expander("🔍 View SQL Query", expanded=False):
-                    st.code(result['sql_query'], language="sql")
-        
+                    st.code(result["sql_query"], language="sql")
+
         # Clear input after processing
         if "clear_input" not in st.session_state:
             st.session_state.clear_input = True
@@ -885,83 +941,84 @@ def run_langchain_streamlit_app():
 def force_voice_dependencies():
     """Override the initialize_voice_dependencies function to force voice to be enabled"""
     global ELEVENLABS_AVAILABLE, PYGAME_AVAILABLE
-    
+
     # Force dependencies to be available
     ELEVENLABS_AVAILABLE = True
     PYGAME_AVAILABLE = True
-    
+
     # Return success status
-    return {
-        "elevenlabs": True,
-        "audio_playback": True
-    }
+    return {"elevenlabs": True, "audio_playback": True}
+
 
 # Replace the imported function with our custom one
 initialize_voice_dependencies = force_voice_dependencies
 
 # Make sure voice is enabled by default
-if 'voice_enabled' not in st.session_state:
+if "voice_enabled" not in st.session_state:
     st.session_state.voice_enabled = True  # Default to enabled
+
 
 # Create a simplified voice class that doesn't have dependency issues
 class SimpleVoice:
     """Simple voice class that avoids complex imports"""
-    
+
     def __init__(self, persona="casual", **kwargs):
         self.enabled = True
         self.initialized = True
         self.persona = persona
-        
+
         # Get persona info
         persona_info = get_persona_info(persona)
         self.voice_name = f"{persona.title()} Voice"
-        self.voice_id = persona_info['voice_id']
-        self.prompt = persona_info['prompt']
-        
+        self.voice_id = persona_info["voice_id"]
+        self.prompt = persona_info["prompt"]
+
         print(f"✓ Initialized SimpleVoice with persona: {persona}")
-    
+
     def clean_text_for_speech(self, text):
         """Clean text to make it more suitable for speech synthesis"""
         import re
-        
+
         # Remove markdown formatting
         # Replace ** and * (bold and italic) with nothing
-        text = re.sub(r'\*\*?(.*?)\*\*?', r'\1', text)
-        
+        text = re.sub(r"\*\*?(.*?)\*\*?", r"\1", text)
+
         # Remove markdown bullet points and replace with natural pauses
-        text = re.sub(r'^\s*[\*\-\•]\s*', '', text, flags=re.MULTILINE)
-        
+        text = re.sub(r"^\s*[\*\-\•]\s*", "", text, flags=re.MULTILINE)
+
         # Remove markdown headers
-        text = re.sub(r'^#+\s*', '', text, flags=re.MULTILINE)
-        
+        text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)
+
         # Replace newlines with spaces to make it flow better in speech
-        text = re.sub(r'\n+', ' ', text)
-        
+        text = re.sub(r"\n+", " ", text)
+
         # Remove extra spaces
-        text = re.sub(r'\s+', ' ', text).strip()
-        
+        text = re.sub(r"\s+", " ", text).strip()
+
         # Replace common abbreviations with full words
         text = text.replace("vs.", "versus")
         text = text.replace("etc.", "etcetera")
         text = text.replace("e.g.", "for example")
         text = text.replace("i.e.", "that is")
-        
+
         # Improve speech timing with commas for complex sentences
-        text = re.sub(r'(\d+)([a-zA-Z])', r'\1, \2', text)  # Put pauses after numbers before words
-        
+        text = re.sub(
+            r"(\d+)([a-zA-Z])", r"\1, \2", text
+        )  # Put pauses after numbers before words
+
         # Add a pause after periods that end sentences
-        text = re.sub(r'\.(\s+[A-Z])', r'. \1', text)
-        
+        text = re.sub(r"\.(\s+[A-Z])", r". \1", text)
+
         return text
-    
+
     def speak(self, text):
         """Speak the given text using ElevenLabs API"""
         if not text:
             return False
-        
+
         # Clean the text for better speech synthesis
         text = self.clean_text_for_speech(text)
-        
+
         try:
             # Try to use a simple direct approach with elevenlabs
             try:
@@ -972,80 +1029,81 @@ class SimpleVoice:
                 import pygame
                 from io import BytesIO
                 import time
-                
+
                 # Load API key
                 load_dotenv()
                 api_key = os.getenv("ELEVENLABS_API_KEY")
-                
+
                 if not api_key:
                     raise ValueError("No ElevenLabs API key found")
-                
+
                 # Make direct API call to ElevenLabs
                 url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}"
-                
+
                 headers = {
                     "Accept": "audio/mpeg",
                     "Content-Type": "application/json",
-                    "xi-api-key": api_key
+                    "xi-api-key": api_key,
                 }
-                
+
                 data = {
                     "text": text,
                     "model_id": "eleven_monolingual_v1",
-                    "voice_settings": {
-                        "stability": 0.5,
-                        "similarity_boost": 0.5
-                    }
+                    "voice_settings": {"stability": 0.5, "similarity_boost": 0.5},
                 }
-                
+
                 print("Generating speech with ElevenLabs API...")
                 response = requests.post(url, json=data, headers=headers)
-                
+
                 if response.status_code != 200:
-                    raise Exception(f"API request failed with status {response.status_code}: {response.text}")
-                
+                    raise Exception(
+                        f"API request failed with status {response.status_code}: {response.text}"
+                    )
+
                 # Get audio data
                 audio_data = BytesIO(response.content)
-                
+
                 # Play with pygame
                 pygame.mixer.init()
                 pygame.mixer.music.load(audio_data)
                 pygame.mixer.music.play()
-                
+
                 # Wait for playback to finish
                 while pygame.mixer.music.get_busy():
                     time.sleep(0.1)
-                
+
                 print(f"✓ Successfully played audio with {self.persona} voice")
                 return True
-            
+
             except Exception as e:
                 print(f"Direct API attempt failed: {str(e)}")
                 raise
-                
+
         except Exception as e:
             # Fall back to simulation
             print(f"🔊 [{self.persona}] Would speak: {text[:50]}...")
             print(f"Voice error: {str(e)}")
             return True
-    
+
     def toggle(self):
         """Toggle voice on/off"""
         self.enabled = not self.enabled
         status = "enabled" if self.enabled else "disabled"
         return f"Voice {status}"
-        
+
     def change_persona(self, persona):
         """Change the voice persona"""
         self.persona = persona
         persona_info = get_persona_info(persona)
         self.voice_name = f"{persona.title()} Voice"
-        self.voice_id = persona_info['voice_id']
-        self.prompt = persona_info['prompt']
+        self.voice_id = persona_info["voice_id"]
+        self.prompt = persona_info["prompt"]
         return f"Changed to {persona} voice"
+
 
 # Override the imported ElevenLabsVoice with our better version
 ElevenLabsVoice = SimpleVoice
+
 
 # Add a special diagnostic function to test and fix voice issues
 def test_elevenlabs_connection():
@@ -1054,10 +1112,10 @@ def test_elevenlabs_connection():
     from dotenv import load_dotenv
     import importlib
     import sys
-    
+
     # Make sure we have the latest environment variables
     load_dotenv(override=True)
-    
+
     results = {
         "api_key_present": False,
         "elevenlabs_installed": False,
@@ -1065,9 +1123,9 @@ def test_elevenlabs_connection():
         "can_list_voices": False,
         "can_generate_audio": False,
         "can_play_audio": False,
-        "errors": []
+        "errors": [],
     }
-    
+
     # Check API key
     api_key = os.getenv("ELEVENLABS_API_KEY")
     if api_key:
@@ -1076,7 +1134,7 @@ def test_elevenlabs_connection():
     else:
         results["errors"].append("No ElevenLabs API key found in .env file")
         print("✗ No ElevenLabs API key found")
-    
+
     # Check if elevenlabs is installed
     try:
         # Check if we can import the package without actually importing it
@@ -1085,7 +1143,7 @@ def test_elevenlabs_connection():
             results["elevenlabs_installed"] = True
             print("✓ ElevenLabs package is installed")
             print(f"  Version: {getattr(spec, '__version__', 'unknown')}")
-            
+
             # Don't actually import elevenlabs to avoid the error
             results["can_list_voices"] = "Unknown - skipped to avoid errors"
             results["can_generate_audio"] = "Unknown - skipped to avoid errors"
@@ -1095,7 +1153,7 @@ def test_elevenlabs_connection():
     except Exception as e:
         results["errors"].append(f"Error checking ElevenLabs: {str(e)}")
         print(f"✗ Error checking elevenlabs: {str(e)}")
-    
+
     # Check if pygame is installed
     try:
         # Check if we can import pygame
@@ -1103,10 +1161,11 @@ def test_elevenlabs_connection():
         if spec is not None:
             results["pygame_installed"] = True
             print("✓ Pygame is installed")
-            
+
             # Try to import and initialize mixer
             try:
                 import pygame
+
                 pygame.mixer.init()
                 print("✓ Pygame mixer initialized successfully")
                 results["can_play_audio"] = "Possibly - mixer initialized"
@@ -1120,9 +1179,11 @@ def test_elevenlabs_connection():
     except Exception as e:
         results["errors"].append(f"Error checking pygame: {str(e)}")
         print(f"✗ Error checking pygame: {str(e)}")
-    
+
     # Provide solution
-    results["solution"] = """
+    results[
+        "solution"
+    ] = """
     It looks like there's an issue with your elevenlabs package. Here are some solutions:
     
     1. Downgrade to a more stable version:
@@ -1136,46 +1197,49 @@ def test_elevenlabs_connection():
        
     Press "Re-initialize Voice System" button below to try with the updated implementation.
     """
-    
+
     return results
+
 
 # Add a modified speech recognition function with timeout
 def recognize_speech_with_timeout(timeout=5, phrase_time_limit=15):
     """
     Capture audio from the microphone and convert it to text with a custom timeout.
-    
+
     Args:
         timeout: Time to wait before stopping if no speech is detected
         phrase_time_limit: Maximum duration of speech to recognize
-    
+
     Returns:
         str: Recognized text, or empty string if recognition failed
     """
     try:
         import speech_recognition as sr
-        
+
         # Create a recognizer instance
         recognizer = sr.Recognizer()
-        
+
         # Capture audio from the microphone
         with sr.Microphone() as source:
-            st.session_state['recording'] = True
-            
+            st.session_state["recording"] = True
+
             # Adjust for ambient noise
             recognizer.adjust_for_ambient_noise(source, duration=0.5)
-            
+
             # Display recording indicator
             with st.spinner(f"Listening... (timeout: {timeout}s)"):
                 # Capture audio with the specified timeout
                 try:
-                    audio = recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
+                    audio = recognizer.listen(
+                        source, timeout=timeout, phrase_time_limit=phrase_time_limit
+                    )
                 except sr.WaitTimeoutError:
                     st.info("No speech detected within timeout period.")
                     return ""
-            
+
             # Try to recognize the speech
             try:
-                st.session_state['recording'] = False
+                st.session_state["recording"] = False
                 # Use Google's speech recognition
                 text = recognizer.recognize_google(audio)
                 return text
@@ -1185,57 +1249,62 @@ def recognize_speech_with_timeout(timeout=5, phrase_time_limit=15):
             except sr.RequestError as e:
                 st.error(f"Speech recognition service error: {e}")
                 return ""
-            
+
     except ImportError:
-        st.error("Speech recognition library not installed. Run: pip install SpeechRecognition PyAudio")
+        st.error(
+            "Speech recognition library not installed. Run: pip install SpeechRecognition PyAudio"
+        )
         return ""
     except Exception as e:
         st.error(f"Error during speech recognition: {e}")
         return ""
     finally:
-        st.session_state['recording'] = False
+        st.session_state["recording"] = False
+
 
 # Add a background speech recognition function with timeout
 def background_speech_recognition_with_timeout():
     """Run speech recognition in a background thread with timeout and store the result in session state"""
     try:
         # Get the timeout from session state or use default
-        timeout = st.session_state.get('auto_listen_timeout', 5)
-        
+        timeout = st.session_state.get("auto_listen_timeout", 5)
+
         # Start listening with the timeout
         text = recognize_speech_with_timeout(timeout=timeout)
         if text:
-            st.session_state['speech_text'] = text
-            st.session_state['speech_ready'] = True
+            st.session_state["speech_text"] = text
+            st.session_state["speech_ready"] = True
     except Exception as e:
         st.error(f"Error in background speech recognition: {e}")
     finally:
-        st.session_state['recording'] = False
+        st.session_state["recording"] = False
 
 
 # Initialize more session state variables
-if 'recording' not in st.session_state:
+if "recording" not in st.session_state:
     st.session_state.recording = False
-    
-if 'speech_text' not in st.session_state:
+
+if "speech_text" not in st.session_state:
     st.session_state.speech_text = ""
-    
-if 'speech_ready' not in st.session_state:
+
+if "speech_ready" not in st.session_state:
     st.session_state.speech_ready = False
 
-if 'auto_listen_enabled' not in st.session_state:
+if "auto_listen_enabled" not in st.session_state:
     st.session_state.auto_listen_enabled = False
-    
-if 'auto_listen_timeout' not in st.session_state:
+
+if "auto_listen_timeout" not in st.session_state:
     st.session_state.auto_listen_timeout = 5
 
 if __name__ == "__main__":
     if not LANGCHAIN_AVAILABLE:
-        st.error("""
+        st.error(
+            """
         LangChain integration is not available. Please install the required packages:
         ```
         pip install langchain==0.0.150 langchain-community<0.1.0
         ```
-        """)
+        """
+        )
     else:
-        run_langchain_streamlit_app() 
+        run_langchain_streamlit_app()
