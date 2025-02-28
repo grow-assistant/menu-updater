@@ -1,5 +1,9 @@
 import datetime
+import logging
 from typing import Dict, Optional, Any, Union
+
+# Get the logger that was configured in utils/langchain_integration.py
+logger = logging.getLogger("ai_menu_updater")
 
 
 def create_categorization_prompt(cached_dates=None) -> Dict[str, Any]:
@@ -11,6 +15,9 @@ def create_categorization_prompt(cached_dates=None) -> Dict[str, Any]:
     Returns:
         Dict containing the prompt string and context information
     """
+    # Log input parameters
+    logger.info(f"Categorization prompt inputs: cached_dates={cached_dates}")
+    
     yesterday_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime(
         "%Y-%m-%d"
     )
@@ -117,8 +124,11 @@ CATEGORIZATION APPROACH:
 Make the most accurate determination based on the query's intent and content.
 Respond with a JSON object containing the categorized request information."""
 
+    # Log the generated prompt
+    logger.info(f"Generated categorization prompt: {prompt[:200]}..." if len(prompt) > 200 else prompt)
+    
     # Return a structured dictionary instead of just a string
-    return {
+    result = {
         "prompt": prompt,
         "context": {
             "current_date": current_date,
@@ -127,3 +137,5 @@ Respond with a JSON object containing the categorized request information."""
             "date_context": cached_dates,  # Include date_context for compatibility
         },
     }
+    
+    return result

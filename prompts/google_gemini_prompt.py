@@ -1,4 +1,8 @@
 import json
+import logging
+
+# Get the logger that was configured in utils/langchain_integration.py
+logger = logging.getLogger("ai_menu_updater")
 
 
 def create_gemini_prompt(
@@ -22,6 +26,12 @@ def create_gemini_prompt(
     Returns:
         str: The optimized prompt for SQL generation
     """
+    # Log input parameters
+    logger.info(f"Gemini prompt inputs: user_query='{user_query}', location_id={location_id}, " 
+                f"has_conversation_history={bool(conversation_history)}, " 
+                f"has_previous_sql={bool(previous_sql)}, " 
+                f"date_context={date_context}")
+    
     # Extract context files with error handling
     business_rules = context_files.get("business_rules", "Business rules unavailable")
 
@@ -91,7 +101,7 @@ MUST USE THESE JOINS:
 """
 
     # Create a comprehensive prompt with all context files and specific guidelines
-    return f"""You are an expert SQL developer specializing in restaurant order systems. Your task is to generate precise SQL queries for a restaurant management system.
+    prompt = f"""You are an expert SQL developer specializing in restaurant order systems. Your task is to generate precise SQL queries for a restaurant management system.
 
 USER QUESTION: {formatted_query}
 
@@ -143,3 +153,8 @@ IMPORTANT: For follow-up queries, maintain date filters and other context from p
 
 Generate ONLY a clean, efficient SQL query that precisely answers the user's question. No explanations or commentary.
 """
+
+    # Log the generated prompt
+    logger.info(f"Generated Gemini prompt: {prompt[:200]}..." if len(prompt) > 200 else prompt)
+    
+    return prompt

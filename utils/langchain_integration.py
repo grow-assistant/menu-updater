@@ -7,9 +7,62 @@ into the existing Swoop AI application.
 import os
 import re
 import json
+import logging
+import datetime
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 import streamlit as st
+
+# Store current session ID
+current_session_id = None
+
+# Configure logging
+def setup_logging():
+    """Ensure logging is properly configured with the necessary directories"""
+    global current_session_id
+    
+    # Create logs directory if it doesn't exist
+    os.makedirs("logs", exist_ok=True)
+    
+    # Generate a session ID based on timestamp
+    current_session_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    session_log_path = f"logs/session_{current_session_id}.log"
+    
+    # Reset root logger to avoid duplicate handlers
+    root_logger = logging.getLogger()
+    if root_logger.handlers:
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+    
+    # Create a formatter for consistent log formatting
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    
+    # Configure root logger with multiple handlers
+    root_logger.setLevel(logging.INFO)
+    
+    # Handler for global log file (all sessions)
+    global_file_handler = logging.FileHandler("logs/ai_interaction.log")
+    global_file_handler.setFormatter(formatter)
+    root_logger.addHandler(global_file_handler)
+    
+    # Handler for session-specific log file
+    session_file_handler = logging.FileHandler(session_log_path)
+    session_file_handler.setFormatter(formatter)
+    root_logger.addHandler(session_file_handler)
+    
+    # Handler for console output
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+    
+    # Get the application-specific logger
+    logger = logging.getLogger("ai_menu_updater")
+    logger.info(f"Session {current_session_id} started - Logging to both global log and {session_log_path}")
+    
+    return logger
+
+# Set up logging
+logger = setup_logging()
 
 # LangChain imports for version 0.0.150
 from langchain.chains import ConversationChain
@@ -389,6 +442,9 @@ def integrate_with_existing_flow(
     Returns:
         Dict: Results from the agent execution
     """
+    # Log the incoming user query
+    logger.info(f"Received user query: '{query}'")
+    
     from integrate_app import (
         get_clients,
         create_categorization_prompt,
@@ -497,6 +553,13 @@ def integrate_with_existing_flow(
             raw_response = categorization_response["choices"][0]["message"]["content"]
 
         json_response = json.loads(raw_response)
+        
+        # Log the categorization response
+        logger.info(f"Categorization response: {raw_response[:200]}..." if len(raw_response) > 200 else raw_response)
+        
+        # For long responses, also dump to a file for easier debugging
+        if len(raw_response) > 1000:
+            log_to_file(raw_response, prefix="categorization")
 
         # Update flow tracking
         flow_steps["categorization"]["data"] = json_response
@@ -591,6 +654,13 @@ def integrate_with_existing_flow(
                 time_period=time_period,
                 location_ids=location_ids,
             )
+
+            # Log the generated SQL query
+            logger.info(f"Generated SQL query: {sql_query}")
+            
+            # For complex queries, also dump to a file for easier debugging
+            if len(sql_query) > 500:
+                log_to_file(sql_query, prefix="sql_query")
 
         # Update flow tracking
         if sql_query:
@@ -711,6 +781,10 @@ IMPORTANT: Please provide TWO distinct responses:
    - Avoid unnecessary elaboration, metaphors, or overly formal language
    - Focus on the most important information, but sound like a helpful colleague
    - No need for follow-up questions
+   - When mentioning dates, use "on February 21st, 2025" format with clear comma pauses
+   - Avoid ambiguous date formats that might be misinterpreted when spoken
+   - Always add a comma before the year when mentioning a full date
+   - For number ranges, say "from X to Y" rather than "X-Y"
 
 2. TEXT_ANSWER: A more detailed response with all relevant information, formatted nicely for display on screen.
 
@@ -761,6 +835,13 @@ TEXT_ANSWER: [Your detailed response here]
         else:
             # Old OpenAI API format
             raw_response = summarization_response["choices"][0]["message"]["content"]
+            
+        # Log the summarization response
+        logger.info(f"Summarization response: {raw_response[:200]}..." if len(raw_response) > 200 else raw_response)
+        
+        # For long responses, also dump to a file for easier debugging
+        if len(raw_response) > 1000:
+            log_to_file(raw_response, prefix="summarization")
 
         # Parse the verbal and text answers
         verbal_answer = None
@@ -828,6 +909,9 @@ TEXT_ANSWER: [Your detailed response here]
             callback_handler.on_text(
                 f"\nError in flow: {str(e)}\nFalling back to LangChain agent\n"
             )
+            
+        # Log the error
+        logger.error(f"Error in AI flow: {str(e)}", exc_info=True)
 
         # Create or use existing agent
         if agent is None:
@@ -852,40 +936,417 @@ TEXT_ANSWER: [Your detailed response here]
         }
 
 
-# Add a function to clean text for speech synthesis
 def clean_text_for_speech(text):
-    """Clean text to make it more suitable for speech synthesis"""
+    """
+    Clean and format text to be more appropriate for text-to-speech engines.
+    This ensures dates, numbers, and other elements are properly formatted
+    for clear verbal communication.
+    
+    Uses advanced NLP libraries:
+    - textacy: For advanced text normalization
+    - num2words: For converting numbers to words
+    - unidecode: For handling special characters
+    - re: For precise pattern matching with regular expressions
+    """
+    import re
+    from num2words import num2words
+    from unidecode import unidecode
+    import textacy.preprocessing.normalize as tpn
+    import textacy.preprocessing.replace as tpr
+    
     if not text:
         return text
-
-    # Remove markdown formatting
-    # Replace ** and * (bold and italic) with nothing
-    text = re.sub(r"\*\*?(.*?)\*\*?", r"\1", text)
-
-    # Remove markdown bullet points and replace with natural pauses
-    text = re.sub(r"^\s*[\*\-\•]\s*", "", text, flags=re.MULTILINE)
-
-    # Remove markdown headers
-    text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)
-
-    # Replace newlines with spaces to make it flow better in speech
-    text = re.sub(r"\n+", " ", text)
-
-    # Remove extra spaces
-    text = re.sub(r"\s+", " ", text).strip()
-
-    # Replace common abbreviations with full words
-    text = text.replace("vs.", "versus")
-    text = text.replace("etc.", "etcetera")
-    text = text.replace("e.g.", "for example")
-    text = text.replace("i.e.", "that is")
-
-    # Improve speech timing with commas for complex sentences
+    
+    # 1. BASIC CLEANUP
+    
+    # Remove URLs
+    text = re.sub(r"https?://\S+", "", text)
+    
+    # Remove markdown formatting 
+    text = re.sub(r"\*\*?(.*?)\*\*?", r"\1", text)  # Remove ** and * (bold and italic)
+    text = re.sub(r"^\s*[\*\-\•]\s*", "", text, flags=re.MULTILINE)  # Remove bullet points
+    text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)  # Remove markdown headers
+    
+    # 2. NORMALIZE TEXT WITH TEXTACY
+    
+    # Normalize whitespace, quotation marks, dashes, etc.
+    text = tpn.whitespace(text)
+    text = tpn.hyphenated_words(text)
+    text = tpn.quotation_marks(text)
+    
+    # 3. HANDLE EMAIL AND PHONE FORMATS
+    
+    # Handle email addresses
+    text = re.sub(r'([\w.+-]+@[\w-]+\.[\w.-]+)', r' email address ', text)
+    
+    # Handle phone numbers more consistently
+    text = re.sub(r'(?<!\w)(?:\+?1[-\s]?)?(?:\(?\d{3}\)?[-\s]?)?(?:\d{3}[-\s]?)\d{4}(?!\w)', ' phone number ', text)
+    
+    # 4. DATE FORMATTING
+    
+    # First remove any spaces in ordinal suffixes like "21 st" -> "21st"
+    # This needs to run before any other date formatting
+    text = re.sub(r'(\d+)\s+(st|nd|rd|th)\b', r'\1\2', text)
+    
+    # Get list of month names for pattern matching
+    month_names = [
+        'January', 'February', 'March', 'April', 'May', 'June', 'July', 
+        'August', 'September', 'October', 'November', 'December'
+    ]
+    month_pattern = r'\b(?:' + '|'.join(month_names) + r')\s+'
+    
+    # Step 1: Convert ordinal dates in the context of month names (like "January 21st")
+    def convert_month_ordinal(match):
+        month = match.group(1)
+        day_num = int(match.group(2))
+        suffix = match.group(3)
+        year = match.group(4) if len(match.groups()) >= 4 and match.group(4) else ""
+        
+        # Convert day number to words
+        day_words = num2words(day_num, ordinal=True)
+        
+        # Format with or without year
+        if year:
+            return f"{month} {day_words}, {year}"
+        else:
+            return f"{month} {day_words}"
+    
+    # Handle "Month DDst" and "Month DDst YYYY" formats
+    month_ordinal_pattern = r'(\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+)(\d+)(st|nd|rd|th)\b(?:\s+(\d{4})\b)?'
+    text = re.sub(month_ordinal_pattern, convert_month_ordinal, text)
+    
+    # Step 2: Flag parts that have already been processed to avoid double conversion
+    # Create placeholders for already processed month-date combinations
+    processed_month_dates = {}
+    
+    # Create a copy for processing other ordinal dates
+    processed_text = text
+    
+    # Step 3: Convert other ordinal dates not attached to months
+    def convert_other_ordinal(match):
+        num = int(match.group(1))
+        suffix = match.group(2)
+        
+        # Skip if this part is inside a month-date that was already processed
+        # This is a simplified check - in a production system, you'd want more robust detection
+        start_pos = match.start()
+        for month in month_names:
+            if month in processed_text[max(0, start_pos-20):start_pos]:
+                return match.group(0)  # Return unchanged if part of a month name format
+                
+        # For all other cases, convert to ordinal words
+        return num2words(num, ordinal=True)
+    
+    # Handle "the DDst" and other standalone ordinal cases
+    # Process only numbers followed by ordinal suffixes that are not part of converted month patterns
+    ordinal_pattern = r'(\d+)(st|nd|rd|th)\b'
+    text = re.sub(ordinal_pattern, convert_other_ordinal, text)
+    
+    # Do NOT re-add spacing for ordinal suffixes to avoid TTS saying "saint" for "st"
+    # text = re.sub(r'(\d+)(st|nd|rd|th)', r'\1 \2', text)
+    
+    # Handle "Month DDst YYYY" -> "Month DDst, YYYY"
     text = re.sub(
-        r"(\d+)([a-zA-Z])", r"\1, \2", text
-    )  # Put pauses after numbers before words
-
-    # Add a pause after periods that end sentences
-    text = re.sub(r"\.(\s+[A-Z])", r". \1", text)
-
+        r'(\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+(?:st|nd|rd|th)?)\s+(\d{4})\b',
+        r'\1, \2',
+        text
+    )
+    
+    # Also handle without suffix
+    text = re.sub(
+        r'(\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+)\s+(\d{4})\b',
+        r'\1, \2',
+        text
+    )
+    
+    # Handle MM/DD/YYYY format: "01/15/2025" -> "01 15, 2025"
+    text = re.sub(r'(\d{1,2})/(\d{1,2})/(\d{4})\b', r'\1 \2, \3', text)
+    
+    # Handle ISO dates YYYY-MM-DD: "2025-03-10" -> "2025, March 10"
+    months = {
+        '01': 'January', '02': 'February', '03': 'March', '04': 'April',
+        '05': 'May', '06': 'June', '07': 'July', '08': 'August',
+        '09': 'September', '10': 'October', '11': 'November', '12': 'December',
+        '1': 'January', '2': 'February', '3': 'March', '4': 'April', 
+        '5': 'May', '6': 'June', '7': 'July', '8': 'August',
+        '9': 'September'
+    }
+    
+    def replace_iso_date(match):
+        year = match.group(1)
+        month = match.group(2)
+        day = match.group(3).lstrip('0')  # Remove leading zero
+        
+        # Convert month number to name
+        month_name = months.get(month, month)
+        
+        # Convert day to ordinal word form
+        day_word = num2words(int(day), ordinal=True)
+        
+        return f"{year}, {month_name} {day_word}"
+    
+    text = re.sub(r'(\d{4})-(\d{2}|\d)-(\d{2}|\d)\b', replace_iso_date, text)
+    
+    # 5. NUMBER HANDLING
+    
+    # Handle common number ranges that shouldn't be expanded (like years)
+    text = re.sub(r'(\d{4})-(\d{4})', r'\1 to \2', text)  # Convert "2023-2024" to "2023 to 2024"
+    
+    # Format dollar amounts for better speech
+    # Add a trailing zero to ensure 2 decimal places: $25.5 -> $25.50
+    def add_trailing_zero(match):
+        dollars = match.group(1)
+        cents = match.group(2)
+        return f"${dollars}.{cents}0"
+    
+    text = re.sub(r'\$(\d+)\.(\d)(?!\d)', add_trailing_zero, text)
+    
+    # Convert "$25.50 - $30.75" to "$25.50 to $30.75"
+    text = re.sub(r'\$(\d+\.\d{2})\s*-\s*\$(\d+\.\d{2})', r'$\1 to $\2', text)
+    
+    # 6. SELECTIVE NUMBER-TO-WORD CONVERSION
+    # Convert small standalone numbers to words (but preserve larger numbers, years, etc.)
+    def convert_small_numbers(match):
+        number = int(match.group(0))
+        if 0 <= number <= 20:  # Only convert small numbers
+            return num2words(number)
+        return match.group(0)
+    
+    # Convert small numbers that stand alone or at start of sentences
+    text = re.sub(r'(?<!\d)(?<!\$)(?<![a-zA-Z])\b([0-9]|1[0-9]|20)\b(?![a-zA-Z]|%|\d)', convert_small_numbers, text)
+    
+    # 7. ABBREVIATION HANDLING
+    
+    # Replace common abbreviations with full words
+    abbreviations = {
+        'vs.': 'versus',
+        'vs': 'versus',
+        'etc.': 'etcetera',
+        'e.g.': 'for example',
+        'i.e.': 'that is',
+        'approx.': 'approximately',
+        'Dr.': 'Doctor',
+        'Mr.': 'Mister',
+        'Mrs.': 'Misses',
+        'Ms.': 'Miss',
+        'Sr.': 'Senior',
+        'Jr.': 'Junior',
+        'Prof.': 'Professor',
+        'Dept.': 'Department',
+        'St.': 'Street',
+        'Ave.': 'Avenue',
+        'Blvd.': 'Boulevard',
+        'Co.': 'Company'
+    }
+    
+    for abbr, full in abbreviations.items():
+        # Ensure we match whole words with word boundaries
+        text = re.sub(r'\b' + re.escape(abbr) + r'\b', full, text)
+    
+    # Fix "vs" abbreviation when attached to numbers
+    text = re.sub(r'(\$?\d+[\.\d]*)\s*vs\s*\.?\s*(\$?\d+[\.\d]*)', r'\1 versus \2', text)
+    
+    # 8. SPACING AND FORMATTING
+    
+    # Fix number-word combinations: "15items" -> "15 items"
+    text = re.sub(r'(\d+)([a-zA-Z])', r'\1 \2', text)
+    
+    # Replace special characters for better speech
+    text = re.sub(r'&', 'and', text)
+    text = re.sub(r'@', 'at', text)
+    text = re.sub(r'#', 'number', text)
+    
+    # Ensure periods have spacing
+    text = re.sub(r'\.([A-Za-z])', r'. \1', text)
+    
+    # 9. FINAL CLEANUP WITH UNIDECODE
+    
+    # Convert any remaining special characters to closest ASCII equivalent
+    text = unidecode(text)
+    
+    # Remove extra spaces
+    text = re.sub(r'\s+', ' ', text).strip()
+    
     return text
+
+
+def test_speech_cleaning():
+    """Test the clean_text_for_speech function with various examples"""
+    test_cases = [
+        "Orders on February 21st 2025 were higher than expected.",
+        "Orders on February 21 2025 were higher than expected.",
+        "Orders on February 21 st 2025 were higher than expected.",  # Spaced suffix
+        "Revenue for 01/15/2025 was $5000.",
+        "Comparing data from 2025-03-10 to 2025-03-15 shows growth.",
+        "Sales increased by 15% on March 3rd 2025.",
+        "Sales increased by 15% on March 3 rd 2025.",  # Spaced suffix  
+        "We sold 15items on Tuesday.",
+        "The average order value was $25.5vs.$20.8 last week.",
+        "Comparing December 15th 2024 to January 5th 2025, we see a 12% increase.",
+        # New test cases
+        "Visit https://example.com for more information!",
+        "Contact us at +1 (555) 123-4567 or email@example.com",
+        "The range 2023-2024 shows a 5-10% improvement.",
+        "Our company, Dr. Smith & Co., will host an event.",
+        "The temperature is approx. 72° today vs. 65° yesterday.",
+        "For small numbers: 1 2 3 show as words, but 25, 100, 1000 stay as digits.",
+        "The product costs $9.5 today, down from $10.5 yesterday.",
+        # Ordinal date conversion test cases
+        "The meeting is on the 21st of July.",
+        "Please submit your report by January 3rd.",
+        "The event will take place on October 22nd, 2025.",
+        "He was born on the 15th of May, 1990.",
+        "We'll celebrate the 1st, 2nd, and 3rd place winners.",
+        "The 4th quarter results were impressive.",
+        "May 5th and June 6th are important dates.",
+        "The 31st of December is New Year's Eve."
+    ]
+    
+    print("===== SPEECH CLEANING TEST =====")
+    for case in test_cases:
+        cleaned = clean_text_for_speech(case)
+        print(f"\nOriginal: {case}")
+        print(f"Cleaned:  {cleaned}")
+    print("===============================")
+    return "Test completed."
+
+def get_current_session_id():
+    """Return the current session ID for use in other parts of the application"""
+    global current_session_id
+    return current_session_id
+
+def get_session_log_path():
+    """Return the path to the current session's log file"""
+    global current_session_id
+    if current_session_id:
+        return f"logs/session_{current_session_id}.log"
+    return None
+
+def log_to_file(content, filename=None, prefix="dump"):
+    """
+    Dumps content to a file in the logs directory for debugging
+    
+    Args:
+        content: Content to dump (string, dict, or other object)
+        filename: Optional filename, if None a timestamped name will be used
+        prefix: Prefix for auto-generated filenames
+        
+    Returns:
+        Path to the created file
+    """
+    global current_session_id
+    
+    # Create logs directory if it doesn't exist
+    os.makedirs("logs", exist_ok=True)
+    
+    if filename is None:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        if current_session_id:
+            filename = f"{prefix}_{current_session_id}_{timestamp}.txt"
+        else:
+            filename = f"{prefix}_{timestamp}.txt"
+    
+    file_path = os.path.join("logs", filename)
+    
+    with open(file_path, "w", encoding="utf-8") as f:
+        if isinstance(content, str):
+            f.write(content)
+        else:
+            try:
+                # Try to convert to JSON
+                f.write(json.dumps(content, indent=2))
+            except (TypeError, ValueError, OverflowError) as e:
+                # Fallback to string representation with error note
+                f.write(f"Error converting to JSON: {str(e)}\n\n")
+                f.write(str(content))
+    
+    logger = logging.getLogger("ai_menu_updater")
+    logger.info(f"Content dumped to {file_path}")
+    
+    return file_path
+
+def log_session_end():
+    """
+    Log the end of the current session for easier log analysis
+    """
+    global current_session_id
+    if current_session_id:
+        logger = logging.getLogger("ai_menu_updater")
+        logger.info(f"Session {current_session_id} ended")
+        
+        # Create a summary file with session statistics if needed
+        # This is where you could add code to analyze the session logs and generate stats
+
+def get_recent_logs(n_lines=20, session_specific=True):
+    """
+    Get the most recent log entries from either the session log or global log
+    
+    Args:
+        n_lines: Number of lines to retrieve
+        session_specific: If True, get logs from the current session only
+        
+    Returns:
+        List of log lines
+    """
+    if session_specific and current_session_id:
+        log_path = get_session_log_path()
+    else:
+        log_path = "logs/ai_interaction.log"
+    
+    try:
+        if os.path.exists(log_path):
+            with open(log_path, "r", encoding="utf-8") as f:
+                # Read all lines and take the last n_lines
+                lines = f.readlines()
+                return lines[-n_lines:] if len(lines) > n_lines else lines
+    except Exception as e:
+        logger = logging.getLogger("ai_menu_updater")
+        logger.error(f"Error reading log file: {str(e)}")
+    
+    return []
+
+def cleanup_old_logs(days_to_keep=30):
+    """
+    Remove log files older than the specified number of days
+    
+    Args:
+        days_to_keep: Number of days to keep logs for
+        
+    Returns:
+        Number of files deleted
+    """
+    # Calculate the cutoff time
+    cutoff_time = datetime.datetime.now() - datetime.timedelta(days=days_to_keep)
+    cutoff_timestamp = cutoff_time.timestamp()
+    
+    # Get all log files
+    log_dir = "logs"
+    if not os.path.exists(log_dir):
+        return 0
+    
+    files_deleted = 0
+    
+    # Process each file
+    for filename in os.listdir(log_dir):
+        if filename.startswith("session_") and filename.endswith(".log"):
+            file_path = os.path.join(log_dir, filename)
+            
+            # Skip the README.md file
+            if filename == "README.md":
+                continue
+                
+            # Skip the global log file
+            if filename == "ai_interaction.log":
+                continue
+            
+            # Check file modification time
+            file_mtime = os.path.getmtime(file_path)
+            if file_mtime < cutoff_timestamp:
+                try:
+                    os.remove(file_path)
+                    files_deleted += 1
+                except Exception as e:
+                    logger = logging.getLogger("ai_menu_updater")
+                    logger.error(f"Error deleting log file {file_path}: {str(e)}")
+    
+    return files_deleted
