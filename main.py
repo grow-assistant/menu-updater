@@ -1781,13 +1781,26 @@ def background_speech_recognition_with_timeout():
         # Start listening with the timeout
         text = recognize_speech_with_timeout(timeout=timeout)
         if text:
+            # Use Streamlit's threading utilities to safely update the UI
+            # Store the data to session state (which is thread-safe)
             st.session_state["speech_text"] = text
             st.session_state["speech_ready"] = True
+            
+            # Trigger a rerun safely using queue_callback if available
+            try:
+                # For newer Streamlit versions
+                if hasattr(st, 'runtime') and hasattr(st.runtime, 'scriptrunner') and hasattr(st.runtime.scriptrunner, 'add_script_run_ctx'):
+                    def safe_update():
+                        st.rerun()
+                    st.runtime.scriptrunner.add_script_run_ctx(safe_update)()
+                else:
+                    # This will still work but may show the warning
+                    logger.debug("Using basic session state update for speech recognition")
+            except Exception as rerun_error:
+                logger.warning(f"Could not safely trigger rerun: {str(rerun_error)}")
     except Exception as e:
-        try:
-            st.error(f"Error in background speech recognition: {e}")
-        except Exception as ui_error:
-            logger.warning(f"UI update error in speech recognition: {str(ui_error)}")
+        # Use logger instead of direct UI updates from background thread
+        logger.error(f"Error in background speech recognition: {str(e)}")
     finally:
         st.session_state["recording"] = False
 

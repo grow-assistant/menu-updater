@@ -479,6 +479,14 @@ def call_sql_generator(
         logger.error(f"SQL generation error: {str(e)}")
         raise Exception(f"SQL generation error: {str(e)}")
 
+# Add this new DateTimeEncoder class after the imports
+class DateTimeEncoder(json.JSONEncoder):
+    """Custom JSON encoder that can handle datetime objects"""
+    def default(self, obj):
+        if isinstance(obj, (datetime.datetime, datetime.date)):
+            return obj.isoformat()
+        return super().default(obj)
+
 # Function to create a summary prompt (from utils/prompt_templates.py)
 def create_summary_prompt(
     user_query: str,
@@ -527,13 +535,30 @@ def create_summary_prompt(
     )
     
     # Determine if we have empty results to provide better context
-    results_count = len(result.get("results", []))
+    results = result.get("results", [])
+    results_count = len(results)
     result_context = ""
     if results_count == 0:
         result_context = (
             "The query returned no results, which typically means no data matches "
             "the specified criteria for the given time period or filters."
         )
+    
+    # Limit the number of results to prevent token overflow
+    MAX_RESULTS = 20
+    if results_count > MAX_RESULTS:
+        limited_results = results[:MAX_RESULTS]
+        result_context += f"\nNOTE: Showing only the first {MAX_RESULTS} of {results_count} total results."
+    else:
+        limited_results = results
+        
+    # Use the custom encoder to handle datetime objects
+    results_json = json.dumps(limited_results, indent=2, cls=DateTimeEncoder)
+    
+    # Further truncate if the JSON string is still too large
+    MAX_JSON_CHARS = 8000
+    if len(results_json) > MAX_JSON_CHARS:
+        results_json = results_json[:MAX_JSON_CHARS] + f"\n... (truncated, {len(results_json)} total characters)"
 
     # Add conversation context for follow-up queries
     conversation_context = ""
@@ -547,7 +572,11 @@ def create_summary_prompt(
         conversation_context = "CONVERSATION HISTORY:\n"
         for i, exchange in enumerate(recent_exchanges):
             if "query" in exchange and "answer" in exchange:
-                conversation_context += f"User: {exchange['query']}\nAssistant: {exchange['answer']}\n\n"
+                # Truncate long answers in conversation history
+                answer = exchange['answer']
+                if len(answer) > 300:
+                    answer = answer[:300] + "... (truncated)"
+                conversation_context += f"User: {exchange['query']}\nAssistant: {answer}\n\n"
 
     # Check if this is a follow-up query using the proper function
     is_followup = is_followup_query(user_query, conversation_history)
@@ -566,7 +595,7 @@ def create_summary_prompt(
         f"{conversation_context}\n"
         f"SQL QUERY: {formatted_sql}\n\n"
         f"QUERY TYPE: {query_type}\n\n"
-        f"DATABASE RESULTS: {json.dumps(result.get('results', []), indent=2)}\n\n"
+        f"DATABASE RESULTS: {results_json}\n\n"
         f"RESULT CONTEXT: {result_context}\n\n"
         f"BUSINESS CONTEXT:\n"
         f"- Order statuses: 0=Open, 1=Pending, 2=Confirmed, 3=In Progress, 4=Ready, 5=In Transit, "
@@ -593,77 +622,100 @@ def create_system_prompt_with_business_rules() -> str:
         str: System prompt with business rules context
     """
     try:
-        # Try to import business rules from prompts module
+        # First try: import directly from prompts.business_rules
         try:
-            from prompts.business_rules import (
-                ORDER_STATUS,
-                RATING_SIGNIFICANCE,
-                ORDER_FILTERS,
-            )
+            logger.info("Attempting to import business rules modules")
+            from prompts.system_rules import ORDER_STATUS, RATING_SIGNIFICANCE, ORDER_FILTERS
             
             business_context = {
                 "order_status": ORDER_STATUS,
                 "rating_significance": RATING_SIGNIFICANCE,
                 "order_filters": ORDER_FILTERS,
             }
+            logger.info("Successfully imported business rules from prompts.system_rules")
         except ImportError:
-            # Fallback business context if import fails
-            logger.warning("Could not import business rules, using fallback values")
-            business_context = {
-                "order_status": {
-                    "7": "Completed",
-                    "6": "Cancelled",
-                    "0": "Open"
-                },
-                "rating_significance": {
-                    "5": "Excellent",
-                    "4": "Good",
-                    "3": "Average",
-                    "2": "Poor",
-                    "1": "Very Poor"
-                },
-                "order_filters": {
-                    "status": "Use status=7 for completed orders"
-                }
+            # Second try: check if there's a business_rules.py file we can import
+            import importlib.util
+            import os
+            
+            # Construct absolute path to business_rules.py if available
+            rules_path = os.path.join(os.getcwd(), "prompts", "business_rules.py")
+            if os.path.exists(rules_path):
+                logger.info(f"Found business_rules.py at {rules_path}")
+                try:
+                    spec = importlib.util.spec_from_file_location("business_rules", rules_path)
+                    br_module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(br_module)
+                    
+                    # Try to get key elements from the module
+                    business_context = {}
+                    
+                    if hasattr(br_module, "ORDER_STATUS"):
+                        business_context["order_status"] = br_module.ORDER_STATUS
+                    
+                    if hasattr(br_module, "RATING_SIGNIFICANCE"):
+                        business_context["rating_significance"] = br_module.RATING_SIGNIFICANCE
+                    
+                    if hasattr(br_module, "ORDER_FILTERS"):
+                        business_context["order_filters"] = br_module.ORDER_FILTERS
+                    
+                    logger.info("Successfully loaded business rules from file")
+                except Exception as e:
+                    logger.warning(f"Error loading business rules from file: {str(e)}")
+                    raise ImportError("Failed to load business rules from file")
+            else:
+                logger.warning("business_rules.py not found in prompts directory")
+                raise ImportError("business_rules.py not found")
+            
+        # If we get here, we have successfully loaded business_context
+    except ImportError:
+        # Fallback business context if import fails
+        logger.warning("Could not import business rules, using comprehensive fallback values")
+        business_context = {
+            "order_status": {
+                "0": "Open",
+                "1": "Pending", 
+                "2": "Confirmed",
+                "3": "In Progress",
+                "4": "Ready",
+                "5": "In Transit",
+                "6": "Cancelled",
+                "7": "Completed", 
+                "8": "Refunded",
+                "9": "Archived"
+            },
+            "rating_significance": {
+                "5": "Excellent - Very Satisfied",
+                "4": "Good - Satisfied",
+                "3": "Average - Neutral",
+                "2": "Poor - Unsatisfied",
+                "1": "Very Poor - Very Unsatisfied"
+            },
+            "order_filters": {
+                "status": "Use status=7 for completed orders",
+                "location_id": "Always filter by the current location_id",
+                "time_period": "Use appropriate date filters for the requested time period"
             }
+        }
 
-        # Enhanced system prompt with business rules and conversational guidelines
-        return (
-            "You are a helpful restaurant analytics assistant that translates database results "
-            "into natural language answers. "
-            "Your goal is to provide clear, actionable insights from restaurant order data. "
-            f"Use these business rules for context: {json.dumps(business_context, indent=2)}\n\n"
-            "CONVERSATIONAL GUIDELINES:\n"
-            "1. Use a friendly, professional tone that balances expertise with approachability\n"
-            "2. Begin responses with a direct answer to the question, then provide supporting details\n"
-            "3. Use natural transitions between ideas and maintain a conversational flow\n"
-            "4. Highlight important metrics or insights with bold formatting (**like this**)\n"
-            "5. For follow-up questions, explicitly reference previous context\n"
-            "6. When appropriate, end with a subtle suggestion for what the user might want to know next\n"
-            "7. Keep responses concise but complete - prioritize clarity over verbosity\n"
-            "8. Use bullet points or numbered lists for multiple data points\n"
-            "9. Format currency values with dollar signs and commas ($1,234.56)\n"
-            "10. When discussing ratings, include their significance (e.g., '5.0 - Very Satisfied')\n"
-        )
-    except Exception as e:
-        logger.error(f"Error creating system prompt: {str(e)}")
-        # Fallback if business rules can't be imported or other errors occur
-        return (
-            "You are a helpful restaurant analytics assistant that translates database results "
-            "into natural language answers. "
-            "Your goal is to provide clear, actionable insights from restaurant order data.\n\n"
-            "CONVERSATIONAL GUIDELINES:\n"
-            "1. Use a friendly, professional tone that balances expertise with approachability\n"
-            "2. Begin responses with a direct answer to the question, then provide supporting details\n"
-            "3. Use natural transitions between ideas and maintain a conversational flow\n"
-            "4. Highlight important metrics or insights with bold formatting (**like this**)\n"
-            "5. For follow-up questions, explicitly reference previous context\n"
-            "6. When appropriate, end with a subtle suggestion for what the user might want to know next\n"
-            "7. Keep responses concise but complete - prioritize clarity over verbosity\n"
-            "8. Use bullet points or numbered lists for multiple data points\n"
-            "9. Format currency values with dollar signs and commas ($1,234.56)\n"
-            "10. When discussing ratings, include their significance (e.g., '5.0 - Very Satisfied')\n"
-        )
+    # Enhanced system prompt with business rules and conversational guidelines
+    return (
+        "You are a helpful restaurant analytics assistant that translates database results "
+        "into natural language answers. "
+        "Your goal is to provide clear, actionable insights from restaurant order data. "
+        f"Use these business rules for context: {json.dumps(business_context, indent=2)}\n\n"
+        "CONVERSATIONAL GUIDELINES:\n"
+        "1. Use a friendly, professional tone that balances expertise with approachability\n"
+        "2. Begin responses with a direct answer to the question, then provide supporting details\n"
+        "3. Use natural transitions between ideas and maintain a conversational flow\n"
+        "4. Highlight important metrics or insights with bold formatting (**like this**)\n"
+        "5. For follow-up questions, explicitly reference previous context\n"
+        "6. When appropriate, end with a subtle suggestion for what the user might want to know next\n"
+        "7. Keep responses concise but complete - prioritize clarity over verbosity\n"
+        "8. Use bullet points or numbered lists for multiple data points\n"
+        "9. Format currency values with dollar signs and commas ($1,234.56)\n"
+        "10. When discussing ratings, include their significance (e.g., '5.0 - Very Satisfied')\n"
+    )
 
 # Process query results function from app.py
 def process_query_results(

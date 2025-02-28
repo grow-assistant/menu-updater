@@ -49,9 +49,14 @@ def create_gemini_prompt(
     elif isinstance(business_rules, str):
         business_rules = business_rules.replace("[LOCATION_ID]", str(location_id))
 
+    # Truncate database schema if too long
     database_schema = context_files.get(
         "database_schema", "Database schema unavailable"
     )
+    
+    MAX_SCHEMA_LENGTH = 3000
+    if len(database_schema) > MAX_SCHEMA_LENGTH:
+        database_schema = database_schema[:MAX_SCHEMA_LENGTH] + "...(truncated)"
     
     # Determine query category from user query to load specific examples
     query_type = None
@@ -72,7 +77,61 @@ def create_gemini_prompt(
                 break
     
     # Load example queries directly from the database folders
-    example_queries = load_example_queries(query_type)
+    all_examples = load_example_queries(query_type)
+    
+    # Limit number of example queries to reduce prompt size
+    MAX_EXAMPLES_PER_CATEGORY = 3
+    MAX_TOTAL_EXAMPLES = 10
+    
+    # Process examples to limit their size
+    example_categories = all_examples.split('\n\n')
+    limited_examples = []
+    example_count = 0
+    
+    for category in example_categories:
+        if not category.strip():
+            continue
+            
+        # Skip if we've reached our max total examples
+        if example_count >= MAX_TOTAL_EXAMPLES:
+            break
+            
+        # Extract category lines
+        lines = category.split('\n')
+        if not lines:
+            continue
+            
+        # First line is usually the category title
+        title = lines[0]
+        limited_examples.append(title)
+        
+        # Process examples in this category
+        example_lines = []
+        category_count = 0
+        
+        for i in range(1, len(lines)):
+            example_lines.append(lines[i])
+            
+            # If this is a SQL line, count it as an example
+            if lines[i].startswith("SQL:"):
+                category_count += 1
+                example_count += 1
+                
+                # Truncate long SQL
+                if len(lines[i]) > 500:
+                    example_lines[-1] = lines[i][:500] + " ... (truncated)"
+                
+                # If we've reached our limit for this category, add what we have and break
+                if category_count >= MAX_EXAMPLES_PER_CATEGORY or example_count >= MAX_TOTAL_EXAMPLES:
+                    limited_examples.extend(example_lines)
+                    break
+        
+        # Add all lines for this category if we didn't hit a limit
+        if category_count < MAX_EXAMPLES_PER_CATEGORY:
+            limited_examples.extend(example_lines)
+    
+    # Join the limited examples back together
+    example_queries = "\n".join(limited_examples)
     
     # Format user query for better processing - strip whitespace and ensure question ends with ?
     formatted_query = user_query.strip().rstrip("?") + "?"
@@ -82,10 +141,16 @@ def create_gemini_prompt(
     if conversation_history and len(conversation_history) > 0:
         # Get the most recent conversation
         last_exchange = conversation_history[-1]
+        
+        # Truncate previous SQL if too long
+        prev_sql = last_exchange.get('sql', '')
+        if len(prev_sql) > 300:
+            prev_sql = prev_sql[:300] + "... (truncated)"
+            
         previous_context = f"""
 PREVIOUS QUERY CONTEXT:
 Previous Question: "{last_exchange.get('query', '')}"
-Previous SQL: "{last_exchange.get('sql', '')}"
+Previous SQL: "{prev_sql}"
 Previous Results: {len(last_exchange.get('results', []))} rows returned
 
 When generating SQL for this query, maintain context from the previous query (especially date filters, 
@@ -121,6 +186,28 @@ MUST USE THESE JOINS:
 - LEFT JOIN discounts d ON d.order_id = o.id
 """
 
+    # Truncate business rules if it's a string and too long
+    if isinstance(business_rules, str) and len(business_rules) > 1000:
+        business_rules = business_rules[:1000] + "... (truncated)"
+    
+    # For dictionary business rules, convert to string with a reasonable limit
+    if isinstance(business_rules, dict):
+        try:
+            rules_str = json.dumps(business_rules, indent=2)
+            if len(rules_str) > 1000:
+                # Try to extract key information instead of showing all
+                key_rules = {
+                    "order_status": business_rules.get("order_status", {}),
+                    "time_period_guidance": business_rules.get("time_period_guidance", {})
+                }
+                rules_str = json.dumps(key_rules, indent=2)
+                if len(rules_str) > 1000:
+                    rules_str = rules_str[:1000] + "... (truncated)"
+            business_rules = rules_str
+        except Exception as e:
+            logger.warning(f"Error converting business rules to JSON: {str(e)}")
+            business_rules = str(business_rules)[:1000] + "... (truncated)"
+
     # Create a comprehensive prompt with all context files and specific guidelines
     prompt = f"""You are an expert SQL developer specializing in restaurant order systems. Your task is to generate precise SQL queries for a restaurant management system.
 
@@ -134,7 +221,7 @@ DATABASE SCHEMA:
 {database_schema}
 
 BUSINESS RULES:
-{json.dumps(business_rules, indent=2) if isinstance(business_rules, dict) else business_rules}
+{business_rules}
 
 EXAMPLE QUERIES FOR REFERENCE:
 {example_queries}
@@ -155,22 +242,6 @@ QUERY GUIDELINES:
 10. Always use updated_at instead of created_at for time-based calculations
 11. For date format conversions, use TO_CHAR function with appropriate format (e.g., 'YYYY-MM-DD')
 12. Include explicit ORDER BY clauses for consistent results, especially with LIMIT
-
-COMMON QUERY PATTERNS:
-1. For order counts: USE COUNT(o.id) with appropriate filters
-2. For revenue: USE SUM(COALESCE(o.total, 0)) with proper grouping
-3. For date ranges: USE BETWEEN or >= and <= with timezone adjusted dates
-4. For menu items: JOIN orders, order_items, and items tables
-
-STEP-BY-STEP APPROACH:
-1. Identify the tables needed based on the question
-2. Determine the appropriate JOIN conditions
-3. Apply proper filtering (location, status, date range)
-4. Select the correct aggregation functions if needed
-5. Include proper GROUP BY, ORDER BY, and LIMIT clauses
-6. Add NULL handling for numeric calculations
-
-IMPORTANT: For follow-up queries, maintain date filters and other context from previous queries unless explicitly changed in the new query.
 
 Generate ONLY a clean, efficient SQL query that precisely answers the user's question. No explanations or commentary.
 """
