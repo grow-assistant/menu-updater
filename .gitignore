@@ -6,3 +6,7 @@ env
 
 # py cahe
 __pycache__
+
+# Ignore archive and log folders
+archive/
+logs/
