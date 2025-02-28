@@ -1,7 +1,0 @@
-2025-02-26 15:17:39,586 - INFO - === New Session Started at 2025-02-26_15-17-39 ===
-2025-02-26 15:17:39,586 - INFO - Logging initialized with fresh log file
-2025-02-26 15:17:40,382 - WARNING - Could not delete previous log file - it might be open in another process
-2025-02-26 15:17:40,383 - INFO - Starting app.py
-2025-02-26 15:17:40,384 - INFO - .env file loaded
-2025-02-26 15:17:40,617 - INFO - Debug mode set to: False
-2025-02-26 15:17:40,617 - INFO - End of app.py execution

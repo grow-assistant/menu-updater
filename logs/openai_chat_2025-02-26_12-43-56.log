@@ -1,7 +1,0 @@
-2025-02-26 12:43:56,885 - INFO - === New Session Started at 2025-02-26_12-43-56 ===
-2025-02-26 12:43:56,885 - INFO - Logging initialized with fresh log file
-2025-02-26 12:43:57,885 - INFO - Starting app.py
-2025-02-26 12:43:57,894 - INFO - .env file loaded
-2025-02-26 12:43:58,181 - INFO - Debug mode set to: False
-2025-02-26 12:43:58,181 - INFO - End of app.py execution
-2025-02-26 12:44:00,245 - INFO - HTTP Request: GET https://api.elevenlabs.io/v1/voices "HTTP/1.1 200 OK"
