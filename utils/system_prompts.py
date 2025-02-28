@@ -33,10 +33,12 @@ Before presenting, confirm the validity of SQL scripts and dataframes. Assess if
 def get_table_context(schema: str, table: str, db_credentials: dict):
     conn = psycopg2.connect(**db_credentials)
     cursor = conn.cursor()
-    cursor.execute(f"""
+    cursor.execute(
+        f"""
     SELECT column_name, data_type FROM information_schema.columns
     WHERE table_schema = '{schema}' AND table_name = '{table}'
-    """)
+    """
+    )
     columns = cursor.fetchall()
 
     columns_str = "\n".join([f"- **{col[0]}**: {col[1]}" for col in columns])
@@ -49,13 +51,16 @@ def get_table_context(schema: str, table: str, db_credentials: dict):
     conn.close()
     return context
 
+
 def get_all_tables_from_db(db_credentials: dict):
     conn = psycopg2.connect(**db_credentials)
     cursor = conn.cursor()
-    cursor.execute("""
+    cursor.execute(
+        """
     SELECT table_schema, table_name FROM information_schema.tables
     WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
-    """)
+    """
+    )
     tables = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -64,8 +69,10 @@ def get_all_tables_from_db(db_credentials: dict):
 
 def get_all_table_contexts(db_credentials: dict):
     tables = get_all_tables_from_db(db_credentials)
-    table_contexts = [get_table_context(schema, table, db_credentials) for schema, table in tables]
-    return '\n'.join(table_contexts)
+    table_contexts = [
+        get_table_context(schema, table, db_credentials) for schema, table in tables
+    ]
+    return "\n".join(table_contexts)
 
 
 def get_data_dictionary(db_credentials: dict):
@@ -74,29 +81,36 @@ def get_data_dictionary(db_credentials: dict):
     for schema, table in tables:
         conn = psycopg2.connect(**db_credentials)
         cursor = conn.cursor()
-        cursor.execute(f"""
+        cursor.execute(
+            f"""
         SELECT column_name, data_type FROM information_schema.columns
         WHERE table_schema = '{schema}' AND table_name = '{table}'
-        """)
+        """
+        )
         columns = cursor.fetchall()
         data_dict[f"{schema}.{table}"] = {col[0]: col[1] for col in columns}
         cursor.close()
         conn.close()
-    return data_dict  
+    return data_dict
 
 
 def get_final_system_prompt(db_credentials: dict):
     return GENERATE_SQL_PROMPT
 
+
 if __name__ == "__main__":
-    
+
     st.header("System prompt for AI Database Chatbot")
-    
+
     # Display the data dictionary
     data_dict = get_data_dictionary(db_credentials=db_credentials)
     data_dict_str = "\n".join(
-        [f"{table}:\n" + "\n".join(
-            [f"    {column}: {dtype}" for column, dtype in columns.items()]) for table, columns in data_dict.items()])
+        [
+            f"{table}:\n"
+            + "\n".join([f"    {column}: {dtype}" for column, dtype in columns.items()])
+            for table, columns in data_dict.items()
+        ]
+    )
 
     SYSTEM_PROMPT = get_final_system_prompt(db_credentials=db_credentials)
     st.markdown(SYSTEM_PROMPT)

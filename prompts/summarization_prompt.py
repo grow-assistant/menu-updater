@@ -13,7 +13,7 @@ AVOID REPETITION BY:
 - Changing emphasis (sometimes highlight date first, sometimes metric)
 - Using different sports analogies (when using clubhouse_legend persona)
 """
-    
+
     return f"""Generate a verbal response with these rules:
 1. Use natural, conversational language
 2. Vary sentence structure from previous responses
@@ -37,4 +37,4 @@ Guidelines for this response:
 - Rotate between emphasizing dates, metrics, or percentages
 - Limit sports analogies to 1 per response
 - Vary sentence lengths between short (3-7 words) and medium (8-15 words)
-""" 
+"""

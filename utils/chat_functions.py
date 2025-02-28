@@ -1,6 +1,8 @@
-import tiktoken
 import streamlit as st
+import os
+import tiktoken
 import json
+from datetime import datetime
 from typing import Dict, List, Any
 from utils.config import AI_MODEL
 from utils.api_functions import send_api_request_to_openai_api, execute_function_call
@@ -8,21 +10,14 @@ from utils.operation_patterns import match_operation, handle_operation_step
 from utils.database_functions import (
     execute_menu_update as db_execute_menu_update,
     get_db_connection,
-    execute_menu_query
-)
-from utils.menu_analytics import (
-    get_recent_operations,
-    get_popular_items,
-    analyze_time_patterns,
-    get_category_relationships
+    execute_menu_query,
 )
 import logging
-import datetime
-import os
 from pathlib import Path
-from utils.create_sql_statement import generate_sql_from_user_query  # Import our Gemini SQL generator
+from utils.create_sql_statement import generate_sql_from_user_query
 import requests
 
+# Set up logging
 # Create logs directory if it doesn't exist
 log_dir = Path("logs")
 log_dir.mkdir(exist_ok=True)
@@ -31,23 +26,23 @@ log_dir.mkdir(exist_ok=True)
 logging.getLogger().handlers.clear()
 
 # Get current timestamp for the log file
-current_time = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_file = f"logs/openai_chat_{current_time}.log"
 
 # Set up logging to both file and console
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         # File handler - new file each run with timestamp
         logging.FileHandler(
             filename=log_file,
-            mode='w',  # 'w' mode overwrites the file each time
-            encoding='utf-8'
+            mode="w",  # 'w' mode overwrites the file each time
+            encoding="utf-8",
         ),
         # Console handler
-        logging.StreamHandler()
-    ]
+        logging.StreamHandler(),
+    ],
 )
 
 # Start the log file with a header
@@ -55,32 +50,19 @@ logger = logging.getLogger(__name__)
 logger.info(f"=== New Session Started at {current_time} ===")
 logger.info("Logging initialized with fresh log file")
 
-# At the top of the file
-import logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
-# Create a file handler
-handler = logging.FileHandler('chat_functions.log')
-handler.setLevel(logging.INFO)
-
-# Create a logging format
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-
-# Add the handler to the logger
-logger.addHandler(handler)
 
 def log_openai_interaction(messages: List[Dict], response: Any, interaction_type: str):
-    """Log OpenAI interactions with timestamps"""
-    timestamp = datetime.datetime.now().isoformat()
+    """Log OpenAI API interactions for debugging and auditing"""
+    timestamp = datetime.now().isoformat()
     log_entry = {
         "timestamp": timestamp,
         "type": interaction_type,
         "messages": messages,
-        "response": response.model_dump() if hasattr(response, 'model_dump') else str(response)
+        "response": (
+            response.model_dump() if hasattr(response, "model_dump") else str(response)
+        ),
     }
-    
+
     # Pretty print the log entry
     formatted_log = (
         f"\n{'='*80}\n"
@@ -90,14 +72,12 @@ def log_openai_interaction(messages: List[Dict], response: Any, interaction_type
         f"RESPONSE:\n{json.dumps(log_entry['response'], indent=2)}\n"
         f"{'='*80}\n"
     )
-    
+
     logger.info(formatted_log)
 
+
 def execute_order_query(query: str) -> str:
-    """
-    Helper function to execute a read-only order query.
-    Returns the JSON-dumped result or an error message.
-    """
+    """Execute order-related database queries"""
     conn = None
     try:
         conn = get_db_connection()
@@ -112,24 +92,17 @@ def execute_order_query(query: str) -> str:
         if conn:
             conn.close()
 
-def process_chat_message(message: str, history: List[Dict], functions: List[Dict]) -> Dict:
-    """Process chat message with error handling
-    
-    Args:
-        message: User message
-        history: Chat history
-        functions: OpenAI function definitions
-        
-    Returns:
-        Response dict with role and content
-    """
+
+def process_chat_message(
+    message: str, history: List[Dict], functions: List[Dict]
+) -> Dict:
+    """Process chat messages and determine appropriate action"""
     try:
         # Check for operation in progress
         if "current_operation" in st.session_state:
             operation = st.session_state["current_operation"]
-            step = operation["steps"][operation["current_step"]]
             response = handle_operation_step(operation, message)
-            
+
             if response:
                 if response["role"] == "function":
                     try:
@@ -137,56 +110,74 @@ def process_chat_message(message: str, history: List[Dict], functions: List[Dict
                         result = execute_menu_update(
                             get_db_connection,
                             response["params"]["query"],
-                            operation["type"]
+                            operation["type"],
                         )
                         # Clear operation state
                         del st.session_state["current_operation"]
                         return {"role": "assistant", "content": result}
                     except Exception as e:
-                        return {"role": "assistant", "content": f"Error executing operation: {str(e)}. Please try again."}
+                        return {
+                            "role": "assistant",
+                            "content": f"Error executing operation: {str(e)}. Please try again.",
+                        }
                 else:
                     operation["current_step"] += 1
                     st.session_state["current_operation"] = operation
                     return response
-        
+
         # Try to match new operation
         if operation := match_operation(message):
             operation["current_step"] = 0
             st.session_state["current_operation"] = operation
             return handle_operation_step(operation, message)
-        
+
         # Fallback to OpenAI
         try:
             response = send_api_request_to_openai_api(
-                history + [{"role": "user", "content": message}],
-                functions
+                history + [{"role": "user", "content": message}], functions
             )
             response_json = response.json()
-            
+
             if not response_json.get("choices"):
-                return {"role": "assistant", "content": "I encountered an error processing your request. Please try again."}
-                
+                return {
+                    "role": "assistant",
+                    "content": "I encountered an error processing your request. Please try again.",
+                }
+
             assistant_message = response_json["choices"][0]["message"]
-            
+
             if assistant_message["role"] == "assistant":
                 if assistant_message.get("function_call"):
                     try:
                         results = execute_function_call(assistant_message)
                         return {"role": "assistant", "content": results}
                     except Exception as e:
-                        return {"role": "assistant", "content": f"Error executing operation: {str(e)}. Please try again."}
+                        return {
+                            "role": "assistant",
+                            "content": f"Error executing operation: {str(e)}. Please try again.",
+                        }
                 return assistant_message
-            
-            return {"role": "assistant", "content": "I encountered an unexpected response. Please try again."}
-            
+
+            return {
+                "role": "assistant",
+                "content": "I encountered an unexpected response. Please try again.",
+            }
+
         except Exception as e:
-            return {"role": "assistant", "content": f"Error communicating with AI: {str(e)}. Please try again."}
-            
+            return {
+                "role": "assistant",
+                "content": f"Error communicating with AI: {str(e)}. Please try again.",
+            }
+
     except Exception as e:
-        return {"role": "assistant", "content": f"I encountered an error: {str(e)}. Please try again."}
+        return {
+            "role": "assistant",
+            "content": f"I encountered an error: {str(e)}. Please try again.",
+        }
+
 
 def process_query_results(result: dict, xai_client: dict, user_question: str) -> str:
-    """Process query results using XAI API"""
+    """Process query results and format as human-readable response"""
     try:
         data = result.get("results", [])
         prompt = (
@@ -201,56 +192,63 @@ def process_query_results(result: dict, xai_client: dict, user_question: str) ->
             f"{json.dumps(data)}\n"
             f"User question: {user_question}"
         )
-        
+
         response = requests.post(
-            xai_client['XAI_API_URL'],
+            xai_client["XAI_API_URL"],
             json={
                 "messages": [{"role": "user", "content": prompt}],
-                "model": xai_client['XAI_MODEL'],
-                "temperature": 0.3
+                "model": xai_client["XAI_MODEL"],
+                "temperature": 0.3,
             },
             headers={
                 "Authorization": f"Bearer {xai_client['XAI_TOKEN']}",
-                "Content-Type": "application/json"
-            }
+                "Content-Type": "application/json",
+            },
         )
         response.raise_for_status()
-        summary_response = response.json()['choices'][0]['message']['content']
-        summary_content = summary_response.get('content', summary_response)  # Extract inner content
-        
+        summary_response = response.json()["choices"][0]["message"]["content"]
+        summary_content = summary_response.get(
+            "content", summary_response
+        )  # Extract inner content
+
         return {"role": "assistant", "content": f"{summary_content}"}
-        
+
     except Exception as e:
         logger.error(f"XAI summarization failed: {str(e)}")
         return f"Found {len(data)} matching records: {data}"
 
-def run_chat_sequence(messages: List[Dict[str, str]], functions: List[Dict[str, Any]], openai_client, grok_client) -> Dict[str, str]:
-    """
-    Process a chat sequence with function calling:
-    1. Categorize the user's request.
-    2. Execute appropriate function based on request type.
-    3. Handle queries by transforming the user query into SQL using Gemini and then summarizing results.
-    """
+
+def run_chat_sequence(
+    messages: List[Dict[str, str]],
+    functions: List[Dict[str, Any]],
+    openai_client,
+    grok_client,
+) -> Dict[str, str]:
+    """Run a sequence of chat operations with OpenAI API"""
     user_message = messages[-1]["content"] if messages else ""
-    
-    logger = logging.getLogger(__name__)
+
     logger.info(f"\n{'='*50}\nNew Chat Request: {user_message}\n{'='*50}")
-    
+
     try:
         # For example, checking if a location is selected (your logic might vary)
         location_id = 62  # For demonstration; in practice, use the real location_id from session state.
         if not location_id:
-            return {"role": "assistant", "content": "Please select a location first to view order information."}
-        
+            return {
+                "role": "assistant",
+                "content": "Please select a location first to view order information.",
+            }
+
         # Categorize user request by calling the categorization function (as you already do)
-        categorize_functions = [f for f in functions if f["name"] == "categorize_request"]
+        categorize_functions = [
+            f for f in functions if f["name"] == "categorize_request"
+        ]
         categorize_response = openai_client.chat.completions.create(
             model="gpt-4-turbo-preview",
             messages=messages,
             functions=categorize_functions,
-            function_call={"name": "categorize_request"}
+            function_call={"name": "categorize_request"},
         )
-        
+
         # Log the OpenAI interaction for categorization
         logger.info("Received categorization response.")
         assistant_message = categorize_response.choices[0].message
@@ -259,33 +257,39 @@ def run_chat_sequence(messages: List[Dict[str, str]], functions: List[Dict[str, 
             request_type = args.get("request_type", "unknown")
             order_metric = args.get("order_metric")
             logger.info(f"Request type: {request_type}")
-            
+
             # ------------------------------
             # Query Handling via Gemini
             # ------------------------------
             if request_type in ["query_orders", "query_menu"]:
                 # Generate SQL query using Gemini
                 sql_query = generate_sql_from_user_query(user_message, location_id)
-                
+
                 logger.info(f"Generated SQL query via Gemini: {sql_query}")
-                
+
                 # Execute the SQL query
                 result = execute_menu_query(sql_query)
-                
+
                 logger.info(f"Raw SQL results: {json.dumps(result)}")
-                
+
                 # Process and summarize the results using Grok
                 summary = process_query_results(result, grok_client, user_message)
-                summary_content = summary.get('content', summary)  # Extract inner content
-                
+                summary_content = summary.get(
+                    "content", summary
+                )  # Extract inner content
+
                 logger.info(f"Summary: {summary_content}")
                 return {"role": "assistant", "content": summary_content}
-            
+
             # ------------------------------
             # Query Handling with Preset Order Metrics
             # (Your already-implemented branches based on specific metrics)
             # ------------------------------
-            elif request_type == "query_orders" and order_metric == "completed_orders" and args.get("date"):
+            elif (
+                request_type == "query_orders"
+                and order_metric == "completed_orders"
+                and args.get("date")
+            ):
                 query = f"""
                     SELECT COUNT(*) as completed_orders
                     FROM orders
@@ -304,28 +308,50 @@ def run_chat_sequence(messages: List[Dict[str, str]], functions: List[Dict[str, 
                     error_msg = f"No data found for location #{location_id} on {args.get('date')}."
                     logger.warning(error_msg)
                     return {"role": "assistant", "content": error_msg}
-            
+
             # ------------------------------
             # Menu Updates (e.g., price changes, enable/disable)
             # ------------------------------
             elif request_type in ["update_price", "disable_item", "enable_item"]:
                 # The existing approach: Construct UPDATE queries and execute them.
-                if request_type == "update_price" and args.get("item_name") and args.get("new_price") is not None:
+                if (
+                    request_type == "update_price"
+                    and args.get("item_name")
+                    and args.get("new_price") is not None
+                ):
                     sql_query = f"""
-                        UPDATE items 
-                        SET price = {args['new_price']} 
-                        WHERE name ILIKE '%{args['item_name']}%' 
-                            AND deleted_at IS NULL 
+                        UPDATE items
+                        SET price = {args['new_price']}
+                        WHERE name ILIKE '%{args['item_name']}%'
+                            AND deleted_at IS NULL
                             AND price >= 0;
                     """
-                    return execute_menu_update(messages, functions, sql_query, "update_menu_item", openai_client)
+                    return execute_menu_update(
+                        messages,
+                        functions,
+                        sql_query,
+                        "update_menu_item",
+                        openai_client,
+                    )
                 elif request_type == "disable_item" and args.get("item_name"):
                     sql_query = f"UPDATE items SET disabled = true WHERE name ILIKE '%{args['item_name']}%';"
-                    return execute_menu_update(messages, functions, sql_query, "toggle_menu_item", openai_client)
+                    return execute_menu_update(
+                        messages,
+                        functions,
+                        sql_query,
+                        "toggle_menu_item",
+                        openai_client,
+                    )
                 elif request_type == "enable_item" and args.get("item_name"):
                     sql_query = f"UPDATE items SET disabled = false WHERE name ILIKE '%{args['item_name']}%';"
-                    return execute_menu_update(messages, functions, sql_query, "toggle_menu_item", openai_client)
-            
+                    return execute_menu_update(
+                        messages,
+                        functions,
+                        sql_query,
+                        "toggle_menu_item",
+                        openai_client,
+                    )
+
             # ------------------------------
             # Fallback / Help Message
             # ------------------------------
@@ -340,75 +366,91 @@ def run_chat_sequence(messages: List[Dict[str, str]], functions: List[Dict[str, 
                 )
                 return {"role": "assistant", "content": help_message}
         else:
-            return {"role": "assistant", "content": "Sorry, I couldn't determine your request. Could you please rephrase?"}
-    
+            return {
+                "role": "assistant",
+                "content": "Sorry, I couldn't determine your request. Could you please rephrase?",
+            }
+
     except Exception as e:
         logger.error(f"Error in chat sequence: {str(e)}", exc_info=True)
-        return {"role": "assistant", "content": "Sorry, I encountered an error. Please try again or contact support."}
+        return {
+            "role": "assistant",
+            "content": "Sorry, I encountered an error. Please try again or contact support.",
+        }
 
-def execute_menu_update(messages: List[Dict[str, str]], 
-                       functions: List[Dict[str, Any]], 
-                       sql_query: str, 
-                       function_name: str,
-                       openai_client) -> Dict[str, str]:
+
+def execute_menu_update(
+    messages: List[Dict[str, str]],
+    functions: List[Dict[str, Any]],
+    sql_query: str,
+    function_name: str,
+    openai_client,
+) -> Dict[str, str]:
     """Helper function to execute menu updates with the appropriate function"""
     try:
         # Get database connection
         conn = get_db_connection()
-        
+
         # Execute the update query
         result = db_execute_menu_update(conn, sql_query, operation_name=function_name)
-        
+
         if "successful" in result.lower():
             # Customize message based on operation type
             if function_name == "update_menu_item":
                 return {
                     "role": "assistant",
-                    "content": f"✅ Successfully updated the price. {result}"
+                    "content": f"✅ Successfully updated the price. {result}",
                 }
             elif function_name == "toggle_menu_item":
                 action = "enabled" if "disabled = false" in sql_query else "disabled"
                 return {
                     "role": "assistant",
-                    "content": f"✅ Successfully {action} the menu item. {result}"
+                    "content": f"✅ Successfully {action} the menu item. {result}",
                 }
         else:
-            operation_type = "price update" if function_name == "update_menu_item" else "status update"
+            operation_type = (
+                "price update"
+                if function_name == "update_menu_item"
+                else "status update"
+            )
             return {
                 "role": "assistant",
-                "content": f"❌ Failed to perform {operation_type}: {result}"
+                "content": f"❌ Failed to perform {operation_type}: {result}",
             }
-            
+
     except Exception as e:
         print(f"Database error: {e}")
-        operation_type = "price update" if function_name == "update_menu_item" else "status update"
+        operation_type = (
+            "price update" if function_name == "update_menu_item" else "status update"
+        )
         return {
             "role": "assistant",
-            "content": f"❌ Sorry, I encountered a database error during {operation_type}: {str(e)}"
+            "content": f"❌ Sorry, I encountered a database error during {operation_type}: {str(e)}",
         }
     finally:
         if conn:
             conn.close()
 
+
 def clear_chat_history():
-    """ Clear the chat history stored in the Streamlit session state """
+    """Clear the chat history stored in the Streamlit session state"""
     del st.session_state["live_chat_history"]
     del st.session_state["full_chat_history"]
     del st.session_state["api_chat_history"]
 
 
 def count_tokens(text):
-    """ Count the total tokens used in a text string """
-    if not isinstance(text, str):  
-        return 0 
+    """Count the total tokens used in a text string"""
+    if not isinstance(text, str):
+        return 0
     encoding = tiktoken.encoding_for_model(AI_MODEL)
     total_tokens_in_text_string = len(encoding.encode(text))
-    
+
     return total_tokens_in_text_string
 
 
 def prepare_sidebar_data(database_schema_dict):
-    """ Add a sidebar for visualizing the database schema objects  """
+    """Add a sidebar for visualizing the database schema objects"""
     sidebar_data = {}
     for table in database_schema_dict:
         schema_name = table["schema_name"]
@@ -421,43 +463,46 @@ def prepare_sidebar_data(database_schema_dict):
         sidebar_data[schema_name][table_name] = columns
     return sidebar_data
 
+
 def call_grok(prompt: str) -> str:
     """Make a call to the XAI Grok API"""
     try:
         # Get environment variables
-        xai_token = os.getenv('XAI_TOKEN')
-        xai_url = os.getenv('XAI_API_URL')
-        xai_model = os.getenv('XAI_MODEL')
-        
+        xai_token = os.getenv("XAI_TOKEN")
+        xai_url = os.getenv("XAI_API_URL")
+        xai_model = os.getenv("XAI_MODEL")
+
         # Validate configuration
         if not all([xai_token, xai_url, xai_model]):
             raise ValueError("Missing XAI environment variables")
-        
+
         # Construct the payload
         payload = {
             "messages": [
-                {"role": "system", "content": "You are a helpful assistant that converts database results into natural language answers."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant that converts database results into natural language answers.",
+                },
+                {"role": "user", "content": prompt},
             ],
             "model": xai_model,
             "temperature": 0.3,
-            "stream": False
+            "stream": False,
         }
-        
+
         # Make the API call
         response = requests.post(
             xai_url,
             json=payload,
             headers={
                 "Authorization": f"Bearer {xai_token}",
-                "Content-Type": "application/json"
-            }
+                "Content-Type": "application/json",
+            },
         )
         response.raise_for_status()
-        
-        return response.json()['choices'][0]['message']['content']
-        
+
+        return response.json()["choices"][0]["message"]["content"]
+
     except Exception as e:
         logger.error(f"XAI API call failed: {str(e)}")
         return None
-

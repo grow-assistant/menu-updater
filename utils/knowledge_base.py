@@ -19,11 +19,13 @@ from typing import Dict, List, Optional
 
 class KnowledgeItem:
     """Represents a single piece of knowledge with metadata for retrieval."""
-    
-    def __init__(self, title: str, content: str, triggers: List[str], importance: int = 1):
+
+    def __init__(
+        self, title: str, content: str, triggers: List[str], importance: int = 1
+    ):
         """
         Initialize a knowledge item.
-        
+
         Args:
             title: Short descriptive title
             content: The actual knowledge content
@@ -36,12 +38,12 @@ class KnowledgeItem:
         self.importance = importance
         self.created_at = datetime.datetime.now()
         self.last_updated = self.created_at
-    
+
     def update(self, content: str):
         """Update the content and last_updated timestamp."""
         self.content = content
         self.last_updated = datetime.datetime.now()
-    
+
     def __str__(self):
         return f"{self.title}: {self.content}"
 
@@ -56,7 +58,7 @@ TIME_TIMEZONE_RULE = KnowledgeItem(
     2. Format times as 'YYYY-MM-DD HH:MM:SS' for display
     3. Make sure all time comparisons account for timezone differences
     """,
-    triggers=["time", "timezone", "EST", "date", "datetime"]
+    triggers=["time", "timezone", "EST", "date", "datetime"],
 )
 
 ORDER_STATUS_RULES = KnowledgeItem(
@@ -67,10 +69,10 @@ ORDER_STATUS_RULES = KnowledgeItem(
     - 'pending': Order has been placed but not yet fulfilled
     - 'cancelled' (status code 6): Order was cancelled by either customer or staff
     - 'in_progress': Order is being prepared or is out for delivery
-    
+
     When filtering by status in SQL queries, use the numeric status codes (e.g., 7 for completed, 6 for cancelled).
     """,
-    triggers=["status", "completed", "pending", "cancelled", "in_progress"]
+    triggers=["status", "completed", "pending", "cancelled", "in_progress"],
 )
 
 PRICE_FORMATTING_RULES = KnowledgeItem(
@@ -82,7 +84,7 @@ PRICE_FORMATTING_RULES = KnowledgeItem(
     3. Use proper comma separation for thousands (e.g., $1,234.56)
     4. Be calculated including all applicable taxes and fees
     """,
-    triggers=["price", "cost", "amount", "total", "money", "dollars"]
+    triggers=["price", "cost", "amount", "total", "money", "dollars"],
 )
 
 SQL_QUERY_RULES = KnowledgeItem(
@@ -98,7 +100,16 @@ SQL_QUERY_RULES = KnowledgeItem(
     7. Always handle NULL values properly with COALESCE or IS NULL/IS NOT NULL checks
     8. Use CASE statements for complex conditional logic
     """,
-    triggers=["SQL", "query", "database", "select", "where", "join", "created_at", "updated_at"]
+    triggers=[
+        "SQL",
+        "query",
+        "database",
+        "select",
+        "where",
+        "join",
+        "created_at",
+        "updated_at",
+    ],
 )
 
 RESPONSE_FORMAT_RULES = KnowledgeItem(
@@ -114,7 +125,7 @@ RESPONSE_FORMAT_RULES = KnowledgeItem(
     7. Organize information hierarchically with numbered lists for multiple items
     8. End responses with a brief insight or actionable suggestion when appropriate
     """,
-    triggers=["response", "answer", "format", "display", "output"]
+    triggers=["response", "answer", "format", "display", "output"],
 )
 
 # New knowledge items
@@ -133,7 +144,15 @@ RATINGS_ANALYSIS_RULES = KnowledgeItem(
     6. Use the order_ratings_feedback table to access rating data
     7. Always suggest potential improvement areas based on rating patterns
     """,
-    triggers=["rating", "ratings", "stars", "feedback", "satisfaction", "review", "reviews"]
+    triggers=[
+        "rating",
+        "ratings",
+        "stars",
+        "feedback",
+        "satisfaction",
+        "review",
+        "reviews",
+    ],
 )
 
 DATA_HANDLING_RULES = KnowledgeItem(
@@ -150,7 +169,7 @@ DATA_HANDLING_RULES = KnowledgeItem(
     5. Use appropriate statistical methods when calculating averages with outliers
     6. For time-based metrics, consider adding minimum and maximum ranges alongside averages
     """,
-    triggers=["zero", "null", "missing", "empty", "average", "avg", "time", "error"]
+    triggers=["zero", "null", "missing", "empty", "average", "avg", "time", "error"],
 )
 
 CONTEXT_AWARE_RESPONSE_RULES = KnowledgeItem(
@@ -165,7 +184,15 @@ CONTEXT_AWARE_RESPONSE_RULES = KnowledgeItem(
     6. Use phrases like "As we saw earlier..." or "Building on the previous analysis..."
     7. Provide cumulative insights that build on the entire conversation context
     """,
-    triggers=["follow-up", "followup", "previous", "earlier", "before", "already", "also"]
+    triggers=[
+        "follow-up",
+        "followup",
+        "previous",
+        "earlier",
+        "before",
+        "already",
+        "also",
+    ],
 )
 
 ERROR_ANALYSIS_RULES = KnowledgeItem(
@@ -180,7 +207,16 @@ ERROR_ANALYSIS_RULES = KnowledgeItem(
     6. When time metrics show as 0 seconds or NULL, explain potential technical causes
     7. Suggest specific SQL query modifications that might resolve data issues
     """,
-    triggers=["error", "anomaly", "unusual", "suspect", "incorrect", "zero", "null", "bug"]
+    triggers=[
+        "error",
+        "anomaly",
+        "unusual",
+        "suspect",
+        "incorrect",
+        "zero",
+        "null",
+        "bug",
+    ],
 )
 
 # SQL Knowledge reference examples - not to be used as templates but as context
@@ -202,9 +238,8 @@ JOIN locations AS l ON o.location_id = l.id
 WHERE o.location_id = 62 AND o.status = 7
 GROUP BY day_of_week
 ORDER BY order_count DESC;
-        """
+        """,
     },
-    
     "fulfillment_time": {
         "description": "Calculating average time between order creation and completion",
         "context": """
@@ -219,9 +254,8 @@ SELECT
 FROM orders AS o
 JOIN locations AS l ON o.location_id = l.id
 WHERE o.location_id = 62 AND o.status = 7 AND o.updated_at >= NOW() - INTERVAL '30 days';
-        """
+        """,
     },
-    
     "delivery": {
         "description": "Analyzing delivery-specific order patterns",
         "context": """
@@ -235,11 +269,10 @@ SELECT
   AVG(EXTRACT(EPOCH FROM (o.updated_at - o.created_at)) / 60) AS average_fulfillment_time_minutes
 FROM orders AS o
 JOIN locations AS l ON o.location_id = l.id
-WHERE o.location_id = 62 AND o.status = 7 AND o.order_type = 'delivery' 
+WHERE o.location_id = 62 AND o.status = 7 AND o.order_type = 'delivery'
 AND o.updated_at >= NOW() - INTERVAL '30 days';
-        """
+        """,
     },
-    
     "cancellations": {
         "description": "Analyzing canceled or refunded orders",
         "context": """
@@ -264,9 +297,8 @@ JOIN locations AS l ON o.location_id = l.id
 WHERE o.location_id = 62 AND (o.status = 8 OR o.status = 9)
 GROUP BY o.cancellation_reason
 ORDER BY count DESC;
-        """
+        """,
     },
-    
     "general": {
         "description": "General SQL query patterns and best practices",
         "context": """
@@ -291,8 +323,8 @@ AND o.updated_at >= NOW() - INTERVAL '30 days'
 GROUP BY m.name
 ORDER BY order_count DESC
 LIMIT 10;
-        """
-    }
+        """,
+    },
 }
 
 # Knowledge Registry - Update with new items
@@ -312,10 +344,10 @@ _KNOWLEDGE_REGISTRY: Dict[str, KnowledgeItem] = {
 def get_knowledge_by_key(key: str) -> Optional[str]:
     """
     Retrieve knowledge content by its key.
-    
+
     Args:
         key: The identifier for the knowledge item
-        
+
     Returns:
         The knowledge content or None if not found
     """
@@ -326,10 +358,10 @@ def get_knowledge_by_key(key: str) -> Optional[str]:
 def get_knowledge_by_trigger(trigger: str) -> List[str]:
     """
     Retrieve all knowledge items that match a trigger word.
-    
+
     Args:
         trigger: The trigger word to search for
-        
+
     Returns:
         List of knowledge content that matches the trigger
     """
@@ -343,59 +375,61 @@ def get_knowledge_by_trigger(trigger: str) -> List[str]:
 def get_all_knowledge() -> str:
     """
     Retrieve all knowledge items concatenated into a single string.
-    
+
     Returns:
         All knowledge content
     """
     return "\n\n".join(str(item) for item in _KNOWLEDGE_REGISTRY.values())
 
 
-def get_formatted_knowledge_for_prompt(keys: List[str] = None, triggers: List[str] = None) -> str:
+def get_formatted_knowledge_for_prompt(
+    keys: List[str] = None, triggers: List[str] = None
+) -> str:
     """
     Get formatted knowledge content ready to be inserted into a prompt.
-    
+
     Args:
         keys: Specific knowledge keys to include
         triggers: Trigger words to search for relevant knowledge
-        
+
     Returns:
         Formatted knowledge content for prompts
     """
     items = []
-    
+
     # Add items by key
     if keys:
         for key in keys:
             content = get_knowledge_by_key(key)
             if content:
                 items.append(content)
-    
+
     # Add items by trigger
     if triggers:
         for trigger in triggers:
             trigger_items = get_knowledge_by_trigger(trigger)
             items.extend(trigger_items)
-    
+
     # If neither keys nor triggers specified, return all knowledge
     if not keys and not triggers:
         items = [item.content for item in _KNOWLEDGE_REGISTRY.values()]
-    
+
     # Remove duplicates while preserving order
     unique_items = []
     for item in items:
         if item not in unique_items:
             unique_items.append(item)
-    
+
     return "\n\n===IMPORTANT RULES AND GUIDELINES===\n\n" + "\n\n".join(unique_items)
 
 
 def get_sql_knowledge(knowledge_type):
     """
     Get knowledge information for a specific type of SQL query.
-    
+
     Args:
         knowledge_type (str): The type of knowledge to retrieve
-        
+
     Returns:
         dict: The knowledge information including context and examples
     """
@@ -407,25 +441,26 @@ def get_sql_knowledge(knowledge_type):
 def get_formatted_knowledge_for_prompt(triggers=None):
     """
     Format relevant knowledge as context for an LLM prompt.
-    
+
     Args:
         triggers (list): List of keywords to identify relevant knowledge
-        
+
     Returns:
         str: Formatted knowledge string for inclusion in prompts
     """
     if not triggers:
         triggers = ["general"]
-    
+
     knowledge_sections = []
-    
+
     # Always include general knowledge
     if "general" not in triggers:
         triggers.append("general")
-    
+
     # Add SQL best practices if SQL is in triggers
     if "SQL" in triggers or "query" in triggers:
-        knowledge_sections.append("""
+        knowledge_sections.append(
+            """
 ## SQL Best Practices
 When writing SQL queries:
 - Filter by the location_id from the context (currently set to 62)
@@ -434,51 +469,63 @@ When writing SQL queries:
 - Order types include 'delivery', 'pickup', and 'dine_in'
 - Include clear ORDER BY clauses for analytical queries
 - Use appropriate JOINs between tables (orders, locations, menu_items, etc.)
-        """)
-    
+        """
+        )
+
     # Add day of week knowledge if relevant
     if any(keyword in triggers for keyword in ["day", "week", "weekday", "weekend"]):
         knowledge = get_sql_knowledge("day_of_week")
-        knowledge_sections.append(f"""
+        knowledge_sections.append(
+            f"""
 ## Day of Week Analysis
 {knowledge['context']}
 
 Example:
 {knowledge['example']}
-        """)
-    
-    # Add fulfillment time knowledge if relevant  
-    if any(keyword in triggers for keyword in ["time", "fulfillment", "duration", "minutes"]):
+        """
+        )
+
+    # Add fulfillment time knowledge if relevant
+    if any(
+        keyword in triggers
+        for keyword in ["time", "fulfillment", "duration", "minutes"]
+    ):
         knowledge = get_sql_knowledge("fulfillment_time")
-        knowledge_sections.append(f"""
+        knowledge_sections.append(
+            f"""
 ## Order Fulfillment Time Analysis
 {knowledge['context']}
 
 Example:
 {knowledge['example']}
-        """)
-    
+        """
+        )
+
     # Add delivery knowledge if relevant
     if any(keyword in triggers for keyword in ["delivery", "pickup", "order_type"]):
         knowledge = get_sql_knowledge("delivery")
-        knowledge_sections.append(f"""
+        knowledge_sections.append(
+            f"""
 ## Delivery Orders Analysis
 {knowledge['context']}
 
 Example:
 {knowledge['example']}
-        """)
-    
+        """
+        )
+
     # Add cancellation knowledge if relevant
     if any(keyword in triggers for keyword in ["cancel", "refund", "reason"]):
         knowledge = get_sql_knowledge("cancellations")
-        knowledge_sections.append(f"""
+        knowledge_sections.append(
+            f"""
 ## Cancellation Analysis
 {knowledge['context']}
 
 Example:
 {knowledge['example']}
-        """)
-    
+        """
+        )
+
     # Join all sections
-    return "\n\n".join(knowledge_sections) 
+    return "\n\n".join(knowledge_sections)

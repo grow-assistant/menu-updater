@@ -1,4 +1,4 @@
-made_by_sdw = '''
+made_by_sdw = """
 <style>
     .made_by {
         position: fixed; 
@@ -10,4 +10,4 @@ made_by_sdw = '''
         border-radius: 5px;
     }
 </style>
-'''
+"""

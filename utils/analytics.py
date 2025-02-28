@@ -1,28 +1,30 @@
 """Analytics functions for menu suggestions"""
+
 from typing import List, Dict, Any
-from datetime import datetime, timedelta
+
 
 def get_item_suggestions(connection, item_id: int) -> List[Dict[str, Any]]:
     """Get cross-sell suggestions based on order history"""
     try:
         with connection.cursor() as cursor:
             # Find items frequently ordered together
-            cursor.execute("""
+            cursor.execute(
+                """
                 WITH item_orders AS (
-                    SELECT DISTINCT order_id 
-                    FROM order_items 
+                    SELECT DISTINCT order_id
+                    FROM order_items
                     WHERE item_id = %s
                 ),
                 related_items AS (
-                    SELECT 
+                    SELECT
                         i.id,
                         i.name,
                         i.price,
                         c.name as category,
                         COUNT(*) as co_occurrence,
                         ROUND(COUNT(*) * 100.0 / (
-                            SELECT COUNT(DISTINCT order_id) 
-                            FROM order_items 
+                            SELECT COUNT(DISTINCT order_id)
+                            FROM order_items
                             WHERE item_id = %s
                         ), 2) as order_percentage
                     FROM order_items oi
@@ -37,7 +39,7 @@ def get_item_suggestions(connection, item_id: int) -> List[Dict[str, Any]]:
                     ORDER BY co_occurrence DESC, order_percentage DESC
                     LIMIT 5
                 )
-                SELECT 
+                SELECT
                     id,
                     name,
                     price,
@@ -45,19 +47,30 @@ def get_item_suggestions(connection, item_id: int) -> List[Dict[str, Any]]:
                     co_occurrence as times_ordered_together,
                     order_percentage as percentage_of_orders
                 FROM related_items;
-            """, (item_id, item_id, item_id))
-            
-            columns = ['id', 'name', 'price', 'category', 'times_ordered_together', 'percentage_of_orders']
+            """,
+                (item_id, item_id, item_id),
+            )
+
+            columns = [
+                "id",
+                "name",
+                "price",
+                "category",
+                "times_ordered_together",
+                "percentage_of_orders",
+            ]
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
-    except Exception as e:
+    except Exception:
         return []
+
 
 def get_category_suggestions(connection, category_id: int) -> List[Dict[str, Any]]:
     """Get cross-sell suggestions based on category relationships"""
     try:
         with connection.cursor() as cursor:
             # Find categories frequently ordered together
-            cursor.execute("""
+            cursor.execute(
+                """
                 WITH category_orders AS (
                     SELECT DISTINCT o.id as order_id
                     FROM orders o
@@ -66,7 +79,7 @@ def get_category_suggestions(connection, category_id: int) -> List[Dict[str, Any
                     WHERE i.category_id = %s
                 ),
                 related_categories AS (
-                    SELECT 
+                    SELECT
                         c.id,
                         c.name,
                         COUNT(DISTINCT co.order_id) as co_occurrence,
@@ -85,25 +98,35 @@ def get_category_suggestions(connection, category_id: int) -> List[Dict[str, Any
                     ORDER BY co_occurrence DESC
                     LIMIT 3
                 )
-                SELECT 
+                SELECT
                     id,
                     name,
                     co_occurrence as times_ordered_together,
                     order_percentage as percentage_of_orders,
                     popular_items
                 FROM related_categories;
-            """, (category_id, category_id))
-            
-            columns = ['id', 'name', 'times_ordered_together', 'percentage_of_orders', 'popular_items']
+            """,
+                (category_id, category_id),
+            )
+
+            columns = [
+                "id",
+                "name",
+                "times_ordered_together",
+                "percentage_of_orders",
+                "popular_items",
+            ]
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
-    except Exception as e:
+    except Exception:
         return []
 
-def format_suggestion_message(item_suggestions: List[Dict[str, Any]], 
-                            category_suggestions: List[Dict[str, Any]]) -> str:
+
+def format_suggestion_message(
+    item_suggestions: List[Dict[str, Any]], category_suggestions: List[Dict[str, Any]]
+) -> str:
     """Format suggestions into a readable message"""
     message_parts = []
-    
+
     if item_suggestions:
         items = "\n".join(
             f"• {item['name']} (${item['price']:.2f}) - "
@@ -112,7 +135,7 @@ def format_suggestion_message(item_suggestions: List[Dict[str, Any]],
             for item in item_suggestions
         )
         message_parts.append(f"Suggested items:\n{items}")
-    
+
     if category_suggestions:
         categories = "\n".join(
             f"• {cat['name']} - appears in {cat['percentage_of_orders']}% "
@@ -120,5 +143,5 @@ def format_suggestion_message(item_suggestions: List[Dict[str, Any]],
             for cat in category_suggestions
         )
         message_parts.append(f"Suggested categories:\n{categories}")
-    
+
     return "\n\n".join(message_parts) if message_parts else "No suggestions available"

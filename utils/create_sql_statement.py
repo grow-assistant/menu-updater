@@ -2,19 +2,20 @@ import os
 import sys
 import google.generativeai as genai
 from dotenv import load_dotenv
-from prompts.example_queries import EXAMPLE_QUERIES
+
 
 def load_schema():
     """Load the database schema from the markdown file"""
     try:
         # Get the project root directory using the absolute path
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        schema_path = os.path.join(project_root, 'prompts', 'database_schema.md')
-        with open(schema_path, 'r', encoding='utf-8') as f:
+        schema_path = os.path.join(project_root, "prompts", "database_schema.md")
+        with open(schema_path, "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
         print("Error: database_schema.md not found in prompts directory")
         sys.exit(1)
+
 
 def create_prompt(schema: str, user_query: str) -> str:
     """Create a prompt for Gemini combining the schema and user query"""
@@ -60,6 +61,7 @@ THINKING STEP-BY-STEP:
 Now, generate a properly formatted SQL query that precisely answers the user's question. Do not include any explanations in your output - only return the SQL query.
 """
 
+
 def generate_sql_query(prompt: str, model):
     """Generate SQL query using Gemini"""
     try:
@@ -67,20 +69,23 @@ def generate_sql_query(prompt: str, model):
         if response.text:
             # Remove any markdown code block syntax
             sql_query = response.text.strip()
-            sql_query = sql_query.replace('```sql', '').replace('```', '').strip()
+            sql_query = sql_query.replace("```sql", "").replace("```", "").strip()
             return sql_query
         else:
             return "Error: No response generated"
     except Exception as e:
         return f"Error generating SQL query: {str(e)}"
 
-def generate_sql_from_user_query(user_query: str, location_id: int, base_sql_query: str = None) -> str:
+
+def generate_sql_from_user_query(
+    user_query: str, location_id: int, base_sql_query: str = None
+) -> str:
     """
     Uses Gemini AI to generate an SQL statement based on the user's query, location ID, and optional base query.
     """
     schema = load_schema()
     prompt = create_prompt(schema, user_query)
-    
+
     # Include previous query context if available
     if base_sql_query:
         prompt += f"\n\nPrevious Query Context:\n{base_sql_query}"
@@ -88,52 +93,53 @@ def generate_sql_from_user_query(user_query: str, location_id: int, base_sql_que
     # Setup Gemini
     api_key = os.getenv("GOOGLE_GEMINI_API")
     model_id = os.getenv("GOOGLE_GEMINI_MODEL", "gemini-pro")
-    
+
     if not api_key:
         raise Exception("Error: GOOGLE_GEMINI_API environment variable not set.")
-    
+
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(model_id)
-    
+
     generated_sql = generate_sql_query(prompt, model)
-    
+
     # Replace [ACTUAL_LOCATION_ID] placeholder with actual location ID
     generated_sql = generated_sql.replace("[ACTUAL_LOCATION_ID]", str(location_id))
-    
+
     # Validate that the placeholder was replaced
     if "[ACTUAL_LOCATION_ID]" in generated_sql:
         raise ValueError("Location ID placeholder was not replaced in generated SQL")
-    
+
     return generated_sql
+
 
 def generate_sql_with_custom_prompt(custom_prompt, location_id):
     """Generate SQL using a custom prompt that includes conversation history
-    
+
     Args:
         custom_prompt (str): The complete custom prompt with all context
         location_id (int): The location ID to filter data
-        
+
     Returns:
         str: The generated SQL query
     """
     import google.generativeai as genai
     import os
     from dotenv import load_dotenv
-    
+
     # Load environment variables to get API key
     load_dotenv()
-    
+
     # Get API key from environment variables - use the correct key name from .env
     api_key = os.getenv("GOOGLE_GEMINI_API")
     if not api_key:
         raise ValueError("GOOGLE_GEMINI_API not found in environment variables")
-    
+
     # Get model name from environment variables
     model_name = os.getenv("GOOGLE_GEMINI_MODEL", "gemini-pro")
-    
+
     # Configure the Gemini API
     genai.configure(api_key=api_key)
-    
+
     # Set up the model
     generation_config = {
         "temperature": 0.1,
@@ -141,54 +147,57 @@ def generate_sql_with_custom_prompt(custom_prompt, location_id):
         "top_k": 0,
         "max_output_tokens": 2048,
     }
-    
+
     model = genai.GenerativeModel(
-        model_name=model_name,
-        generation_config=generation_config
+        model_name=model_name, generation_config=generation_config
     )
-    
+
     # Generate the SQL query
     response = model.generate_content(custom_prompt)
-    
+
     # Extract and clean the SQL query
     sql_query = response.text.strip()
-    
+
     # Remove markdown code block formatting if present
     if sql_query.startswith("```sql"):
         sql_query = sql_query.replace("```sql", "").replace("```", "").strip()
     elif sql_query.startswith("```"):
         sql_query = sql_query.replace("```", "").strip()
-    
+
     # Replace any remaining [LOCATION_ID] placeholders with the actual location_id
-    sql_query = sql_query.replace('[LOCATION_ID]', str(location_id))
-    
+    sql_query = sql_query.replace("[LOCATION_ID]", str(location_id))
+
     return sql_query
+
 
 def main():
     # Load environment variables
     load_dotenv()
-    
+
     print("\nSQL Query Generator")
     print("------------------")
     print("Type 'exit' to quit")
     print("Enter your question about the database:\n")
-    
+
     while True:
         # Get user input
         user_query = input("> ").strip()
-        
+
         # Check for exit command
-        if user_query.lower() in ['exit', 'quit']:
+        if user_query.lower() in ["exit", "quit"]:
             print("\nGoodbye!")
             break
-        
+
         if not user_query:
             continue
-            
+
         print("\nGenerating SQL query...\n")
-        sql_query = generate_sql_from_user_query(user_query, 1)  # Assuming location_id is 1
+        sql_query = generate_sql_from_user_query(
+            user_query, 1
+        )  # Assuming location_id is 1
         print(sql_query)
-        print("\n" + "-"*50 + "\n")
+        print("\n" + "-" * 50 + "\n")
+
 
 if __name__ == "__main__":
-    main() 
+    main()
