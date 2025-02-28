@@ -1,10 +1,12 @@
 import datetime
 import logging
+import os
+import glob
 from typing import Dict, Optional, Any, Union
+from . import load_example_queries  # Import the function from prompts package
 
 # Get the logger that was configured in utils/langchain_integration.py
 logger = logging.getLogger("ai_menu_updater")
-
 
 def create_categorization_prompt(cached_dates=None) -> Dict[str, Any]:
     """Create an optimized categorization prompt for OpenAI
@@ -29,6 +31,81 @@ def create_categorization_prompt(cached_dates=None) -> Dict[str, Any]:
     - Followup: "Total for those" -> use previous dates
     - New query: "Compare to last week" -> calculate new dates
     """
+
+    # Load examples directly from database folders
+    examples_by_category = ""
+    # Get raw examples from all categories
+    example_data = load_example_queries()
+    
+    # Parse the example data into categories
+    raw_examples = example_data.split("\n")
+    current_category = None
+    category_examples = {
+        "order_history": [],
+        "update_price": [],
+        "disable_item": [],
+        "enable_item": [],
+        "query_menu": [],
+        "query_performance": [],
+        "query_ratings": [],
+        "delete_options": []
+    }
+    
+    # Process the raw examples to extract descriptions by category
+    for line in raw_examples:
+        if line.endswith("EXAMPLES:"):
+            # Convert "ORDER_HISTORY EXAMPLES:" to "order_history"
+            current_category = line.replace(" EXAMPLES:", "").strip().lower()
+            continue
+            
+        if current_category in category_examples and ". " in line and ":" in line:
+            # This looks like a description line
+            description = line.split(":", 1)[0].split(". ", 1)[1].strip()
+            if description:
+                category_examples[current_category].append(f'"{description}"')
+    
+    # Format examples for the prompt
+    category_num = 1
+    for category, examples_list in category_examples.items():
+        if examples_list:
+            formatted_examples = "\n   - " + "\n   - ".join(examples_list[:3])  # Limit to 3 examples
+            examples_by_category += f"\n{category_num}. {category}:{formatted_examples}\n"
+            category_num += 1
+    
+    # If no examples were found, use some defaults
+    if not examples_by_category:
+        examples_by_category = (
+"""
+1. order_history:
+   - "How many orders on 2023-10-15?"
+   - "Show revenue from March 5th"
+   - "What were yesterday's cancellations?"
+
+2. update_price:
+   - "Update the price of French Fries to $4.99"
+   - "Change Burger price to $8.50"
+
+3. disable_item:
+   - "Disable the Chocolate Cake menu item"
+   - "Remove Veggie Burger from the menu"
+
+4. enable_item:
+   - "Make the Veggie Burger available again"
+   - "Add Apple Pie back to the menu"
+
+5. query_menu:
+   - "Show all active dessert items"
+   - "What vegetarian options do we have?"
+
+6. query_performance:
+   - "What is our average order value this month?"
+   - "How do weekday sales compare to weekend sales?"
+
+7. query_ratings:
+   - "Show orders with low customer ratings"
+   - "What menu items get the most complaints?"
+"""
+        )
 
     prompt = f"""You are an expert query categorization system for a restaurant management application. 
 Analyze user queries and classify them into the correct category from the following options.
@@ -56,45 +133,7 @@ For "order_history" queries, also identify:
 - analysis_type: What's being analyzed (count, revenue, details, trend, comparison)
 - date_filter: EXACT date specified in format 'YYYY-MM-DD' (extract even if implied)
 
-EXAMPLES BY CATEGORY:
-1. order_history:
-   - "How many orders on 2023-10-15?" → request_type="order_history", start_date="2023-10-15", end_date="2023-10-15"
-   - "Show revenue from March 5th" → request_type="order_history", start_date="2024-03-05", end_date="2024-03-05", analysis_type="revenue"
-   - "What were yesterday's cancellations?" → request_type="order_history", start_date="{yesterday_date}", end_date="{yesterday_date}"
-   - "How many orders were completed yesterday?" → request_type="order_history", time_period="yesterday", analysis_type="count"
-   - "Show revenue from last week" → request_type="order_history", time_period="last_week", analysis_type="revenue"
-   - "What were our busiest days this month?" → request_type="order_history", time_period="this_month", analysis_type="trend"
-   - "What was the most number of orders last year?" → request_type="order_history", time_period="last_year", analysis_type="trend"
-   - "How many orders were placed in the last year?" → request_type="order_history", time_period="last_year", analysis_type="count"
-   - "What was the highest revenue day last year?" → request_type="order_history", time_period="last_year", analysis_type="trend"
-   - "How have sales changed in the last year?" → request_type="order_history", time_period="last_year", analysis_type="trend"
-
-2. update_price:
-   - "Update the price of French Fries to $4.99" → request_type="update_price", item_name="French Fries", new_price=4.99
-   - "Change Burger price to $8.50" → request_type="update_price", item_name="Burger", new_price=8.50
-
-3. disable_item:
-   - "Disable the Chocolate Cake menu item" → request_type="disable_item", item_name="Chocolate Cake"
-   - "Remove Veggie Burger from the menu" → request_type="disable_item", item_name="Veggie Burger"
-
-4. enable_item:
-   - "Make the Veggie Burger available again" → request_type="enable_item", item_name="Veggie Burger"
-   - "Add Apple Pie back to the menu" → request_type="enable_item", item_name="Apple Pie"
-
-5. query_menu:
-   - "Show all active dessert items" → request_type="query_menu"
-   - "What vegetarian options do we have?" → request_type="query_menu"
-   - "How much does the Caesar Salad cost?" → request_type="query_menu", item_name="Caesar Salad"
-
-6. query_performance:
-   - "What's our average order value this month?" → request_type="query_performance", time_period="this_month"
-   - "How do weekday sales compare to weekend sales?" → request_type="query_performance", analysis_type="comparison"
-   - "Which time of day has the highest sales?" → request_type="query_performance", analysis_type="trend"
-
-7. query_ratings:
-   - "Show orders with low customer ratings" → request_type="query_ratings"
-   - "What menu items get the most complaints?" → request_type="query_ratings", analysis_type="complaints"
-   - "What's our average customer satisfaction score?" → request_type="query_ratings", analysis_type="average"
+EXAMPLES BY CATEGORY:{examples_by_category}
 
 IMPORTANT TIME PERIOD GUIDANCE:
 - "last year" refers to the calendar year 2024 (not a 365-day rolling window)
@@ -139,3 +178,62 @@ Respond with a JSON object containing the categorized request information."""
     }
     
     return result
+
+def create_query_categorization_prompt(user_query, conversation_history=None):
+    """Create a prompt for categorizing the user's query type.
+    
+    Args:
+        user_query (str): The user's query to categorize
+        conversation_history (list, optional): Previous conversation history. Defaults to None.
+        
+    Returns:
+        str: The prompt for query categorization
+    """
+    # Load examples of each category
+    examples = load_example_queries()
+    
+    # Include conversation history context if available
+    previous_context = ""
+    if conversation_history and len(conversation_history) > 0:
+        # Get the most recent conversation
+        last_exchange = conversation_history[-1]
+        previous_context = f"""
+PREVIOUS QUERY CONTEXT:
+Previous Question: "{last_exchange.get('query', '')}"
+Previous SQL: "{last_exchange.get('sql', '')}"
+"""
+    
+    prompt = f"""You are an expert SQL query categorizer for a restaurant management system. Your task is to classify the user's query into one of the predefined categories.
+
+USER QUERY: {user_query.strip()}
+
+{previous_context}
+
+CATEGORY DESCRIPTIONS:
+1. order_history - Queries about past orders, order details, order lookup, customer orders
+2. update_price - Queries about changing, updating, or modifying menu item prices
+3. disable_item - Queries about turning off, disabling, or removing menu items from availability
+4. enable_item - Queries about turning on, enabling, or making menu items available again
+5. query_menu - Queries about menu structure, categories, items, or general menu information
+6. query_performance - Queries about sales performance, revenue, trends, or business metrics
+7. query_ratings - Queries about customer ratings, feedback, or review information
+8. delete_options - Queries about removing customization options, toppings, or modifiers
+9. other - Queries that don't fit into any of the above categories
+
+EXAMPLE QUERIES FROM EACH CATEGORY:
+{examples}
+
+INSTRUCTIONS:
+1. Analyze the user query carefully
+2. Compare it to the example queries and category descriptions
+3. Identify the most appropriate category based on the intent
+4. If the query could fit multiple categories, prioritize based on the main action requested
+5. Respond ONLY with the category name (lowercase, no explanation)
+
+Your response must be EXACTLY one of these words: order_history, update_price, disable_item, enable_item, query_menu, query_performance, query_ratings, delete_options, other
+"""
+    
+    # Log the generated prompt
+    logger.info(f"Generated categorization prompt: {prompt[:200]}..." if len(prompt) > 200 else prompt)
+    
+    return prompt

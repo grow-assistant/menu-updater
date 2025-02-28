@@ -4,65 +4,57 @@ This module provides classes and functions to integrate LangChain functionality
 into the existing Swoop AI application.
 """
 
+# Standard library imports
 import os
 import re
 import json
 import logging
 import datetime
 from typing import List, Dict, Any, Optional
+
+# Third-party imports
 from dotenv import load_dotenv
+import pytz
 import streamlit as st
 
 # Store current session ID
 current_session_id = None
 
 # Configure logging
-def setup_logging():
-    """Ensure logging is properly configured with the necessary directories"""
-    global current_session_id
+def setup_logging(session_id=None):
+    """Configure the shared logger for all components"""
+    if not session_id:
+        session_id = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+    # Ensure logs directory exists
+    log_dir = "logs"
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir, exist_ok=True)
+        
+    log_filename = f"logs/app_log_{session_id}.log"
     
-    # Create logs directory if it doesn't exist
-    os.makedirs("logs", exist_ok=True)
+    # Configure root logger to write to the consolidated log file
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_filename),
+            logging.StreamHandler()  # Keep console output
+        ]
+    )
     
-    # Generate a session ID based on timestamp
-    current_session_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    session_log_path = f"logs/session_{current_session_id}.log"
-    
-    # Reset root logger to avoid duplicate handlers
-    root_logger = logging.getLogger()
-    if root_logger.handlers:
-        for handler in root_logger.handlers[:]:
-            root_logger.removeHandler(handler)
-    
-    # Create a formatter for consistent log formatting
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    
-    # Configure root logger with multiple handlers
-    root_logger.setLevel(logging.INFO)
-    
-    # Handler for global log file (all sessions)
-    global_file_handler = logging.FileHandler("logs/ai_interaction.log")
-    global_file_handler.setFormatter(formatter)
-    root_logger.addHandler(global_file_handler)
-    
-    # Handler for session-specific log file
-    session_file_handler = logging.FileHandler(session_log_path)
-    session_file_handler.setFormatter(formatter)
-    root_logger.addHandler(session_file_handler)
-    
-    # Handler for console output
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    root_logger.addHandler(console_handler)
-    
-    # Get the application-specific logger
+    # Get the ai_menu_updater logger that's used by all prompt modules
     logger = logging.getLogger("ai_menu_updater")
-    logger.info(f"Session {current_session_id} started - Logging to both global log and {session_log_path}")
+    logger.info(f"=== New Session Started at {session_id} ===")
+    logger.info(f"All logs consolidated in {log_filename}")
     
     return logger
 
 # Set up logging
 logger = setup_logging()
+
+# Load environment variables
+load_dotenv()
 
 # LangChain imports for version 0.0.150
 from langchain.chains import ConversationChain
@@ -74,9 +66,783 @@ from langchain.schema import AgentAction, AgentFinish, LLMResult
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
-# Load environment variables
-load_dotenv()
+# Timezone Constants
+USER_TIMEZONE = pytz.timezone("America/Phoenix")  # Arizona (no DST)
+CUSTOMER_DEFAULT_TIMEZONE = pytz.timezone("America/New_York")  # EST
+DB_TIMEZONE = pytz.timezone("UTC")
 
+def convert_to_user_timezone(dt, target_tz=USER_TIMEZONE):
+    """Convert UTC datetime to user's timezone"""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=DB_TIMEZONE)
+    return dt.astimezone(target_tz)
+
+def get_location_timezone(location_id):
+    """Get timezone for a specific location, defaulting to EST if not found"""
+    # This would normally query the database, but for testing we'll hardcode
+    location_timezones = {
+        62: CUSTOMER_DEFAULT_TIMEZONE,  # Idle Hour Country Club
+        # Add other locations as needed
+    }
+    return location_timezones.get(location_id, CUSTOMER_DEFAULT_TIMEZONE)
+
+def adjust_query_timezone(query, location_id):
+    """Adjust SQL query to handle timezone conversion"""
+    location_tz = get_location_timezone(location_id)
+
+    # Replace any date/time comparisons with timezone-aware versions
+    if "updated_at" in query:
+        # First convert CURRENT_DATE to user timezone (Arizona)
+        current_date_in_user_tz = datetime.datetime.now(USER_TIMEZONE).date()
+
+        # Handle different date patterns
+        if "CURRENT_DATE" in query:
+            # Convert current date to location timezone for comparison
+            query = query.replace(
+                "CURRENT_DATE",
+                f"(CURRENT_DATE AT TIME ZONE 'UTC' AT TIME ZONE '{USER_TIMEZONE.zone}')",
+            )
+
+        # Handle the updated_at conversion
+        query = query.replace(
+            "(o.updated_at - INTERVAL '7 hours')",
+            f"(o.updated_at AT TIME ZONE 'UTC' AT TIME ZONE '{location_tz.zone}')",
+        )
+
+    return query
+
+def convert_user_date_to_location_tz(date_str, location_id):
+    """Convert a date string from user timezone to location timezone"""
+    try:
+        # Parse the date in user's timezone (Arizona)
+        if isinstance(date_str, str):
+            if date_str.lower() == "today":
+                user_date = datetime.datetime.now(USER_TIMEZONE)
+            elif date_str.lower() == "yesterday":
+                user_date = datetime.datetime.now(USER_TIMEZONE) - datetime.timedelta(days=1)
+            else:
+                # Try to parse the date string
+                user_date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+                user_date = USER_TIMEZONE.localize(user_date)
+        else:
+            # If it's already a datetime
+            user_date = USER_TIMEZONE.localize(date_str)
+
+        # Convert to location timezone
+        location_tz = get_location_timezone(location_id)
+        location_date = user_date.astimezone(location_tz)
+
+        return location_date.strftime("%Y-%m-%d")
+    except Exception as e:
+        logger.error(f"Error converting date: {e}")
+        return date_str
+
+# Function to get clients (from integrate_app.py)
+def get_clients():
+    """Get the OpenAI and xAI clients"""
+    try:
+        return get_openai_client(), get_xai_config()
+    except Exception as e:
+        # Fallback if client functions fail
+        logger.warning(f"Unable to initialize clients: {str(e)}")
+        return None, None
+
+# Function to detect follow-up queries
+def is_followup_query(
+    user_query: str, conversation_history: Optional[List[Dict]] = None
+) -> bool:
+    """Determine if a query is a follow-up to previous conversation with more sophisticated detection.
+
+    Args:
+        user_query (str): The current user query
+        conversation_history (list, optional): Previous exchanges in the conversation
+
+    Returns:
+        bool: True if the query appears to be a follow-up, False otherwise
+    """
+    # Normalize the query
+    query_lower = user_query.lower().strip()
+
+    # 1. Check for explicit follow-up indicators
+    explicit_indicators = [
+        "those", "these", "that", "it", "they", "them", "their", "previous",
+        "last", "again", "more", "further", "additional", "also", "too",
+        "as well", "what about", "how about", "tell me more", "can you elaborate",
+        "show me", "what else", "and", "what if",
+    ]
+
+    # Check if query starts with certain phrases
+    starting_phrases = [
+        "what about", "how about", "what if", "and what", "and how",
+        "can you also", "could you also", "show me", "tell me more",
+    ]
+
+    # Check if query is very short (likely a follow-up)
+    is_short_query = len(query_lower.split()) <= 3
+
+    # 2. Check for pronouns without clear referents
+    has_pronoun_without_referent = False
+    pronouns = ["it", "they", "them", "those", "these", "that", "this"]
+    for pronoun in pronouns:
+        # Check if pronoun exists as a standalone word
+        has_pronoun = f" {pronoun} " in f" {query_lower} "
+        no_referent = not any(
+            noun in query_lower
+            for noun in ["order", "revenue", "sales", "item", "menu", "customer"]
+        )
+        if has_pronoun and no_referent:
+            has_pronoun_without_referent = True
+            break
+
+    # 3. Check for incomplete queries that would need context
+    incomplete_indicators = [
+        query_lower.startswith("what about"),
+        query_lower.startswith("how about"),
+        query_lower.startswith("and "),
+        query_lower.startswith("but "),
+        query_lower.startswith("also "),
+        query_lower.startswith("what if"),
+        query_lower == "why",
+        query_lower == "how",
+        query_lower == "when",
+        is_short_query and not any(x in query_lower for x in ["show", "list", "get", "find"]),
+    ]
+
+    # 4. Context-based detection (if conversation history is available)
+    context_based = False
+    if conversation_history and len(conversation_history) > 0:
+        # Get the most recent query for comparison
+        last_query = ""
+        if "query" in conversation_history[-1]:
+            last_query = conversation_history[-1].get("query", "").lower()
+
+        # Check for shared key terms between queries
+        last_query_terms = set(last_query.split())
+        current_query_terms = set(query_lower.split())
+
+        # Remove common stop words
+        stop_words = {
+            "the", "a", "an", "in", "on", "at", "by", "for", 
+            "with", "about", "from", "to", "of",
+        }
+        last_query_terms = last_query_terms - stop_words
+        current_query_terms = current_query_terms - stop_words
+
+        # If the current query has significantly fewer terms and shares some with the previous query
+        if len(current_query_terms) < len(last_query_terms) * 0.7:
+            common_terms = current_query_terms.intersection(last_query_terms)
+            if len(common_terms) > 0:
+                context_based = True
+                
+    # Combine all detection methods
+    return (
+        any(indicator in query_lower.split() for indicator in explicit_indicators)
+        or any(query_lower.startswith(phrase) for phrase in starting_phrases)
+        or has_pronoun_without_referent
+        or any(incomplete_indicators)
+        or context_based
+    )
+
+# OpenAI client function from app.py
+def get_openai_client():
+    """Get OpenAI client with compatibility for different API versions"""
+    api_key = os.getenv("OPENAI_API_KEY")
+    
+    # Handle both old and new OpenAI package versions
+    try:
+        # For OpenAI >= 1.0.0
+        from openai import OpenAI
+        return OpenAI(api_key=api_key)
+    except ImportError:
+        # For OpenAI < 1.0.0
+        import openai
+        openai.api_key = api_key
+        
+        # Create compatible wrapper for old API
+        class OpenAICompatWrapper:
+            def __init__(self, api_key=None):
+                self.api_key = api_key
+                
+            def chat(self):
+                class ChatCompletions:
+                    @staticmethod
+                    def create(*args, **kwargs):
+                        return openai.ChatCompletion.create(*args, **kwargs)
+                return ChatCompletions()
+                
+            def completions(self):
+                return openai
+        
+        return OpenAICompatWrapper(api_key=api_key)
+
+# xAI config function from app.py  
+def get_xai_config():
+    """Get configuration for xAI API"""
+    return {
+        "XAI_TOKEN": os.getenv("XAI_TOKEN"),
+        "XAI_API_URL": os.getenv("XAI_API_URL"),
+        "XAI_MODEL": os.getenv("XAI_MODEL", "grok-2-1212"),
+    }
+
+# Function to load application context (from integrate_app.py)
+def load_application_context():
+    """Load all application context files and configuration in one place
+
+    Returns:
+        dict: A dictionary containing all application context including
+              business rules, database schema, and example queries
+    """
+    try:
+        # Import all business rules from both system and business-specific modules
+        try:
+            from prompts.system_rules import (
+                ORDER_STATUS,
+                RATING_SIGNIFICANCE,
+                ORDER_TYPES,
+                QUERY_RULES,
+            )
+            from prompts.business_rules import (
+                get_business_context,
+                BUSINESS_METRICS,
+                TIME_PERIOD_GUIDANCE,
+                DEFAULT_LOCATION_ID,
+            )
+            
+            # Get the combined business context
+            business_context = get_business_context()
+        except ImportError:
+            logger.warning("Could not import business rules, using empty values")
+            business_context = {}
+            
+        # Load database schema
+        try:
+            with open("prompts/database_schema.md", "r", encoding="utf-8") as f:
+                database_schema = f.read()
+        except FileNotFoundError:
+            logger.warning("Database schema file not found, using empty value")
+            database_schema = ""
+            
+        # Load example queries from prompts module
+        try:
+            from prompts import EXAMPLE_QUERIES
+        except ImportError:
+            logger.warning("Example queries not found, using empty list")
+            EXAMPLE_QUERIES = []
+
+        # Create an integrated context object with all business rules
+        return {
+            "business_rules": business_context,
+            "database_schema": database_schema,
+            "example_queries": EXAMPLE_QUERIES,
+        }
+    except Exception as e:
+        logger.error(f"Error loading application context: {str(e)}")
+        return None
+
+# Function to create categorization prompt (from integrate_app.py)
+def create_categorization_prompt(cached_dates=None):
+    """Create an optimized categorization prompt for OpenAI
+
+    Args:
+        cached_dates: Optional previously cached date context
+
+    Returns:
+        Dict containing the prompt string and context information
+    """
+    try:
+        # Try to import from external source first
+        from prompts.openai_categorization_prompt import create_categorization_prompt as external_create_prompt
+        
+        # Get the base prompt from external source
+        prompt_data = external_create_prompt(cached_dates=cached_dates)
+        
+        # Add explicit JSON instruction to satisfy OpenAI's requirements
+        prompt_data["prompt"] = (
+            f"{prompt_data['prompt']}\n\nIMPORTANT: Respond using valid JSON format."
+        )
+        
+        return prompt_data
+        
+    except ImportError:
+        # Fallback implementation if the import fails
+        logger.warning("External categorization prompt not available, using fallback")
+        
+        # Create basic prompt data structure
+        prompt = (
+            "Analyze the following user query and categorize it according to the given schema. "
+            "Extract any relevant dates, items, or other entities mentioned:\n\n"
+            "USER QUERY: {query}\n\n"
+            "RESPOND WITH VALID JSON ONLY using this schema: {\n"
+            '  "request_type": "order_history" | "query_menu" | "update_price" | "disable_item" | "enable_item",\n'
+            '  "time_period": "today" | "yesterday" | "this_week" | "last_week" | "this_month" | "last_month" | null,\n'
+            '  "item_name": <extracted item name> | null,\n'
+            '  "start_date": <YYYY-MM-DD> | null,\n'
+            '  "end_date": <YYYY-MM-DD> | null\n'
+            "}\n\n"
+            "IMPORTANT: Respond using valid JSON format."
+        )
+        
+        # Add date context if provided
+        context = {}
+        if cached_dates:
+            context["cached_dates"] = cached_dates
+            
+        return {"prompt": prompt, "context": context}
+
+# Function to call SQL generator (from integrate_app.py)
+def call_sql_generator(
+    query,
+    context_files,
+    location_id,
+    previous_sql=None,
+    conversation_history=None,
+    date_context=None,
+    time_period=None,
+    location_ids=None,
+):
+    """
+    Call SQL generator to create SQL from user query
+    
+    Args:
+        query: User query text
+        context_files: Dictionary of context files
+        location_id: Primary location ID (for backward compatibility)
+        previous_sql: Previously executed SQL query
+        conversation_history: List of previous interactions
+        date_context: Date context information
+        time_period: Time period mentioned in the query
+        location_ids: List of selected location IDs (takes precedence over location_id)
+        
+    Returns:
+        str: Generated SQL query
+    """
+    try:
+        # Try to import the external function
+        try:
+            from prompts.google_gemini_prompt import create_gemini_prompt as external_gemini_prompt
+            from utils.create_sql_statement import generate_sql_with_custom_prompt
+            
+            # First create the enhanced prompt with the correct parameter name
+            prompt = external_gemini_prompt(
+                query,
+                context_files,
+                location_id,
+                conversation_history=conversation_history,
+                previous_sql=previous_sql,
+                date_context=date_context,
+            )
+            
+            # Enhance prompt with additional time period context if available
+            if time_period:
+                # Check if the original query contains the phrase "in the last year"
+                contains_in_the_last_year = (
+                    "in the last year" in query.lower() or "in last year" in query.lower()
+                )
+
+                if time_period == "last_year" and not contains_in_the_last_year:
+                    # Specifically handle "last year" to reference 2024 data (calendar year)
+                    prompt += (
+                        f"\n\nIMPORTANT TIME CONTEXT: The query refers to 'last year' as a specific calendar year (2024). "
+                        f"Filter data where EXTRACT(YEAR FROM (updated_at - INTERVAL '7 hours')) = 2024."
+                    )
+                elif time_period == "last_year" and contains_in_the_last_year:
+                    # Handle "in the last year" to mean the last 365 days
+                    prompt += (
+                        f"\n\nIMPORTANT TIME CONTEXT: The query refers to 'in the last year' which means the last 365 days. "
+                        f"Filter data where (updated_at - INTERVAL '7 hours')::date >= CURRENT_DATE - INTERVAL '365 days'."
+                    )
+                else:
+                    prompt += f"\n\nIMPORTANT TIME CONTEXT: The query refers to the time period: {time_period}. Use the appropriate SQL date filters."
+
+            # Add location context for multiple locations if provided
+            if location_ids and len(location_ids) > 1:
+                locations_str = ", ".join(map(str, location_ids))
+                prompt += (
+                    f"\n\nIMPORTANT LOCATION CONTEXT: The query should filter for multiple locations with IDs: {locations_str}. "
+                    f"Use IN clause for location_id filter instead of equality (location_id IN ({locations_str}))."
+                )
+
+            # Use the specific location_id or first ID from location_ids if provided
+            final_location_id = location_id
+            if location_ids and len(location_ids) > 0:
+                final_location_id = location_ids[0]
+
+            logger.info(f"Generating SQL with location_id: {final_location_id}")
+            return generate_sql_with_custom_prompt(prompt, final_location_id)
+            
+        except ImportError:
+            # Fallback if external functions are not available
+            logger.warning("External SQL generation functions not available")
+            return f"SELECT * FROM orders WHERE location_id = {location_id} AND status = 7 LIMIT 10;"
+            
+    except Exception as e:
+        logger.error(f"SQL generation error: {str(e)}")
+        raise Exception(f"SQL generation error: {str(e)}")
+
+# Function to create a summary prompt (from utils/prompt_templates.py)
+def create_summary_prompt(
+    user_query: str,
+    sql_query: str,
+    result: Dict[str, Any],
+    query_type: Optional[str] = None,
+    conversation_history: Optional[List[Dict]] = None,
+) -> str:
+    """Generate an optimized prompt for OpenAI summarization with conversation history
+
+    Args:
+        user_query (str): The original user query
+        sql_query (str): The executed SQL query
+        result (dict): The database result dictionary
+        query_type (str, optional): The type of query (order_history, query_menu, etc.)
+        conversation_history (list, optional): Previous exchanges in the conversation
+
+    Returns:
+        str: The optimized prompt for summarization
+    """
+    # Format SQL query for better readability
+    formatted_sql = sql_query.strip().replace("\n", " ").replace("  ", " ")
+
+    # Extract query type from result if not provided
+    if not query_type and "function_call" in result:
+        query_type = result.get("function_call", {}).get("name", "unknown")
+
+    # Add query-specific context based on query type
+    type_specific_instructions = {
+        "order_history": "Present order counts, revenue figures, and trends with proper formatting. "
+        "Use dollar signs for monetary values and include percent changes for trends.",
+        "query_performance": "Highlight key performance metrics, compare to benchmarks when available, "
+        "and provide actionable business insights.",
+        "query_menu": "Structure menu information clearly, listing items with their prices "
+        "and availability status in an organized way.",
+        "query_ratings": "Present rating metrics with context (e.g., 'above average', 'concerning') "
+        "and suggest possible actions based on feedback.",
+        "update_price": "Confirm the exact price change with both old and new values clearly stated.",
+        "disable_item": "Confirm the item has been disabled and explain the impact "
+        "(no longer available to customers).",
+        "enable_item": "Confirm the item has been re-enabled and is now available to customers again.",
+    }
+
+    type_guidance = type_specific_instructions.get(
+        query_type, "Provide a clear, direct answer to the user's question."
+    )
+    
+    # Determine if we have empty results to provide better context
+    results_count = len(result.get("results", []))
+    result_context = ""
+    if results_count == 0:
+        result_context = (
+            "The query returned no results, which typically means no data matches "
+            "the specified criteria for the given time period or filters."
+        )
+
+    # Add conversation context for follow-up queries
+    conversation_context = ""
+    if conversation_history and len(conversation_history) > 0:
+        # Extract the last 2-3 exchanges to provide context
+        recent_exchanges = (
+            conversation_history[-3:]
+            if len(conversation_history) >= 3
+            else conversation_history
+        )
+        conversation_context = "CONVERSATION HISTORY:\n"
+        for i, exchange in enumerate(recent_exchanges):
+            if "query" in exchange and "answer" in exchange:
+                conversation_context += f"User: {exchange['query']}\nAssistant: {exchange['answer']}\n\n"
+
+    # Check if this is a follow-up query using the proper function
+    is_followup = is_followup_query(user_query, conversation_history)
+
+    followup_guidance = ""
+    if is_followup:
+        followup_guidance = (
+            "This appears to be a follow-up question. Connect your answer to the previous context. "
+            "Reference specific details from previous exchanges when relevant. "
+            "Maintain continuity in your explanation style and terminology."
+        )
+
+    # Build optimized prompt with enhanced context and guidance
+    return (
+        f"USER QUERY: '{user_query}'\n\n"
+        f"{conversation_context}\n"
+        f"SQL QUERY: {formatted_sql}\n\n"
+        f"QUERY TYPE: {query_type}\n\n"
+        f"DATABASE RESULTS: {json.dumps(result.get('results', []), indent=2)}\n\n"
+        f"RESULT CONTEXT: {result_context}\n\n"
+        f"BUSINESS CONTEXT:\n"
+        f"- Order statuses: 0=Open, 1=Pending, 2=Confirmed, 3=In Progress, 4=Ready, 5=In Transit, "
+        f"6=Cancelled, 7=Completed, 8=Refunded\n"
+        f"- Order types: 1=Delivery, 2=Pickup, 3=Dine-In\n"
+        f"- Revenue values are in USD\n"
+        f"- Ratings are on a scale of 1-5, with 5 being highest\n\n"
+        f"SPECIFIC GUIDANCE FOR {query_type.upper()}: {type_guidance}\n\n"
+        f"{followup_guidance}\n\n"
+        f"SUMMARY INSTRUCTIONS:\n"
+        f"1. Provide a clear, direct answer to the user's question\n"
+        f"2. Include relevant metrics with proper formatting ($ for money, % for percentages)\n"
+        f"3. If no results were found, explain what that means in business terms\n"
+        f"4. Use natural, conversational language with a friendly, helpful tone\n"
+        f"5. Be specific about the time period mentioned in the query\n"
+        f"6. Keep the response concise but informative\n"
+    )
+
+# Function to create system prompt with business rules (from utils/prompt_templates.py)
+def create_system_prompt_with_business_rules() -> str:
+    """Create a system prompt that includes business rules for the summarization step
+
+    Returns:
+        str: System prompt with business rules context
+    """
+    try:
+        # Try to import business rules from prompts module
+        try:
+            from prompts.business_rules import (
+                ORDER_STATUS,
+                RATING_SIGNIFICANCE,
+                ORDER_FILTERS,
+            )
+            
+            business_context = {
+                "order_status": ORDER_STATUS,
+                "rating_significance": RATING_SIGNIFICANCE,
+                "order_filters": ORDER_FILTERS,
+            }
+        except ImportError:
+            # Fallback business context if import fails
+            logger.warning("Could not import business rules, using fallback values")
+            business_context = {
+                "order_status": {
+                    "7": "Completed",
+                    "6": "Cancelled",
+                    "0": "Open"
+                },
+                "rating_significance": {
+                    "5": "Excellent",
+                    "4": "Good",
+                    "3": "Average",
+                    "2": "Poor",
+                    "1": "Very Poor"
+                },
+                "order_filters": {
+                    "status": "Use status=7 for completed orders"
+                }
+            }
+
+        # Enhanced system prompt with business rules and conversational guidelines
+        return (
+            "You are a helpful restaurant analytics assistant that translates database results "
+            "into natural language answers. "
+            "Your goal is to provide clear, actionable insights from restaurant order data. "
+            f"Use these business rules for context: {json.dumps(business_context, indent=2)}\n\n"
+            "CONVERSATIONAL GUIDELINES:\n"
+            "1. Use a friendly, professional tone that balances expertise with approachability\n"
+            "2. Begin responses with a direct answer to the question, then provide supporting details\n"
+            "3. Use natural transitions between ideas and maintain a conversational flow\n"
+            "4. Highlight important metrics or insights with bold formatting (**like this**)\n"
+            "5. For follow-up questions, explicitly reference previous context\n"
+            "6. When appropriate, end with a subtle suggestion for what the user might want to know next\n"
+            "7. Keep responses concise but complete - prioritize clarity over verbosity\n"
+            "8. Use bullet points or numbered lists for multiple data points\n"
+            "9. Format currency values with dollar signs and commas ($1,234.56)\n"
+            "10. When discussing ratings, include their significance (e.g., '5.0 - Very Satisfied')\n"
+        )
+    except Exception as e:
+        logger.error(f"Error creating system prompt: {str(e)}")
+        # Fallback if business rules can't be imported or other errors occur
+        return (
+            "You are a helpful restaurant analytics assistant that translates database results "
+            "into natural language answers. "
+            "Your goal is to provide clear, actionable insights from restaurant order data.\n\n"
+            "CONVERSATIONAL GUIDELINES:\n"
+            "1. Use a friendly, professional tone that balances expertise with approachability\n"
+            "2. Begin responses with a direct answer to the question, then provide supporting details\n"
+            "3. Use natural transitions between ideas and maintain a conversational flow\n"
+            "4. Highlight important metrics or insights with bold formatting (**like this**)\n"
+            "5. For follow-up questions, explicitly reference previous context\n"
+            "6. When appropriate, end with a subtle suggestion for what the user might want to know next\n"
+            "7. Keep responses concise but complete - prioritize clarity over verbosity\n"
+            "8. Use bullet points or numbered lists for multiple data points\n"
+            "9. Format currency values with dollar signs and commas ($1,234.56)\n"
+            "10. When discussing ratings, include their significance (e.g., '5.0 - Very Satisfied')\n"
+        )
+
+# Process query results function from app.py
+def process_query_results(
+    query_result: Dict[str, Any], user_question: str, openai_client, xai_client
+) -> str:
+    """
+    Processes SQL query results and returns a formatted plain-language summary.
+    Uses LLM to generate the summary (including total orders and notable insights).
+    Detailed order information is handled separately (in a table).
+    """
+    if query_result["success"]:
+        try:
+            results = query_result["results"]
+
+            # DIRECTLY USE SQL RESULT VALUE
+            count_value = (
+                results[0]["count"] if results and "count" in results[0] else len(results)
+            )
+
+            # Build prompt with actual database value
+            prompt = (
+                f"The SQL query for '{user_question}' returned {count_value} completed orders. "
+                "Provide a concise summary of this result in plain language."
+            )
+
+            # Use xAI if available, otherwise use openai
+            if xai_client and all(xai_client.get(k) for k in ["XAI_TOKEN", "XAI_API_URL"]):
+                headers = {
+                    "Authorization": f"Bearer {xai_client['XAI_TOKEN']}",
+                    "Content-Type": "application/json",
+                }
+                data = {
+                    "model": xai_client.get("XAI_MODEL", "grok-2-1212"),
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are an expert at converting structured SQL results into concise plain language summaries.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                }
+
+                try:
+                    import requests
+                    response = requests.post(
+                        xai_client["XAI_API_URL"], headers=headers, json=data
+                    )
+                    grok_response = response.json()
+                    final_message = grok_response["choices"][0]["message"]["content"]
+                except Exception as e:
+                    logger.error(f"Error using xAI: {e}")
+                    # Fallback to OpenAI if xAI fails
+                    if openai_client:
+                        response = openai_client.chat.completions.create(
+                            model="gpt-3.5-turbo",
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": "You are an expert at converting structured SQL results into concise plain language summaries.",
+                                },
+                                {"role": "user", "content": prompt},
+                            ],
+                        )
+                        final_message = response.choices[0].message.content
+                    else:
+                        # Fallback summary if LLM output not available
+                        final_message = (
+                            f"Total orders: {count_value}. Detailed order information is available below."
+                            if results
+                            else "No orders to display."
+                        )
+            elif openai_client:
+                # Use OpenAI directly if xAI not available
+                response = openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are an expert at converting structured SQL results into concise plain language summaries.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                )
+                final_message = response.choices[0].message.content
+            else:
+                # Basic fallback if no LLM available
+                final_message = (
+                    f"Total orders: {count_value}. Detailed order information is available below."
+                    if results
+                    else "No orders to display."
+                )
+                
+            return final_message
+
+        except Exception as e:
+            logger.error(f"Error processing results: {e}")
+            return "Could not process the query results."
+    else:
+        return "Sorry, I couldn't retrieve the data. Please try again later."
+
+# Wrapper for database functions
+def execute_menu_query(sql_query: str, params=None) -> Dict[str, Any]:
+    """
+    Execute a SQL query against the menu database.
+    Direct implementation to avoid dependencies on external modules.
+    
+    Args:
+        sql_query (str): SQL query to execute
+        params: Optional parameters for parameterized queries
+        
+    Returns:
+        dict: Result dictionary with keys 'success', 'results', and optionally 'error'
+    """
+    conn = None
+    try:
+        # Use the get_db_connection function defined elsewhere in this module
+        # or directly establish a connection here
+        from utils.database_functions import get_db_connection
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        if params:
+            cur.execute(sql_query, params)
+        else:
+            cur.execute(sql_query)
+
+        # Import Decimal for type conversion if needed
+        from decimal import Decimal
+        
+        # Convert Decimal types to float for JSON serialization
+        results = [
+            {
+                col: float(val) if isinstance(val, Decimal) else val
+                for col, val in row.items()
+            }
+            for row in cur.fetchall()
+        ]
+
+        return {
+            "success": True,
+            "results": results,
+            "columns": [desc[0] for desc in cur.description],
+            "query": sql_query,
+        }
+    except Exception as e:
+        logger.error(f"Error executing menu query: {str(e)}")
+        return {"success": False, "error": str(e), "query": sql_query}
+    finally:
+        if conn:
+            conn.close()
+
+# Function to format order response with details in a table
+def format_order_response(summary: str, results: List[Dict]) -> Dict[str, str]:
+    """Formats order details into a table response"""
+    if not results:
+        table_text = "No orders to display."
+    else:
+        table_lines = [
+            "| Order ID | Customer | Order Date Time | Total Revenue | Phone |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+        for o in results:
+            order_id = o.get("order_id", "N/A")
+            customer = (
+                f"{o.get('customer_first_name', '')} {o.get('customer_last_name', '')}".strip()
+                or "N/A"
+            )
+            order_date = o.get("order_created_at", "N/A")
+            if isinstance(order_date, datetime.datetime):
+                order_date = order_date.strftime("%Y-%m-%d %H:%M:%S")
+            total_revenue = f"${o.get('order_total', 0):.2f}"
+            phone = o.get("phone", "N/A")
+            table_lines.append(
+                f"| {order_id} | {customer} | {order_date} | {total_revenue} | {phone} |"
+            )
+        table_text = "\n".join(table_lines)
+
+    final_summary = f"{summary}\n\n" f"**Order Details:**\n\n" f"{table_text}"
+    return {"role": "assistant", "content": final_summary}
 
 class StreamlitCallbackHandler(BaseCallbackHandler):
     """
@@ -445,22 +1211,16 @@ def integrate_with_existing_flow(
     # Log the incoming user query
     logger.info(f"Received user query: '{query}'")
     
-    from integrate_app import (
-        get_clients,
-        create_categorization_prompt,
-        call_sql_generator,
-        create_summary_prompt,
-        create_system_prompt_with_business_rules,
-        load_application_context,
-    )
-    import app  # For SQL execution
+    # Using local implementations instead of importing from integrate_app
+    # Note: all these functions are now directly implemented in this file
+    # get_clients, create_categorization_prompt, call_sql_generator,
+    # create_summary_prompt, create_system_prompt_with_business_rules,
+    # load_application_context
+    
     import openai
 
-    # Remove the import of OpenAI class which doesn't exist in version 0.28.1
-    # from openai import OpenAI
-
     # Initialize callback if provided
-    # callbacks = [callback_handler] if callback_handler else None
+    callbacks = [callback_handler] if callback_handler else None
 
     # Tracking for the 4-step flow
     flow_steps = {
@@ -705,7 +1465,7 @@ def integrate_with_existing_flow(
 
         for attempt in range(max_retries + 1):
             try:
-                execution_result = app.execute_menu_query(sql_query)
+                execution_result = execute_menu_query(sql_query)
                 break
             except Exception:
                 if attempt < max_retries:
@@ -836,6 +1596,10 @@ TEXT_ANSWER: [Your detailed response here]
             # Old OpenAI API format
             raw_response = summarization_response["choices"][0]["message"]["content"]
             
+        # Apply post-processing to convert ordinals to words in the verbal answer
+        from prompts.summarization_prompt import post_process_summarization
+        raw_response = post_process_summarization(raw_response)
+            
         # Log the summarization response
         logger.info(f"Summarization response: {raw_response[:200]}..." if len(raw_response) > 200 else raw_response)
         
@@ -942,17 +1706,13 @@ def clean_text_for_speech(text):
     This ensures dates, numbers, and other elements are properly formatted
     for clear verbal communication.
     
-    Uses advanced NLP libraries:
+    Uses advanced NLP libraries if available:
     - textacy: For advanced text normalization
     - num2words: For converting numbers to words
     - unidecode: For handling special characters
     - re: For precise pattern matching with regular expressions
     """
     import re
-    from num2words import num2words
-    from unidecode import unidecode
-    import textacy.preprocessing.normalize as tpn
-    import textacy.preprocessing.replace as tpr
     
     if not text:
         return text
@@ -967,20 +1727,47 @@ def clean_text_for_speech(text):
     text = re.sub(r"^\s*[\*\-\•]\s*", "", text, flags=re.MULTILINE)  # Remove bullet points
     text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)  # Remove markdown headers
     
-    # 2. NORMALIZE TEXT WITH TEXTACY
+    # Try to import optional advanced libraries
+    try:
+        from num2words import num2words
+        has_num2words = True
+    except ImportError:
+        logger.warning("num2words library not found, limited number processing available")
+        has_num2words = False
+        
+    try:
+        from unidecode import unidecode
+        has_unidecode = True
+    except ImportError:
+        logger.warning("unidecode library not found, limited accent processing available") 
+        has_unidecode = False
+        
+    try:
+        import textacy.preprocessing.normalize as tpn
+        import textacy.preprocessing.replace as tpr
+        has_textacy = True
+    except ImportError:
+        logger.warning("textacy library not found, limited text normalization available")
+        has_textacy = False
     
-    # Normalize whitespace, quotation marks, dashes, etc.
-    text = tpn.whitespace(text)
-    text = tpn.hyphenated_words(text)
-    text = tpn.quotation_marks(text)
+    # 2. NORMALIZE TEXT WITH TEXTACY IF AVAILABLE
+    if has_textacy:
+        # Normalize whitespace, quotation marks, dashes, etc.
+        text = tpn.whitespace(text)
+        text = tpn.hyphenated_words(text)
+        text = tpn.quotation_marks(text)
+    else:
+        # Simple normalization fallbacks
+        text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
+        text = re.sub(r'["""''‹›«»]', '"', text)  # Normalize quotes
     
     # 3. HANDLE EMAIL AND PHONE FORMATS
     
     # Handle email addresses
-    text = re.sub(r'([\w.+-]+@[\w-]+\.[\w.-]+)', r' email address ', text)
+    text = re.sub(r'([\w.+-]+@[\w-]+\.[\w.-]+)', ' email address ', text)
     
     # Handle phone numbers more consistently
-    text = re.sub(r'(?<!\w)(?:\+?1[-\s]?)?(?:\(?\d{3}\)?[-\s]?)?(?:\d{3}[-\s]?)\d{4}(?!\w)', ' phone number ', text)
+    text = re.sub(r'(?<!\w)(?:\+?1[-\s]?)?(?:\(?\d{3}\)?[-\s]?)\d{4}(?!\w)', ' phone number ', text)
     
     # 4. DATE FORMATTING
     
@@ -988,184 +1775,9 @@ def clean_text_for_speech(text):
     # This needs to run before any other date formatting
     text = re.sub(r'(\d+)\s+(st|nd|rd|th)\b', r'\1\2', text)
     
-    # Get list of month names for pattern matching
-    month_names = [
-        'January', 'February', 'March', 'April', 'May', 'June', 'July', 
-        'August', 'September', 'October', 'November', 'December'
-    ]
-    month_pattern = r'\b(?:' + '|'.join(month_names) + r')\s+'
-    
-    # Step 1: Convert ordinal dates in the context of month names (like "January 21st")
-    def convert_month_ordinal(match):
-        month = match.group(1)
-        day_num = int(match.group(2))
-        suffix = match.group(3)
-        year = match.group(4) if len(match.groups()) >= 4 and match.group(4) else ""
-        
-        # Convert day number to words
-        day_words = num2words(day_num, ordinal=True)
-        
-        # Format with or without year
-        if year:
-            return f"{month} {day_words}, {year}"
-        else:
-            return f"{month} {day_words}"
-    
-    # Handle "Month DDst" and "Month DDst YYYY" formats
-    month_ordinal_pattern = r'(\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+)(\d+)(st|nd|rd|th)\b(?:\s+(\d{4})\b)?'
-    text = re.sub(month_ordinal_pattern, convert_month_ordinal, text)
-    
-    # Step 2: Flag parts that have already been processed to avoid double conversion
-    # Create placeholders for already processed month-date combinations
-    processed_month_dates = {}
-    
-    # Create a copy for processing other ordinal dates
-    processed_text = text
-    
-    # Step 3: Convert other ordinal dates not attached to months
-    def convert_other_ordinal(match):
-        num = int(match.group(1))
-        suffix = match.group(2)
-        
-        # Skip if this part is inside a month-date that was already processed
-        # This is a simplified check - in a production system, you'd want more robust detection
-        start_pos = match.start()
-        for month in month_names:
-            if month in processed_text[max(0, start_pos-20):start_pos]:
-                return match.group(0)  # Return unchanged if part of a month name format
-                
-        # For all other cases, convert to ordinal words
-        return num2words(num, ordinal=True)
-    
-    # Handle "the DDst" and other standalone ordinal cases
-    # Process only numbers followed by ordinal suffixes that are not part of converted month patterns
-    ordinal_pattern = r'(\d+)(st|nd|rd|th)\b'
-    text = re.sub(ordinal_pattern, convert_other_ordinal, text)
-    
-    # Do NOT re-add spacing for ordinal suffixes to avoid TTS saying "saint" for "st"
-    # text = re.sub(r'(\d+)(st|nd|rd|th)', r'\1 \2', text)
-    
-    # Handle "Month DDst YYYY" -> "Month DDst, YYYY"
-    text = re.sub(
-        r'(\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+(?:st|nd|rd|th)?)\s+(\d{4})\b',
-        r'\1, \2',
-        text
-    )
-    
-    # Also handle without suffix
-    text = re.sub(
-        r'(\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+)\s+(\d{4})\b',
-        r'\1, \2',
-        text
-    )
-    
-    # Handle MM/DD/YYYY format: "01/15/2025" -> "01 15, 2025"
-    text = re.sub(r'(\d{1,2})/(\d{1,2})/(\d{4})\b', r'\1 \2, \3', text)
-    
-    # Handle ISO dates YYYY-MM-DD: "2025-03-10" -> "2025, March 10"
-    months = {
-        '01': 'January', '02': 'February', '03': 'March', '04': 'April',
-        '05': 'May', '06': 'June', '07': 'July', '08': 'August',
-        '09': 'September', '10': 'October', '11': 'November', '12': 'December',
-        '1': 'January', '2': 'February', '3': 'March', '4': 'April', 
-        '5': 'May', '6': 'June', '7': 'July', '8': 'August',
-        '9': 'September'
-    }
-    
-    def replace_iso_date(match):
-        year = match.group(1)
-        month = match.group(2)
-        day = match.group(3).lstrip('0')  # Remove leading zero
-        
-        # Convert month number to name
-        month_name = months.get(month, month)
-        
-        # Convert day to ordinal word form
-        day_word = num2words(int(day), ordinal=True)
-        
-        return f"{year}, {month_name} {day_word}"
-    
-    text = re.sub(r'(\d{4})-(\d{2}|\d)-(\d{2}|\d)\b', replace_iso_date, text)
-    
-    # 5. NUMBER HANDLING
-    
-    # Handle common number ranges that shouldn't be expanded (like years)
-    text = re.sub(r'(\d{4})-(\d{4})', r'\1 to \2', text)  # Convert "2023-2024" to "2023 to 2024"
-    
-    # Format dollar amounts for better speech
-    # Add a trailing zero to ensure 2 decimal places: $25.5 -> $25.50
-    def add_trailing_zero(match):
-        dollars = match.group(1)
-        cents = match.group(2)
-        return f"${dollars}.{cents}0"
-    
-    text = re.sub(r'\$(\d+)\.(\d)(?!\d)', add_trailing_zero, text)
-    
-    # Convert "$25.50 - $30.75" to "$25.50 to $30.75"
-    text = re.sub(r'\$(\d+\.\d{2})\s*-\s*\$(\d+\.\d{2})', r'$\1 to $\2', text)
-    
-    # 6. SELECTIVE NUMBER-TO-WORD CONVERSION
-    # Convert small standalone numbers to words (but preserve larger numbers, years, etc.)
-    def convert_small_numbers(match):
-        number = int(match.group(0))
-        if 0 <= number <= 20:  # Only convert small numbers
-            return num2words(number)
-        return match.group(0)
-    
-    # Convert small numbers that stand alone or at start of sentences
-    text = re.sub(r'(?<!\d)(?<!\$)(?<![a-zA-Z])\b([0-9]|1[0-9]|20)\b(?![a-zA-Z]|%|\d)', convert_small_numbers, text)
-    
-    # 7. ABBREVIATION HANDLING
-    
-    # Replace common abbreviations with full words
-    abbreviations = {
-        'vs.': 'versus',
-        'vs': 'versus',
-        'etc.': 'etcetera',
-        'e.g.': 'for example',
-        'i.e.': 'that is',
-        'approx.': 'approximately',
-        'Dr.': 'Doctor',
-        'Mr.': 'Mister',
-        'Mrs.': 'Misses',
-        'Ms.': 'Miss',
-        'Sr.': 'Senior',
-        'Jr.': 'Junior',
-        'Prof.': 'Professor',
-        'Dept.': 'Department',
-        'St.': 'Street',
-        'Ave.': 'Avenue',
-        'Blvd.': 'Boulevard',
-        'Co.': 'Company'
-    }
-    
-    for abbr, full in abbreviations.items():
-        # Ensure we match whole words with word boundaries
-        text = re.sub(r'\b' + re.escape(abbr) + r'\b', full, text)
-    
-    # Fix "vs" abbreviation when attached to numbers
-    text = re.sub(r'(\$?\d+[\.\d]*)\s*vs\s*\.?\s*(\$?\d+[\.\d]*)', r'\1 versus \2', text)
-    
-    # 8. SPACING AND FORMATTING
-    
-    # Fix number-word combinations: "15items" -> "15 items"
-    text = re.sub(r'(\d+)([a-zA-Z])', r'\1 \2', text)
-    
-    # Replace special characters for better speech
-    text = re.sub(r'&', 'and', text)
-    text = re.sub(r'@', 'at', text)
-    text = re.sub(r'#', 'number', text)
-    
-    # Ensure periods have spacing
-    text = re.sub(r'\.([A-Za-z])', r'. \1', text)
-    
-    # 9. FINAL CLEANUP WITH UNIDECODE
-    
-    # Convert any remaining special characters to closest ASCII equivalent
-    text = unidecode(text)
-    
-    # Remove extra spaces
-    text = re.sub(r'\s+', ' ', text).strip()
+    # Apply unidecode if available
+    if has_unidecode:
+        text = unidecode(text)
     
     return text
 
@@ -1350,3 +1962,4 @@ def cleanup_old_logs(days_to_keep=30):
                     logger.error(f"Error deleting log file {file_path}: {str(e)}")
     
     return files_deleted
+

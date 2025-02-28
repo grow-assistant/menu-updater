@@ -1,4 +1,5 @@
 import logging
+from utils.speech_utils import convert_ordinals_to_words  # Import the ordinal conversion function
 
 # Get the logger that was configured in utils/langchain_integration.py
 logger = logging.getLogger("ai_menu_updater")
@@ -51,3 +52,38 @@ Guidelines for this response:
     logger.info(f"Generated summarization prompt: {prompt[:200]}..." if len(prompt) > 200 else prompt)
     
     return prompt
+
+def post_process_summarization(response_text):
+    """
+    Apply post-processing to the summarization response text to ensure
+    ordinal numbers are converted to word form for better voice synthesis.
+    
+    Args:
+        response_text (str): Raw response from the LLM
+        
+    Returns:
+        str: Processed response with ordinals converted to words
+    """
+    if not response_text:
+        return response_text
+        
+    # Extract verbal answer section if present
+    import re
+    verbal_match = re.search(r"VERBAL_ANSWER:(.*?)(?=TEXT_ANSWER:|$)", response_text, re.DOTALL)
+    
+    if verbal_match:
+        verbal_answer = verbal_match.group(1).strip()
+        # Apply ordinal conversion to verbal section
+        processed_verbal = convert_ordinals_to_words(verbal_answer)
+        
+        # Replace the original verbal section with the processed one
+        processed_response = response_text.replace(
+            f"VERBAL_ANSWER:{verbal_match.group(1)}", 
+            f"VERBAL_ANSWER:{processed_verbal}"
+        )
+        
+        logger.info(f"Applied ordinal conversion to VERBAL_ANSWER section")
+        return processed_response
+    
+    # If no verbal section found, apply to whole text as fallback
+    return convert_ordinals_to_words(response_text)

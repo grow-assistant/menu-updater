@@ -1,5 +1,8 @@
 import json
 import logging
+import os
+import glob
+from . import load_example_queries  # Import the function from prompts package
 
 # Get the logger that was configured in utils/langchain_integration.py
 logger = logging.getLogger("ai_menu_updater")
@@ -49,10 +52,28 @@ def create_gemini_prompt(
     database_schema = context_files.get(
         "database_schema", "Database schema unavailable"
     )
-    example_queries = context_files.get(
-        "example_queries", "Example queries unavailable"
-    )
-
+    
+    # Determine query category from user query to load specific examples
+    query_type = None
+    for category in ["order_history", "update_price", "disable_item", "enable_item", 
+                    "query_menu", "query_performance", "query_ratings", "delete_options"]:
+        if category.lower() in user_query.lower():
+            query_type = category
+            break
+    
+    # Try to infer the query type from the conversation history if not found in the query
+    if not query_type and conversation_history and len(conversation_history) > 0:
+        last_query = conversation_history[-1].get('query', '')
+        for category in ["order_history", "update_price", "disable_item", "enable_item", 
+                        "query_menu", "query_performance", "query_ratings", "delete_options"]:
+            if category.lower() in last_query.lower():
+                query_type = category
+                logger.info(f"Inferred query type '{query_type}' from previous conversation")
+                break
+    
+    # Load example queries directly from the database folders
+    example_queries = load_example_queries(query_type)
+    
     # Format user query for better processing - strip whitespace and ensure question ends with ?
     formatted_query = user_query.strip().rstrip("?") + "?"
 

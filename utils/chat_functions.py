@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import tiktoken
 import json
-from datetime import datetime
+import datetime
 from typing import Dict, List, Any
 from utils.config import AI_MODEL
 from utils.api_functions import send_api_request_to_openai_api, execute_function_call
@@ -26,7 +26,7 @@ log_dir.mkdir(exist_ok=True)
 logging.getLogger().handlers.clear()
 
 # Get current timestamp for the log file
-current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_file = f"logs/openai_chat_{current_time}.log"
 
 # Set up logging to both file and console
@@ -53,7 +53,7 @@ logger.info("Logging initialized with fresh log file")
 
 def log_openai_interaction(messages: List[Dict], response: Any, interaction_type: str):
     """Log OpenAI API interactions for debugging and auditing"""
-    timestamp = datetime.now().isoformat()
+    timestamp = datetime.datetime.now().isoformat()
     log_entry = {
         "timestamp": timestamp,
         "type": interaction_type,
@@ -506,3 +506,45 @@ def call_grok(prompt: str) -> str:
     except Exception as e:
         logger.error(f"XAI API call failed: {str(e)}")
         return None
+
+
+def save_conversation(messages, directory="conversations"):
+    """Save conversation history to a JSON file"""
+    try:
+        os.makedirs(directory, exist_ok=True)
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filename = f"{directory}/conversation_{current_time}.json"
+        
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(messages, f, indent=2)
+        
+        return True, filename
+    except Exception as e:
+        return False, str(e)
+
+
+def add_user_feedback(conversation_id, query, response, feedback, notes=""):
+    """Add user feedback about an AI response to the feedback log"""
+    try:
+        os.makedirs("feedback", exist_ok=True)
+        feedback_file = "feedback/user_feedback.json"
+        
+        # Create feedback entry
+        timestamp = datetime.datetime.now().isoformat()
+        feedback_entry = {
+            "conversation_id": conversation_id,
+            "timestamp": timestamp,
+            "query": query,
+            "response": response,
+            "feedback": feedback,
+            "notes": notes
+        }
+
+        # Append to existing feedback file
+        with open(feedback_file, 'a', encoding='utf-8') as f:
+            json.dump(feedback_entry, f)
+            f.write('\n')
+        
+        return True, f"Feedback added successfully. Feedback ID: {timestamp}"
+    except Exception as e:
+        return False, str(e)
