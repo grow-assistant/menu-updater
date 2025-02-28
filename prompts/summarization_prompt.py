@@ -1,4 +1,12 @@
+import logging
+
+# Get the logger that was configured in utils/langchain_integration.py
+logger = logging.getLogger("ai_menu_updater")
+
 def create_summarization_prompt(data_results, query, verbal_history=None):
+    # Log input parameters
+    logger.info(f"Summarization prompt inputs: query='{query}', verbal_history_length={len(verbal_history) if verbal_history else 0}")
+    
     history_context = ""
     if verbal_history:
         # Join the verbal history with actual newline characters, not backslash n in an f-string expression
@@ -14,7 +22,7 @@ AVOID REPETITION BY:
 - Using different sports analogies (when using clubhouse_legend persona)
 """
 
-    return f"""Generate a verbal response with these rules:
+    prompt = f"""Generate a verbal response with these rules:
 1. Use natural, conversational language
 2. Vary sentence structure from previous responses
 3. Focus on different aspects of the data each time
@@ -38,3 +46,8 @@ Guidelines for this response:
 - Limit sports analogies to 1 per response
 - Vary sentence lengths between short (3-7 words) and medium (8-15 words)
 """
+
+    # Log the generated prompt
+    logger.info(f"Generated summarization prompt: {prompt[:200]}..." if len(prompt) > 200 else prompt)
+    
+    return prompt
