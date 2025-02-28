@@ -1,0 +1,14 @@
+2025-02-26 11:32:52,201 - INFO - === New Session Started at 2025-02-26_11-32-52 ===
+2025-02-26 11:32:52,201 - INFO - Logging initialized with fresh log file
+2025-02-26 11:32:53,190 - INFO - Starting app.py
+2025-02-26 11:32:53,191 - INFO - .env file loaded
+2025-02-26 11:32:53,427 - INFO - Debug mode set to: False
+2025-02-26 11:32:53,427 - INFO - End of app.py execution
+2025-02-26 11:32:54,590 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-02-26 11:32:59,905 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-02-26 11:33:01,224 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-02-26 11:33:06,322 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-02-26 11:33:07,606 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-02-26 11:33:14,855 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-02-26 11:33:16,010 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-02-26 11:33:32,989 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"

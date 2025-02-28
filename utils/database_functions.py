@@ -5,11 +5,16 @@ import streamlit as st
 from utils.config import db_credentials
 from utils.menu_operations import add_operation_to_history
 from utils.query_templates import QUERY_TEMPLATES
+from decimal import Decimal
+from typing import Dict, Any
+import psycopg2.extras
+from psycopg2.extras import DictCursor
+import os
 
 def get_db_connection():
     """Get database connection"""
     try:
-        conn = psycopg2.connect(**db_credentials)
+        conn = psycopg2.connect(**db_credentials, cursor_factory=DictCursor)
         conn.set_session(autocommit=True)
         return conn
     except Exception as e:
@@ -251,30 +256,27 @@ def cleanup_menu(connection, location_id: int, item_name: str, option_name: str)
         }
     )
 
-def execute_menu_query(query, params=None):
-    """Execute a read-only query and return results with column names"""
+def execute_menu_query(query: str) -> Dict[str, Any]:
+    """Execute a read-only menu query and return results"""
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor() as cursor:
-            cursor.execute(query, params or ())
-            if cursor.description:  # Check if query returns results
-                columns = [desc[0] for desc in cursor.description]
-                rows = cursor.fetchall()
-                results = []
-                for row in rows:
-                    results.append(dict(zip(columns, row)))
-                return {
-                    "success": True,
-                    "results": results,
-                    "columns": columns,
-                    "query": query
-                }
-            return {
-                "success": True,
-                "affected_rows": cursor.rowcount,
-                "query": query
-            }
+        cur = conn.cursor()
+        cur.execute(query)
+        
+        # Convert Decimal types to float for JSON serialization
+        results = [
+            {col: float(val) if isinstance(val, Decimal) else val 
+             for col, val in row.items()}
+            for row in cur.fetchall()
+        ]
+        
+        return {
+            "success": True,
+            "results": results,
+            "columns": [desc[0] for desc in cur.description],
+            "query": query
+        }
     except Exception as e:
         return {
             "success": False,
