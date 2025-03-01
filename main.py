@@ -161,7 +161,7 @@ st.markdown(
         left: 0;
         width: 100%;
         height: 100%;
-        background-image: url('data:image/svg+xml;base64,PHN2ZyBpZD0iTGF5ZXJfMSIgZGF0YS1uYW1lPSJMYXllciAxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNzguOTEgMjM5LjY0Ij48ZGVmcz48c3R5bGU+LmNscy0xLCAuY2xzLTIge2ZpbGw6ICNmZmY7fS5jbHMtMSB7ZmlsbC1ydWxlOiBldmVub2RkO308L3N0eWxlPjwvZGVmcz48Zz48cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik0yODgsNjVsLTUuNTctMi4wOGMtMzYuNTktMTMuNjgtNDIuMzYtMTUuMzMtNDMuODYtMTUuNTNhNDAuNzEsNDAuNzEsMCwwLDAtNzAuNTEsNC4yOGMtLjg1LS4wNi0xLjctLjExLTIuNTYtLjEzaC0uOTRjLS41NiwwLTEuMTEsMC0xLjY2LDBhNTguOTIsNTguOTIsMCwwLDAtMjIuOCw1QTU4LjExLDU4LjExLDAsMCwwLDExOC40NSw3Mi43TDkuMDksMTc4LjQybDk1LjIyLTUuMTEtMS43Myw5NS4zM0wyMDcuMDksMTUxLjI5YTU5LjYzLDU5LjYzLDAsMCwwLDE1LjY4LTM4LjFjMC0uMTEsMC0uMjMsMC0uMzQsMC0uNjAwLTEuMjAwLTEuOGMwLTEsMC0xLjQ1YzAtLjI0LDAtLjQ5LDAtLjc0LDAtLjg1LS4wNy0xLjY5LS4xNC0yLjU0YTQxLDQxLDAsMCwwLDIxLTI0LjgyLDE1LjU2LDE1LjU2LDAsMCwwLDMuNTctMVpNMjA1LjM4LDc1LjMzYzEsMS4xNSwxLjg5LDIuMzYsMi43NywzLjYuMTcuMjYuMzYuNS41NC43Ni44LDEuMTgsMS41NSwyLjQsMi4yNywzLjY1bC42NywxLjE5Yy42MywxLjE1LDEuMjEsMi4zNCwxLjc1LDMuNTRhNTUuNzEsNTUuNzEsMCwwLDEsNC40NiwxNS41QTM2LjI0LDM2LjI0LDAsMCwxLDE3MC43OSw1Ni41QTU0LjI1LDU0LjI1LDAsMCwxLDIwNSw3NC45M1ptMTIuOTIsMzcuNDN2LjExQTU0LjgyLDU0LjgyLDAsMCwxLDE4NS41NiwxNjFhNTQsNTQsMCwwLDEtMTkuODgsNC41NGwtNTYuNzksMywxLTUyLjY5di0uMTJhNTQuNTYsNTQuNTYsMCwwLDEsNTQtNTkuNzhjLjc4LDAsMS41Ny4wNywyLjM1LjExYTQwLjY4LDQwLjY4LDAsMCwwLDUyLjEsNTIuMWwwLC43YzAsLjI5LDAsLjU4LDAsLjg3czAsLjc3LDAsMS4xNUMyMTguMzIsMTExLjUyLDIxOC4zMiwxMTIuMTQsMjE4LjMsMTEyLjc2Wk0yMC44NywxNzMuMjksMTEwLjE4LDg3Yy0uMzMuNzQtLjcsMS40Ni0xLDIuMjNhNTguODgsNTguODgsMCwwLDAtMy44MywyNi44N2wtLjk1LDUyLjc2Wm04Ny45NC0uMjJMMTY1Ljg4LDE3MGE1OC41Niw1OC41NiwwLDAsMCwyMS40OC00LjkxYy44Mi0uMzYsMS42My0uNzQsMi40Mi0xLjEzTDEwNy4zLDI1Ni42Wm0xMTMuMzEtNzEuNTFhNTkuNTEsNTkuNTEsMCwwLDAtNC4yMi0xNC40N2MtLjE0LS4zMy0uMzMtLjY0LS40OC0xYy0uNTUtMS4yMS0xLjEzLTIuNC0xLjc2LTMuNTdjLS4yOS0uNTItLjU4LTEtLjg4LTEuNTVjLS43NC0xLjI5LTEuNTEtMi41NS0yLjM1LTMuNzhjLS4yMy0uMzQtLjQ3LS42Ni0uNzEtMWMtLjkxLTEuMjgtMS44Ni0yLjUzLTIuODctMy43NGwtLjUxLS41OHEtMS42OS0yLTMuNTctMy44MWwtLjEtLjA5YTU4LjM0LDU4LjM0LDAsMCwwLTE5LjE4LTEyLjM4LDU4LjkzLDU4LjkzLDAsMCwwLTEyLjY3LTMuNDQsMzYuMjksMzYuMjksMCwxLDEsNDkuMyw0OS4zOFptMjIuNi0yNWEzOS43OSwzOS43OSwwLDAsMC0zLjExLTIzLjc4YzQuNDUsMS40NSwxMy45MSw0Ljc5LDMzLjY3LDEyLjE1TDI0NS41NCw3Ni4zNkMyNDUuMjgsNzYuNDcsMjQ1LDc2LjUyLDI0NC43Miw3Ni42MVoiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC05LjA5IC0yOSkiLz48ZWxsaXBzZSBjbGFzcz0iY2xzLTIiIGN4PSIxNTAuMTgiIGN5PSI4NC44OCIgcng9IjE2LjQ0IiByeT0iMTYuNTMiLz48L2c+PC9zdmc+');
+        background-image: url('data:image/svg+xml;base64,PHN2ZyBpZD0iTGF5ZXJfMSIgZGF0YS1uYW1lPSJMYXllciAxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNzguOTEgMjM5LjY0Ij48ZGVmcz48c3R5bGU+LmNscy0xLCAuY2xzLTIge2ZpbGw6ICNmZmY7fS5jbHMtMSB7ZmlsbC1ydWxlOiBldmVub2RkO308L3N0eWxlPjwvZGVmcz48Zz48cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik0yODgsNjVsLTUuNTctMi4wOGMtMzYuNTktMTMuNjgtNDIuMzYtMTUuMzMtNDMuODYtMTUuNTNhNDAuNzEsNDAuNzEsMCwwLDAtNzAuNTEsNC4yOGMtLjg1LS4wNi0xLjctLjExLTIuNTYtLjEzaC0uOTRjLS41NiwwLTEuMTEsMC0xLjY2LDBhNTguOTIsNTguOTIsMCwwLDAtMjIuOCw1QTU4LjExLDU4LjExLDAsMCwwLDExOC40NSw3Mi43TDkuMDksMTc4LjQybDk1LjIyLTUuMTEtMS43Myw5NS4zM0wyMDcuMDksMTUxLjI5YTU5LjYzLDU5LjYzLDAsMCwwLDE1LjY4LTM4LjFjMC0uMTEsMC0uMjMsMC0uMzQsMC0uNjAwLTEuMjAwLTEuOGMwLTEsMC0xLjQ1YzAtLjI0LDAtLjQ5LDAtLjc0LDAtLjg1LS4wNy0xLjY5LS4xNC0yLjU0YTQxLDQxLDAsMCwwLDIxLTI0LjgyLDE1LjU2LDE1LjU2LDAsMCwwLDMuNTctMVpNMjA1LjM4LDc1LjMzYzEsMS4xNSwxLjg5LDIuMzYsMi43NywzLjYuMTcuMjYuMzYuNS41NC43Ni44LDEuMTgsMS41NSwyLjQsMi4yNywzLjY1bC42NywxLjE5Yy42MywxLjE1LDEuMjEsMi4zNCwxLjc1LDMuNTRhNTUuNzEsNTUuNzEsMCwwLDEsNC40NiwxNS41QTM2LjI0LDM2LjI0LDAsMCwxLDE3MC43OSw1Ni41QTU0LjI1LDU0LjI1LDAsMCwxLDIwNSw3NC45M1ptMTIuOTIsMzcuNDN2LjExQTU0LjgyLDU0LjgyLDAsMCwxLDE4NS41NiwxNjFhNTQsNTQsMCwwLDEtMTkuODgsNC41NGwtNTYuNzksMywxLTUyLjY5di0uMTJhNTQuNTYsNTQuNTYsMCwwLDEsNTQtNTkuNzhjLjc4LDAsMS41Ny4wNywyLjM1LjExYTQwLjY4LDQwLjY4LDAsMCwwLDUyLjEsNTIuMWwwLC43YzAsLjI5LDAsLjU4LDAsLjg3czAsLjc3LDAsMS4xNUMyMTguMzIsMTExLjUyLDIxOC4zMiwxMTIuMTQsMjE4LjMsMTEyLjc2Wk0yMC44NywxNzMuMjksMTEwLjE4LDg3Yy0uMzMuNzQtLjcsMS40Ni0xLDIuMjNhNTguODgsNTguODgsMCwwLDAtMy44MywyNi44N2wtLjk1LDUyLjc2Wm04Ny45NC0uMjJMMTY1Ljg4LDE3MGE1OC41Niw1OC41NiwwLDAsMCwyMS40OC00LjkxYy44Mi0uMzYsMS42My0uNzQsMi40Mi0xLjEzTDEwNy4zLDI1Ni42Wm0xMTMuMzEtNzEuNTFhNTkuNTEsNTkuNTEsMCwwLDAtNC4yMi0xNC40N2MtLjE0LS4zMy0uMzMtLjY0LS40OC0xYy0uNTUtMS4yMS0xLjEzLTIuNC0xLjc2LTMuNTdjLS4yOS0uNTItLjU4LTEtLjg4LTEuNTVjLS43NC0xLjI5LTEuNTEtMi41NS0yLjM1LTMuNzhjLS4yMy0uMzQtLjQ3LS42Ni0uNzEtMWMtLjkxLTEuMjgtMS44Ni0yLjUzLTIuODctMy43NGwtLjUxLS41OHEtMS42OS0yLTMuNTctMy44MWwtLjEtLjA5YTU4LjM0LDU4LjM0LDAsMCwwLTE5LjE4LTEyLjM4LDU4LjkzLDU4LjkzLDAsMCwwLTEyLjY3LTMuNDQsMzYuMjksMzYuMjksMCwxLDEsNDkuMyw0OS4zOFptMjIuNi0yNWEzOS43OSwzOS43OSwwLDAsMC0zLjExLTIzLjc4YzQuNDUsMS40NSwxMy45MSw0Ljc5LDMzLjY3LDEyLjE1TDI0NS41NCw3Ni4zNkMyNDUuMjgsNzYuNDcsMjQ1LDc2LjUyLDI0NC43Miw3Ni42MVoiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC05LjA5IC0yOSkiLz48ZWxsaXBzZSBjbGFzcz0iY2xzLTIiIGN4PSIxNTAuMTgiIGN5PSI4NC44o-miniCIgcng9IjE2LjQ0IiByeT0iMTYuNTMiLz48L2c+PC9zdmc+');
         background-size: contain;
         background-repeat: no-repeat;
         background-position: center;
@@ -852,12 +852,15 @@ def process_query_with_langchain(query: str, output_container):
     Args:
         query: User query
         output_container: Streamlit container to display output
+        
+    Returns:
+        tuple: (result, voice_active) - result dict and whether voice is active
     """
     if not LANGCHAIN_AVAILABLE:
         output_container.error(
             "LangChain is not available. Please install required packages."
         )
-        return {"success": False, "error": "LangChain is not available"}
+        return {"success": False, "error": "LangChain is not available"}, False
 
     # Clear any previous content in the output container
     output_container.empty()
@@ -869,7 +872,7 @@ def process_query_with_langchain(query: str, output_container):
     agent = setup_langchain_agent()
     if not agent:
         output_container.error("Failed to set up LangChain agent")
-        return {"success": False, "error": "Failed to set up LangChain agent"}
+        return {"success": False, "error": "Failed to set up LangChain agent"}, False
 
     # Create a mock session state for compatibility
     mock_session = MockSessionState()
@@ -893,8 +896,7 @@ def process_query_with_langchain(query: str, output_container):
     try:
         # Run query through LangChain
         with st.spinner("Processing..."):
-            # Show a thinking message
-            output_container.markdown("_Thinking..._")
+            # No thinking message - keep empty to avoid any indicators
 
             # Process the query
             result = integrate_with_existing_flow(
@@ -926,6 +928,7 @@ def process_query_with_langchain(query: str, output_container):
 
         # Track if voice was used to determine if auto-listen should be triggered
         voice_was_used = False
+        voice_active = False
 
         # Process voice if enabled
         if st.session_state.voice_enabled and st.session_state.voice_instance:
@@ -944,35 +947,32 @@ def process_query_with_langchain(query: str, output_container):
                             "voice_persona", "casual"
                         ).title()
 
-                        # Show voice indicator with Swoop branding and persona info
-                        with st.status(
-                            f"Processing voice output ({persona_name} style)...",
-                            state="running",
-                        ):
-                            st.markdown(
-                                f'<div style="color: #FF8B00; font-weight: 500; font-family: Montserrat, sans-serif;">🔊 Speaking with {persona_name} voice style...</div>',
-                                unsafe_allow_html=True,
-                            )
+                        try:
+                            # Simply speak without showing any processing indicators
                             voice.speak(verbal_text)
-                            st.success(f"✓ Voice response complete")
                             voice_was_used = True
+                            voice_active = True
+                        except Exception as voice_error:
+                            # Log error but don't display in UI
+                            logger.error(f"Voice output error: {str(voice_error)}")
                 except Exception as voice_error:
-                    st.warning(f"Voice output error: {str(voice_error)}")
+                    # Log error but don't display in UI
+                    logger.error(f"Voice output error: {str(voice_error)}")
 
         # Auto-listen after voice response if enabled
         if voice_was_used and st.session_state.get("auto_listen_enabled", False):
-            st.info("Auto-listening for your next question...")
+            # Don't show auto-listen indicator
             # Start speech recognition in a new thread to avoid blocking the UI
             thread = threading.Thread(target=background_speech_recognition_with_timeout)
             thread.daemon = True
             thread.start()
 
-        return result
+        return result, voice_active
     except Exception as e:
         error_msg = f"Error: {str(e)}"
         output_container.error(error_msg)
         st.session_state.chat_history.append((query, error_msg))
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": str(e)}, False
 
 
 def clear_query_input():
@@ -1081,36 +1081,6 @@ def run_langchain_streamlit_app():
 
     # Set up sidebar
     st.sidebar.title("")
-    
-    # Add database connection status in sidebar
-    with st.sidebar.expander("Database Status", expanded=False):
-        status_indicator = st.empty()
-        
-        # Show immediate status based on current flag
-        if USING_MOCK_DATA:
-            status_indicator.error("❌ Database connection failed or checking...")
-            st.info("Using mock data for demonstration")
-            
-            # Connection details
-            st.write("Connection Details:")
-            st.code(f"""
-            Host: {DB_CONFIG['host']}
-            Port: {DB_CONFIG['port']}
-            Database: {DB_CONFIG['database']}
-            """)
-            
-            # Reconnect button with loading state
-            if st.button("Try reconnecting"):
-                with st.spinner("Attempting to connect..."):
-                    reconnection_result = attempt_db_reconnection()
-                    if reconnection_result["success"]:
-                        st.success("✅ Successfully reconnected to database!")
-                        status_indicator.success("✅ Connected to database")
-                        st.rerun()
-                    else:
-                        st.error(f"❌ Connection failed: {reconnection_result['error']}")
-        else:
-            status_indicator.success("✅ Connected to database")
     
     # Club selection in sidebar
     selected_club = st.sidebar.selectbox(
@@ -1320,13 +1290,15 @@ def run_langchain_streamlit_app():
             stream_container = st.empty()
 
             # Process the query
-            result = process_query_with_langchain(query, stream_container)
+            result, voice_active = process_query_with_langchain(query, stream_container)
 
             # Clear the container after processing
             stream_container.empty()
 
-            # Display the text answer with proper markdown formatting
+            # Only display the text answer after voice has started (or if voice not active)
+            # This prevents the text from appearing before the voice starts speaking
             if "text_answer" in result and result["text_answer"]:
+                # Display text even if voice is active - both happen in parallel
                 st.markdown(result["text_answer"])
             else:
                 st.markdown(result.get("summary", "No result available"))
@@ -1358,13 +1330,15 @@ def run_langchain_streamlit_app():
             stream_container = st.empty()
 
             # Process the query
-            result = process_query_with_langchain(query, stream_container)
+            result, voice_active = process_query_with_langchain(query, stream_container)
 
             # Clear the container after processing
             stream_container.empty()
 
-            # Display the text answer with proper markdown formatting
+            # Only display the text answer after voice has started (or if voice not active)
+            # This prevents the text from appearing before the voice starts speaking
             if "text_answer" in result and result["text_answer"]:
+                # Display text even if voice is active - both happen in parallel
                 st.markdown(result["text_answer"])
             else:
                 st.markdown(result.get("summary", "No result available"))
@@ -1558,7 +1532,7 @@ class SimpleVoice:
                     "voice_settings": {"stability": 0.5, "similarity_boost": 0.5},
                 }
 
-                print("Generating speech with ElevenLabs API...")
+                # Generate speech without showing any messages
                 response = requests.post(url, json=data, headers=headers)
 
                 if response.status_code != 200:
@@ -1578,17 +1552,18 @@ class SimpleVoice:
                 while pygame.mixer.music.get_busy():
                     time.sleep(0.1)
 
-                print(f"✓ Successfully played audio with {self.persona} voice")
                 return True
 
             except Exception as e:
-                print(f"Direct API attempt failed: {str(e)}")
+                # Log error but continue
+                logger = logging.getLogger("ai_menu_updater")
+                logger.error(f"Direct API attempt failed: {str(e)}")
                 raise
 
         except Exception as e:
-            # Fall back to simulation
-            print(f"🔊 [{self.persona}] Would speak: {text[:50]}...")
-            print(f"Voice error: {str(e)}")
+            # Log error but don't display to user
+            logger = logging.getLogger("ai_menu_updater")
+            logger.error(f"Voice error: {str(e)}")
             return True
 
     def toggle(self):

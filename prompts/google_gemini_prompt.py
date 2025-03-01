@@ -2,10 +2,34 @@ import json
 import logging
 import os
 import glob
+import time
 from . import load_example_queries  # Import the function from prompts package
 
 # Get the logger that was configured in utils/langchain_integration.py
 logger = logging.getLogger("ai_menu_updater")
+
+# For Gemini token counting
+try:
+    import tiktoken
+    TOKENIZER = tiktoken.get_encoding("cl100k_base")  # Using OpenAI's tokenizer as approximation
+    
+    def count_tokens(text):
+        """Count tokens in a string using tiktoken"""
+        if not text:
+            return 0
+        try:
+            return len(TOKENIZER.encode(text))
+        except Exception as e:
+            logger.warning(f"Error counting tokens: {str(e)}")
+            # Fallback approximation: ~4 chars per token
+            return len(text) // 4
+except ImportError:
+    logger.warning("tiktoken not available, using character-based approximation")
+    def count_tokens(text):
+        """Approximate token count (4 chars ≈ 1 token)"""
+        if not text:
+            return 0
+        return len(text) // 4
 
 
 def create_gemini_prompt(
@@ -29,6 +53,8 @@ def create_gemini_prompt(
     Returns:
         str: The optimized prompt for SQL generation
     """
+    start_time = time.time()
+    
     # Log input parameters
     logger.info(f"Gemini prompt inputs: user_query='{user_query}', location_id={location_id}, " 
                 f"has_conversation_history={bool(conversation_history)}, " 
@@ -60,11 +86,19 @@ def create_gemini_prompt(
     
     # Determine query category from user query to load specific examples
     query_type = None
-    for category in ["order_history", "update_price", "disable_item", "enable_item", 
-                    "query_menu", "query_performance", "query_ratings", "delete_options"]:
-        if category.lower() in user_query.lower():
-            query_type = category
-            break
+    # First check if we already have a categorized query type from the context
+    if context_files and "categorized_type" in context_files:
+        query_type = context_files["categorized_type"]
+        logger.info(f"Using pre-categorized query type: {query_type}")
+    
+    # If no pre-categorized type, try to determine from query text
+    if not query_type:
+        for category in ["order_history", "update_price", "disable_item", "enable_item", 
+                        "query_menu", "query_performance", "query_ratings", "delete_options"]:
+            if category.lower() in user_query.lower():
+                query_type = category
+                logger.info(f"Determined query type from text: {query_type}")
+                break
     
     # Try to infer the query type from the conversation history if not found in the query
     if not query_type and conversation_history and len(conversation_history) > 0:
@@ -77,10 +111,12 @@ def create_gemini_prompt(
                 break
     
     # Load example queries directly from the database folders
+    logger.info(f"Loading examples for query type: {query_type if query_type else 'ALL TYPES'}")
     all_examples = load_example_queries(query_type)
+    logger.info(f"Loaded example length: {len(all_examples) if all_examples else 0} characters")
     
     # Limit number of example queries to reduce prompt size
-    MAX_EXAMPLES_PER_CATEGORY = 3
+    MAX_EXAMPLES_PER_CATEGORY = 10
     MAX_TOTAL_EXAMPLES = 10
     
     # Process examples to limit their size
@@ -246,7 +282,30 @@ QUERY GUIDELINES:
 Generate ONLY a clean, efficient SQL query that precisely answers the user's question. No explanations or commentary.
 """
 
-    # Log the generated prompt
+    # Count tokens in the prompt
+    prompt_tokens = count_tokens(prompt)
+    processing_time = time.time() - start_time
+    
+    # Log token counts and processing time
     logger.info(f"Generated Gemini prompt: {prompt[:200]}..." if len(prompt) > 200 else prompt)
+    logger.info(f"Generated Gemini prompt for query '{user_query}' - Length: {len(prompt)} characters")
+    logger.info(f"Gemini prompt tokens: {prompt_tokens} (approximate)")
+    logger.info(f"Prompt generation time: {processing_time:.2f} seconds")
+    logger.debug(f"Gemini prompt first 100 chars: {prompt[:100]}...")
     
     return prompt
+
+
+# Add a function to log Gemini API response tokens and timing
+def log_gemini_response(query, response, start_time):
+    """Log token counts and timing for a Gemini API response"""
+    response_time = time.time() - start_time
+    response_text = response if isinstance(response, str) else str(response)
+    response_tokens = count_tokens(response_text)
+    
+    logger.info(f"Gemini response received for query: '{query[:50]}{'...' if len(query) > 50 else ''}'")
+    logger.info(f"Gemini response tokens: {response_tokens} (approximate)")
+    logger.info(f"Gemini response time: {response_time:.2f} seconds")
+    logger.info(f"Gemini total tokens (prompt+response): {count_tokens(query) + response_tokens}")
+    
+    return response

@@ -1304,8 +1304,12 @@ def integrate_with_existing_flow(
 
         # STEP 1: OpenAI Categorization
         if callback_handler:
-            callback_handler.on_text("Step 1: OpenAI Query Categorization\n")
-
+            # Remove all output during processing - don't show "Looking..."
+            pass
+            
+        # Create prompt with cached dates context
+        # callback_handler.on_text("Looking...")  # Completely removed
+            
         # Create prompt with cached dates context
         categorization_result = create_categorization_prompt(cached_dates=cached_dates)
         categorization_prompt = categorization_result["prompt"]
@@ -1315,7 +1319,7 @@ def integrate_with_existing_flow(
         try:
             # For new OpenAI client (>=1.0.0)
             categorization_response = openai_client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": categorization_prompt},
                     {
@@ -1332,7 +1336,7 @@ def integrate_with_existing_flow(
                 # Directly try the new API format
                 # Use the legacy OpenAI API format for 0.28.1
                 categorization_response = openai.ChatCompletion.create(
-                    model="gpt-4o",
+                    model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": categorization_prompt},
                         {
@@ -1345,7 +1349,7 @@ def integrate_with_existing_flow(
             except (ImportError, Exception):
                 # Try old OpenAI SDK style
                 categorization_response = openai.ChatCompletion.create(
-                    model="gpt-4o",
+                    model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": categorization_prompt},
                         {
@@ -1385,12 +1389,17 @@ def integrate_with_existing_flow(
         item_name = json_response.get("item_name")
         new_price = json_response.get("new_price")
 
+        # These specific callback lines have been commented out to simplify the UI
+        # Only show "Looking..." at the start and the final result
         if callback_handler:
-            callback_handler.on_text(f"Query categorized as: {query_type}\n")
+            # callback_handler.on_text(f"Query categorized as: {query_type}\n")
+            pass
 
         # STEP 2: Google Gemini SQL Generation
         if callback_handler:
-            callback_handler.on_text("\nStep 2: Google Gemini SQL Generation\n")
+            # Removed step announcement as requested
+            pass
+            # callback_handler.on_text("\nStep 2: Google Gemini SQL Generation\n")
 
         # Load application context
         context_files = load_application_context()
@@ -1456,6 +1465,12 @@ def integrate_with_existing_flow(
                 previous_sql = context["last_sql_query"]
 
             # Call Google Gemini to generate SQL
+            
+            # Add the categorized request type to context_files for proper SQL example selection
+            if query_type:
+                context_files["categorized_type"] = query_type
+                logger.info(f"Added categorized request type '{query_type}' to context_files")
+            
             sql_query = call_sql_generator(
                 query,
                 context_files,
@@ -1482,13 +1497,15 @@ def integrate_with_existing_flow(
             if callback_handler:
                 # Format SQL for display
                 display_sql = sql_query.strip().replace("\n", " ").replace("  ", " ")
-                callback_handler.on_text(f"Generated SQL: {display_sql}\n")
+                # callback_handler.on_text(f"Generated SQL: {display_sql}\n")
+                pass
         else:
             flow_steps["sql_generation"]["status"] = "error"
             flow_steps["sql_generation"]["data"] = {"error": "Failed to generate SQL"}
 
             if callback_handler:
-                callback_handler.on_text("Error: Failed to generate SQL\n")
+                # callback_handler.on_text("Error: Failed to generate SQL\n")
+                pass
 
             # If we can't generate SQL, use the LangChain agent as fallback
             if agent is None:
@@ -1509,7 +1526,8 @@ def integrate_with_existing_flow(
 
         # STEP 3: SQL Execution
         if callback_handler:
-            callback_handler.on_text("\nStep 3: SQL Execution\n")
+            # callback_handler.on_text("\nStep 3: SQL Execution\n")
+            pass
 
         # Execute SQL query with timeout and retries
         max_retries = 2
@@ -1522,9 +1540,10 @@ def integrate_with_existing_flow(
             except Exception:
                 if attempt < max_retries:
                     if callback_handler:
-                        callback_handler.on_text(
-                            f"Retry {attempt+1}/{max_retries} after execution error\n"
-                        )
+                        # callback_handler.on_text(
+                        #    f"Retry {attempt+1}/{max_retries} after execution error\n"
+                        # )
+                        pass
                 else:
                     raise
 
@@ -1535,7 +1554,8 @@ def integrate_with_existing_flow(
 
             result_count = len(execution_result.get("results", []))
             if callback_handler:
-                callback_handler.on_text(f"Query returned {result_count} result(s)\n")
+                # callback_handler.on_text(f"Query returned {result_count} result(s)\n")
+                pass
         else:
             error_msg = (
                 execution_result.get("error", "Unknown error")
@@ -1546,7 +1566,8 @@ def integrate_with_existing_flow(
             flow_steps["execution"]["data"] = {"error": error_msg}
 
             if callback_handler:
-                callback_handler.on_text(f"SQL Execution Error: {error_msg}\n")
+                # callback_handler.on_text(f"SQL Execution Error: {error_msg}\n")
+                pass
 
             # If execution fails, use the LangChain agent as fallback
             if agent is None:
@@ -1567,7 +1588,8 @@ def integrate_with_existing_flow(
 
         # STEP 4: Result Summarization
         if callback_handler:
-            callback_handler.on_text("\nStep 4: Result Summarization\n")
+            # callback_handler.on_text("\nStep 4: Result Summarization\n")
+            pass
 
         # Create summary prompt
         summary_prompt = create_summary_prompt(
@@ -1609,7 +1631,7 @@ TEXT_ANSWER: [Your detailed response here]
         try:
             # For new OpenAI client (>=1.0.0)
             summarization_response = openai_client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": enhanced_summary_prompt},
@@ -1622,7 +1644,7 @@ TEXT_ANSWER: [Your detailed response here]
                 # Directly try the new API format
                 # Use the legacy OpenAI API format for 0.28.1
                 summarization_response = openai.ChatCompletion.create(
-                    model="gpt-4o",
+                    model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": enhanced_summary_prompt},
@@ -1632,7 +1654,7 @@ TEXT_ANSWER: [Your detailed response here]
             except (ImportError, Exception):
                 # Try old OpenAI SDK style
                 summarization_response = openai.ChatCompletion.create(
-                    model="gpt-4o",
+                    model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": enhanced_summary_prompt},
@@ -1685,7 +1707,8 @@ TEXT_ANSWER: [Your detailed response here]
         flow_steps["summarization"]["status"] = "completed"
 
         if callback_handler:
-            callback_handler.on_text(f"\nResult: {summary}\n")
+            # Display the summary without any "Result:" prefix
+            callback_handler.on_text(f"{summary}")
 
         # Update context with the new information
         updated_context = context or {}
@@ -1722,9 +1745,7 @@ TEXT_ANSWER: [Your detailed response here]
     except Exception as e:
         # If anything fails, fall back to the LangChain agent
         if callback_handler:
-            callback_handler.on_text(
-                f"\nError in flow: {str(e)}\nFalling back to LangChain agent\n"
-            )
+            callback_handler.on_text("Error processing query. Trying alternative method...")
             
         # Log the error
         logger.error(f"Error in AI flow: {str(e)}", exc_info=True)

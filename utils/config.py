@@ -16,7 +16,7 @@ db_credentials = {
 
 # Set up OpenAI variables
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-AI_MODEL = "gpt-4o-mini"
+AI_MODEL = "gpt-4o-mini-mini"
 # AI_MODEL = 'gpt-4'
 
 # Max number of tokens permitted within a conversation exchange via OpenAI API

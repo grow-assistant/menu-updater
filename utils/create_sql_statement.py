@@ -113,10 +113,11 @@ def generate_sql_from_user_query(
 
 
 def generate_sql_with_custom_prompt(custom_prompt, location_id):
-    """Generate SQL using a custom prompt that includes conversation history
+    """
+    Generate a SQL query using a custom prompt from another module.
 
     Args:
-        custom_prompt (str): The complete custom prompt with all context
+        custom_prompt (str): The custom prompt to use for generation
         location_id (int): The location ID to filter data
 
     Returns:
@@ -124,7 +125,19 @@ def generate_sql_with_custom_prompt(custom_prompt, location_id):
     """
     import google.generativeai as genai
     import os
+    import time
     from dotenv import load_dotenv
+    import logging
+
+    # Get the logger
+    logger = logging.getLogger("ai_menu_updater")
+
+    # Import token logging function
+    try:
+        from prompts.google_gemini_prompt import log_gemini_response
+    except ImportError:
+        logger.warning("Could not import log_gemini_response, will use local logging")
+        log_gemini_response = None
 
     # Load environment variables to get API key
     load_dotenv()
@@ -152,11 +165,23 @@ def generate_sql_with_custom_prompt(custom_prompt, location_id):
         model_name=model_name, generation_config=generation_config
     )
 
+    # Start timing the API call
+    start_time = time.time()
+    logger.info(f"Generating SQL with location_id: {location_id}")
+    
     # Generate the SQL query
     response = model.generate_content(custom_prompt)
-
+    
     # Extract and clean the SQL query
     sql_query = response.text.strip()
+    
+    # Use the token logging function if available
+    if log_gemini_response:
+        log_gemini_response(custom_prompt, sql_query, start_time)
+    else:
+        # Basic logging if the import failed
+        elapsed_time = time.time() - start_time
+        logger.info(f"SQL generation completed in {elapsed_time:.2f} seconds")
 
     # Remove markdown code block formatting if present
     if sql_query.startswith("```sql"):
@@ -166,6 +191,8 @@ def generate_sql_with_custom_prompt(custom_prompt, location_id):
 
     # Replace any remaining [LOCATION_ID] placeholders with the actual location_id
     sql_query = sql_query.replace("[LOCATION_ID]", str(location_id))
+    
+    logger.info(f"Generated SQL query: {sql_query}")
 
     return sql_query
 

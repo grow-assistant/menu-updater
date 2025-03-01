@@ -23,10 +23,28 @@ def load_example_queries(request_type=None):
     
     try:
         base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "database")
+        logger.info(f"Looking for database directory at: {base_dir}")
+        logger.info(f"Absolute path exists: {os.path.exists(base_dir)}")
         
+        # Try alternative paths if the standard one doesn't work
         if not os.path.exists(base_dir):
-            logger.warning(f"Database directory not found at {base_dir}")
-            return "No example queries available - database directory not found"
+            # Try absolute path
+            alt_base_dir = "C:/Python/ai-menu-updater/database"
+            logger.info(f"Trying alternative path: {alt_base_dir}")
+            if os.path.exists(alt_base_dir):
+                logger.info(f"Found database at alternative path: {alt_base_dir}")
+                base_dir = alt_base_dir
+            else:
+                # List parent directory to help debug
+                parent_dir = os.path.dirname(os.path.dirname(__file__))
+                logger.info(f"Parent directory: {parent_dir}")
+                try:
+                    logger.info(f"Contents of parent directory: {os.listdir(parent_dir)}")
+                except Exception as e:
+                    logger.error(f"Could not list parent directory: {str(e)}")
+                
+                logger.warning(f"Database directory not found at {base_dir}")
+                return "No example queries available - database directory not found"
         
         # Define which folders to load based on request_type
         folders_to_load = []
