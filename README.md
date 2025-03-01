@@ -1,6 +1,102 @@
-# Menu Updater & AI Assistant
+# Swoop AI Menu Updater
 
-An AI-powered tool for Swoop customers to manage their restaurant menus and query order data through natural language interactions. The application is built with a Streamlit frontend that connects to a PostgreSQL database and communicates with OpenAI's API using function-calling for structured operations.
+An AI-powered assistant for restaurant menu management and data analysis built with Streamlit and LangChain.
+
+## Overview
+
+This application provides a conversational AI interface for restaurant managers to:
+- Query order history and analytics
+- View and modify menu items
+- Update prices
+- Enable/disable menu items
+- Analyze performance data
+
+The application integrates with OpenAI's Large Language Models via LangChain to provide natural language processing and can respond with both text and speech.
+
+## Features
+
+- 🤖 Natural language interface using LangChain and OpenAI
+- 🔊 Voice responses using ElevenLabs text-to-speech
+- 🎤 Voice input using speech recognition
+- 📊 SQL database integration for menu and order data
+- 📱 Modern, responsive UI with Streamlit
+- 🧠 Context-aware query processing
+
+## Project Structure
+
+The refactored project has the following structure:
+
+```
+ai-menu-updater/
+├── app/                        # Main application package
+│   ├── components/             # UI components
+│   │   └── ui_components.py    # Reusable UI components
+│   ├── services/               # Service modules
+│   │   ├── langchain_service.py # LangChain integration
+│   │   └── voice_service.py    # Voice processing
+│   ├── utils/                  # Utility modules
+│   │   ├── app_state.py        # State management
+│   │   ├── database.py         # Database utilities
+│   │   └── styling.py          # UI styling
+│   ├── __init__.py             # Package initialization
+│   └── main.py                 # Main application module
+├── config/                     # Configuration
+├── database/                   # Database files
+├── logs/                       # Log files
+├── prompts/                    # AI prompt templates
+├── query_paths/                # Query path modules
+├── tools/                      # LangChain tools
+├── utils/                      # Legacy utilities
+├── main_integration.py         # LangChain integration
+├── main.py                     # Legacy entry point
+└── run_app.py                  # New entry point
+```
+
+## Running the Application
+
+To run the application, use:
+
+```bash
+streamlit run run_app.py
+```
+
+This will start the Streamlit server and open the application in your browser.
+
+## Dependencies
+
+The application requires:
+
+- Python 3.8+
+- Streamlit
+- LangChain (compatible with version 0.0.150 or newer)
+- OpenAI Python client
+- psycopg2 (for PostgreSQL database connection)
+- pytz (for timezone handling)
+- python-dotenv (for environment variables)
+- elevenlabs (for text-to-speech)
+- pygame (for audio playback)
+- SpeechRecognition (for voice input)
+- PyAudio (for microphone access)
+
+## Environment Configuration
+
+Create a `.env` file in the project root with the following variables:
+
+```
+OPENAI_API_KEY=your_openai_api_key
+ELEVENLABS_API_KEY=your_elevenlabs_api_key
+DB_HOST=your_database_host
+DB_PORT=your_database_port
+DB_NAME=your_database_name
+DB_USER=your_database_user
+DB_PASSWORD=your_database_password
+```
+
+## Notes
+
+- The application will work in "mock" mode if the database is unavailable
+- Voice features require an ElevenLabs API key
+- LangChain integration provides fallback mechanisms if specific components fail
 
 ---
 
@@ -141,4 +237,48 @@ This integration ensures that all queries—from menu updates to comprehensive o
 ---
 
 Happy Managing!
+
+## Code Organization
+
+The AI Menu Updater codebase is organized into a modular, service-oriented architecture for better maintainability and testability:
+
+### Core Modules
+
+- `app/` - Contains the Streamlit application code and core services
+  - `app/components/` - UI components
+  - `app/services/` - Service modules (database, prompt generation, queries)
+  - `app/utils/` - Application-specific utilities
+
+- `core/` - Core domain logic
+  - Query paths and menu operations
+
+- `utils/` - Shared utility functions
+  - Database connections
+  - Text processing
+  - Logging utilities
+
+- `prompts/` - Prompt templates and examples
+  - OpenAI prompt templates
+  - Google Gemini prompt templates
+  - Example queries
+
+### Key Service Modules
+
+- **Prompt Service** (`app/services/prompt_service.py`): Centralizes all prompt generation for different LLM providers
+- **Query Service** (`app/services/query_service.py`): Handles query categorization and routing to the appropriate processing path
+- **Database Service** (`app/services/database.py`): Manages database connections and query execution
+- **LangChain Service** (`app/services/langchain_service.py`): Provides LangChain integration for complex queries
+
+### Entry Points
+
+- `run_app.py` - Main entry point for running the Streamlit application
+- `test_integration.py` - Integration test for verifying full application functionality
+
+### Testing Structure
+
+- `tests/` - Test modules
+  - Unit tests for individual components
+  - Integration tests for full application flows
+
+## Deployment
 

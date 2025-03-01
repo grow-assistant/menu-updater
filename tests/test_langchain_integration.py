@@ -15,9 +15,20 @@ from utils.langchain_integration import (
     create_sql_database_tool,
     create_menu_update_tool,
     StreamlitCallbackHandler,
+)
+from main_integration import (
     integrate_with_existing_flow,
+    categorize_query,
 )
 from langchain.agents import Tool
+
+# Check if the new services are available
+try:
+    from app.services.prompt_service import prompt_service, PromptService
+    from app.services.query_service import query_service, QueryService
+    SERVICES_AVAILABLE = True
+except ImportError:
+    SERVICES_AVAILABLE = False
 
 
 class TestLangchainIntegration(unittest.TestCase):
@@ -105,64 +116,112 @@ class TestLangchainIntegration(unittest.TestCase):
         self.assertIn("Update successful", result)
         self.assertIn("2", result)
 
-    @patch("integrate_app.get_clients")
-    @patch("integrate_app.create_categorization_prompt")
-    def test_integrate_with_existing_flow(
-        self, mock_create_categorization_prompt, mock_get_clients
-    ):
+    @patch("main_integration.categorize_query")
+    @patch("main_integration.SERVICES_AVAILABLE", True)
+    @patch("main_integration.query_service")
+    @patch("main_integration.get_query_path")
+    def test_integrate_with_existing_flow(self, mock_get_query_path, mock_query_service, mock_categorize_query):
         """Test that integrate_with_existing_flow correctly processes a menu update query"""
-        # Create mock clients
-        mock_openai_client = MagicMock()
-        mock_other_client = MagicMock()
-        mock_get_clients.return_value = (mock_openai_client, mock_other_client)
-
-        # Setup categorization prompt mock
-        mock_create_categorization_prompt.return_value = {"prompt": "test prompt"}
-
-        # Setup mock response from OpenAI
-        mock_response = MagicMock()
-        mock_choices = MagicMock()
-        mock_message = MagicMock()
-        mock_message.content = '{"request_type": "menu_update", "time_period": "today", "item_name": "burger", "new_price": 10.99}'
-        mock_choices.choices = [MagicMock(message=mock_message)]
-
-        # For new OpenAI client structure (>= 1.0.0)
-        mock_openai_client.chat.completions.create.return_value = mock_choices
-
-        # Create a valid Tool for testing
-        test_tool = Tool(
-            name="test_tool", func=lambda x: "test result", description="A test tool"
-        )
-
+        # Set up the mock categorization function to return our test data when called
+        mock_categorize_query.return_value = {
+            "request_type": "update_price", 
+            "time_period": "today", 
+            "item_name": "burger", 
+            "new_price": 10.99
+        }
+        
+        # Set up mock for query_service.process_query_with_path
+        mock_query_service.process_query_with_path.return_value = {
+            "success": True,
+            "verbal_answer": "Price updated successfully",
+            "text_answer": "The price of burger has been updated to $10.99",
+            "sql_query": "UPDATE items SET price = 10.99 WHERE name ILIKE '%burger%'"
+        }
+        
         # Use a mock callback handler to capture function progress
         mock_callback = MagicMock()
 
-        # Execute the function - we'll just verify it runs without exceptions
-        try:
-            result = integrate_with_existing_flow(
-                "Update the price of the burger to $10.99",
-                [test_tool],
-                callback_handler=mock_callback,
-                context={
-                    "date_filter": {
-                        "start_date": "2023-01-01",
-                        "end_date": "2023-12-31",
-                    }
-                },
-            )
+        # Execute the function
+        result = integrate_with_existing_flow(
+            "Update the price of the burger to $10.99",
+            callback_handler=mock_callback,
+        )
 
-            # Verify the flow was initiated
-            self.assertIsNotNone(result)
+        # Verify the flow was initiated
+        self.assertIsNotNone(result)
 
-            # Verify that our mocks were called appropriately
-            mock_get_clients.assert_called_once()
-            mock_create_categorization_prompt.assert_called_once()
+        # Verify that our mocks were called appropriately
+        mock_categorize_query.assert_called_once()
+        mock_query_service.process_query_with_path.assert_called_once()
+        
+        # Assert the function returned a success result
+        self.assertTrue(result.get("success", False))
+        
+        # Assert the callback was called with our verbal answer
+        mock_callback.on_text.assert_called_once_with("Price updated successfully")
 
-            # We expect the mock_callback to be called with status updates
-            mock_callback.on_text.assert_called()
 
-        except Exception as e:
-            self.fail(f"integrate_with_existing_flow raised an exception: {e}")
+# Only run these tests if the services are available
+@pytest.mark.skipif(not SERVICES_AVAILABLE, reason="New services not available")
+class TestServiceModules(unittest.TestCase):
+    """Tests for the new service modules"""
+    
+    def test_prompt_service_initialization(self):
+        """Test that the prompt service initializes correctly"""
+        # Create a new instance for testing
+        test_prompt_service = PromptService()
+        
+        # Verify it has the expected methods
+        self.assertTrue(hasattr(test_prompt_service, "create_gemini_prompt"))
+        self.assertTrue(hasattr(test_prompt_service, "create_categorization_prompt"))
+        self.assertTrue(hasattr(test_prompt_service, "create_query_categorization_prompt"))
+    
+    @patch("prompts.google_gemini_prompt.create_gemini_prompt")
+    def test_create_gemini_prompt(self, mock_create_gemini_prompt):
+        """Test that the prompt service creates Gemini prompts correctly"""
+        # Setup the mock
+        mock_create_gemini_prompt.return_value = "Test prompt content"
+        
+        # Create a test instance and manually set the mock
+        test_prompt_service = PromptService()
+        test_prompt_service._create_gemini_prompt = mock_create_gemini_prompt
+            
+        # Call the method
+        result = test_prompt_service.create_gemini_prompt(
+            user_query="How many orders yesterday?",
+            context_files={"test": "data"},
+            location_id=42
+        )
+            
+        # Verify the mock was called with correct parameters
+        mock_create_gemini_prompt.assert_called_once()
+            
+        # Verify the result
+        self.assertEqual(result, "Test prompt content")
+    
+    def test_query_categorization(self):
+        """Test that the query service categorizes queries correctly"""
+        # Mock the OpenAI client
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_choice = MagicMock()
+        mock_message = MagicMock()
+        
+        # Set up the mock response structure
+        mock_message.content = '{"request_type": "order_history", "time_period": "yesterday"}'
+        mock_choice.message = mock_message
+        mock_response.choices = [mock_choice]
+        mock_client.chat.completions.create.return_value = mock_response
+        
+        # Call the method with our mock
+        result = query_service.categorize_query(
+            "How many orders did we have yesterday?",
+            openai_client=mock_client
+        )
+        
+        # Verify the result - we don't need to check the exact call parameters here
+        self.assertEqual(result["request_type"], "order_history")
+        self.assertEqual(result["time_period"], "yesterday")
 
 
 if __name__ == "__main__":

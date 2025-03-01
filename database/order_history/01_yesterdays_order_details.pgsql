@@ -16,3 +16,4 @@ LEFT JOIN discounts d on d.order_id = o.id
 WHERE l.id = 62
   AND o.status = 7
   AND (o.updated_at - INTERVAL '7 hours')::date = CURRENT_DATE - INTERVAL '1 day'; 
+

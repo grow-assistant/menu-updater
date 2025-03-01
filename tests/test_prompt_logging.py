@@ -40,7 +40,7 @@ def test_prompts():
     logger.info("Testing create_gemini_prompt...")
     gemini_prompt = create_gemini_prompt(
         context_files=context_files,
-        query="How many restaurants are open today?",
+        user_query="How many restaurants are open today?",
         location_id="location123"
     )
     logger.info(f"Gemini prompt length: {len(gemini_prompt)}")
@@ -48,18 +48,14 @@ def test_prompts():
     
     # Test categorization prompt
     logger.info("Testing create_categorization_prompt...")
-    categorization_prompt = create_categorization_prompt(
-        context_files=context_files,
-        query="What items are in our salad bar?",
-        location_id="location123"
-    )
-    logger.info(f"Categorization prompt length: {len(categorization_prompt)}")
-    logger.info(f"Categorization prompt sample: {categorization_prompt[:100]}...")
+    categorization_prompt = create_categorization_prompt()
+    logger.info(f"Categorization prompt length: {len(str(categorization_prompt))}")
+    logger.info(f"Categorization prompt sample: {str(categorization_prompt)[:100]}...")
     
     # Test query categorization prompt
     logger.info("Testing create_query_categorization_prompt...")
     query_categorization_prompt = create_query_categorization_prompt(
-        query="How many orders did we have yesterday?"
+        user_query="How many orders did we have yesterday?"
     )
     logger.info(f"Query categorization prompt length: {len(query_categorization_prompt)}")
     logger.info(f"Query categorization prompt sample: {query_categorization_prompt[:100]}...")
