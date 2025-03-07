@@ -1,0 +1,76 @@
+2025-03-06 22:23:29,954 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-06 22:23:29,955 - swoop_ai - INFO - Log file: logs\session_20250306_222329\app_main.log
+2025-03-06 22:23:29,955 - services.utils.prompt_loader - INFO - PromptLoader initialized with template directory: resources/prompts/templates
+2025-03-06 22:23:29,956 - swoop_ai - INFO - QueryClassifierInterface initialized
+2025-03-06 22:23:29,958 - services.utils.prompt_loader - INFO - PromptLoader initialized with template directory: resources/prompts/templates
+2025-03-06 22:23:29,958 - swoop_ai.services.sql_generator.prompt_builder - INFO - SQLPromptBuilder initialized
+2025-03-06 22:23:29,958 - swoop_ai.services.sql_generator.sql_generator - INFO - SQLGenerator initialized with max_tokens=2000, temperature=0.2
+2025-03-06 22:23:29,963 - swoop_ai - INFO - SQLExampleLoader initialized with examples directory: ./services/sql_generator/sql_files
+2025-03-06 22:23:31,033 - numexpr.utils - INFO - NumExpr defaulting to 14 threads.
+2025-03-06 22:23:31,417 - swoop_ai - INFO - SQLExecutionLayer initialized with max_rows=1000, timeout=10
+2025-03-06 22:23:31,467 - tts_debug - INFO - ================================================================================
+2025-03-06 22:23:31,467 - tts_debug - INFO - STARTING TTS DEBUGGING
+2025-03-06 22:23:31,467 - tts_debug - INFO - ================================================================================
+2025-03-06 22:23:31,467 - tts_debug - INFO - 
+----------------------------------------
+2025-03-06 22:23:31,467 - tts_debug - INFO - TESTING ELEVENLABS API DIRECTLY
+2025-03-06 22:23:31,467 - tts_debug - INFO - ----------------------------------------
+2025-03-06 22:23:31,467 - tts_debug - INFO - Setting ElevenLabs API key (length: 51)
+2025-03-06 22:23:31,467 - tts_debug - INFO - Fetching available voices from ElevenLabs...
+2025-03-06 22:23:31,658 - tts_debug - INFO - Successfully fetched 27 voices from ElevenLabs
+2025-03-06 22:23:31,659 - tts_debug - INFO - Sample voice: Aria (ID: 9BWtsMINqrJLrRacOk9x)
+2025-03-06 22:23:31,659 - tts_debug - INFO - Generating speech for text: 'This is a test of the ElevenLabs text to speech API.'
+2025-03-06 22:23:33,150 - tts_debug - INFO - Successfully generated 61440 bytes of audio in 1.49s
+2025-03-06 22:23:33,150 - tts_debug - INFO - Audio saved to test_output\test_tts.mp3
+2025-03-06 22:23:33,150 - tts_debug - INFO - 
+----------------------------------------
+2025-03-06 22:23:33,150 - tts_debug - INFO - TESTING ORCHESTRATOR TTS
+2025-03-06 22:23:33,150 - tts_debug - INFO - ----------------------------------------
+2025-03-06 22:23:33,162 - tts_debug - WARNING - TTS is disabled in configuration, enabling it for the test
+2025-03-06 22:23:33,162 - tts_debug - INFO - Initializing orchestrator with configuration
+2025-03-06 22:23:33,162 - services.utils.service_registry - INFO - Registered service: classification
+2025-03-06 22:23:33,162 - services.utils.service_registry - INFO - Registered service: rules
+2025-03-06 22:23:33,162 - services.utils.service_registry - INFO - Registered service: sql_generator
+2025-03-06 22:23:33,162 - services.utils.service_registry - INFO - Registered service: execution
+2025-03-06 22:23:33,162 - services.utils.service_registry - INFO - Registered service: response
+2025-03-06 22:23:33,162 - services.rules.rules_service - INFO - Loading rules from storage
+2025-03-06 22:23:33,167 - services.rules.rules_service - INFO - Assigned implementations to query_rules proxy functions
+2025-03-06 22:23:33,169 - services.rules.rules_service - INFO - Loaded query rules module: menu_inquiry_rules
+2025-03-06 22:23:33,170 - services.rules.rules_service - INFO - Loaded query rules module: order_history_rules
+2025-03-06 22:23:33,171 - services.rules.rules_service - INFO - Loaded query rules module: order_ratings_rules
+2025-03-06 22:23:33,172 - services.rules.rules_service - INFO - Loaded query rules module: popular_items_rules
+2025-03-06 22:23:33,172 - services.rules.rules_service - INFO - Loaded query rules module: trend_analysis_rules
+2025-03-06 22:23:33,173 - services.sql_generator.sql_generator_factory - INFO - Creating SQL generator of type: openai
+2025-03-06 22:23:33,173 - services.sql_generator.sql_generator_factory - INFO - Using OpenAI for SQL generation.
+2025-03-06 22:23:33,221 - services.utils.service_registry - ERROR - Failed to initialize service execution: Could not parse SQLAlchemy URL from string '${DB_CONNECTION_STRING}'
+2025-03-06 22:23:33,221 - tts_debug - ERROR - Error in orchestrator TTS test: Could not parse SQLAlchemy URL from string '${DB_CONNECTION_STRING}'
+2025-03-06 22:23:33,221 - tts_debug - INFO - 
+----------------------------------------
+2025-03-06 22:23:33,221 - tts_debug - INFO - DEBUGGING RESPONSE GENERATOR
+2025-03-06 22:23:33,221 - tts_debug - INFO - ----------------------------------------
+2025-03-06 22:23:33,221 - tts_debug - INFO - OpenAI API key configured: True
+2025-03-06 22:23:33,221 - tts_debug - INFO - ElevenLabs API key configured: True
+2025-03-06 22:23:33,221 - tts_debug - INFO - TTS enabled in config: False
+2025-03-06 22:23:33,221 - tts_debug - INFO - Initializing ResponseGenerator
+2025-03-06 22:23:33,236 - services.response.response_generator - INFO - OpenAI client initialized successfully
+2025-03-06 22:23:33,236 - services.response.response_generator - INFO - ElevenLabs TTS initialized successfully
+2025-03-06 22:23:33,236 - services.response.response_generator - INFO - Response generator personas not enabled. Using defaults - Text: 'professional', Verbal: 'casual'
+2025-03-06 22:23:33,237 - services.response.response_generator - INFO - Found 1 template files
+2025-03-06 22:23:33,237 - services.response.response_generator - INFO - Preloaded 2 templates
+2025-03-06 22:23:33,238 - tts_debug - INFO - ResponseGenerator initialized: True
+2025-03-06 22:23:33,238 - tts_debug - INFO - ElevenLabs API key in ResponseGenerator: True
+2025-03-06 22:23:33,238 - tts_debug - INFO - ElevenLabs client in ResponseGenerator: True
+2025-03-06 22:23:33,238 - tts_debug - INFO - Testing verbal response generation with query: 'What's on the menu today?'
+2025-03-06 22:23:33,238 - services.response.response_generator - INFO - Using persona 'casual' for response generation
+2025-03-06 22:23:33,457 - services.response.response_generator - ERROR - Error generating verbal text: Error code: 401 - {'error': {'message': 'Incorrect API key provided: ${OPENAI*****KEY}. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+2025-03-06 22:23:33,458 - services.response.response_generator - WARNING - No verbal text was generated to convert to speech
+2025-03-06 22:23:33,458 - tts_debug - ERROR - Failed to generate verbal response
+2025-03-06 22:23:33,458 - tts_debug - INFO - 
+================================================================================
+2025-03-06 22:23:33,458 - tts_debug - INFO - TTS DEBUGGING SUMMARY
+2025-03-06 22:23:33,458 - tts_debug - INFO - ================================================================================
+2025-03-06 22:23:33,458 - tts_debug - INFO - ElevenLabs direct test: SUCCESS
+2025-03-06 22:23:33,458 - tts_debug - INFO - Orchestrator TTS test: FAILED
+2025-03-06 22:23:33,458 - tts_debug - INFO - ResponseGenerator test: FAILED
+2025-03-06 22:23:33,458 - tts_debug - INFO - 
+Some TTS tests FAILED

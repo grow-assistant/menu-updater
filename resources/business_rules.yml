@@ -1,0 +1,18 @@
+# Business-specific rules
+rules:
+  order_processing:
+    - "Always verify order status before processing"
+    - "Orders with status=7 are considered completed"
+    - "Orders with status=6 are considered cancelled"
+    - "Orders with status between 3-5 are in progress"
+  reporting:
+    - "Default date range for reports is last 30 days"
+    - "All monetary values are stored in cents but displayed in dollars"
+    - "Time periods should account for timezone differences"
+  locations:
+    - "Default location ID is 62"
+    - "All queries should be scoped to a specific location_id"
+  menu:
+    - "Menu items with enabled=false should not be displayed to customers"
+    - "Price changes should be logged for audit purposes"
+    - "Menu categories should be displayed in their configured order" 

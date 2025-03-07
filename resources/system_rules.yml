@@ -1,0 +1,17 @@
+# System rules for the entire application
+rules:
+  general:
+    - "Use proper SQL syntax with consistent formatting"
+    - "Always include appropriate WHERE clauses for security"
+    - "Handle errors gracefully and provide meaningful error messages"
+    - "Use parameterized queries to prevent SQL injection"
+    - "Limit result sets to prevent performance issues"
+  privacy:
+    - "Do not expose sensitive customer data unnecessarily"
+    - "Mask or truncate sensitive information in responses"
+    - "Follow data minimization principles"
+  performance:
+    - "Use appropriate indexes for queries"
+    - "Avoid unnecessary joins when possible"
+    - "Optimize queries for large datasets"
+    - "Use appropriate caching strategies" 

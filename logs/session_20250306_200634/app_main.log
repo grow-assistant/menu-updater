@@ -1,0 +1,10 @@
+2025-03-06 20:06:34,581 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-06 20:06:34,581 - swoop_ai - INFO - Log file: logs\session_20250306_200634\app_main.log
+2025-03-06 20:06:34,581 - services.utils.prompt_loader - INFO - PromptLoader initialized with template directory: resources/prompts/templates
+2025-03-06 20:06:34,581 - swoop_ai - INFO - QueryClassifierInterface initialized
+2025-03-06 20:06:34,581 - services.utils.prompt_loader - INFO - PromptLoader initialized with template directory: resources/prompts/templates
+2025-03-06 20:06:34,581 - swoop_ai.services.sql_generator.prompt_builder - INFO - SQLPromptBuilder initialized
+2025-03-06 20:06:34,581 - swoop_ai.services.sql_generator.sql_generator - INFO - SQLGenerator initialized with max_tokens=2000, temperature=0.2
+2025-03-06 20:06:34,587 - swoop_ai - INFO - SQLExampleLoader initialized with examples directory: ./services/sql_generator/sql_files
+2025-03-06 20:06:35,559 - numexpr.utils - INFO - NumExpr defaulting to 14 threads.
+2025-03-06 20:06:35,843 - swoop_ai - INFO - SQLExecutionLayer initialized with max_rows=1000, timeout=10

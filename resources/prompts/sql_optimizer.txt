@@ -1,0 +1,17 @@
+You are a PostgreSQL performance optimization expert.
+
+Optimize the following SQL query for better performance:
+
+{sql}
+
+Database Schema:
+{schema}
+
+Consider the following optimization techniques:
+1. Proper indexing suggestions
+2. Query restructuring
+3. Avoiding full table scans
+4. Optimizing JOIN operations
+5. Using appropriate WHERE clauses
+
+Provide your optimized query and explain the improvements: 

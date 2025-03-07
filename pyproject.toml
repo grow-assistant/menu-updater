@@ -1,3 +1,23 @@
 [tool.flake8]
-max-line-length = 120
-exclude = [".git", "__pycache__", "docs/", "archive/", ".pytest_cache/", ".cursor/"] 
+max-line-length = 100
+exclude = [".env", ".git", "__pycache__", "venv", ".venv", "env", "build", "dist"]
+ignore = ["E203", "E266", "E501", "W503"]
+
+[tool.black]
+line-length = 100
+target-version = ['py39']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+''' 

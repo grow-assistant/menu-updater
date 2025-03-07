@@ -1,7 +1,0 @@
-2025-02-28 09:31:12,993 - utils.chat_functions - ERROR - XAI summarization failed: 'XAI_API_URL'
-2025-02-28 09:31:12,993 - utils.chat_functions - INFO - 
-==================================================
-New Chat Request: What are your popular menu items?
-==================================================
-2025-02-28 09:31:12,993 - utils.chat_functions - INFO - Received categorization response.
-2025-02-28 09:31:13,006 - utils.chat_functions - INFO - Request type: analytics

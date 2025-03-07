@@ -1,0 +1,319 @@
+2025-03-06 19:59:32,231 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-06 19:59:32,231 - swoop_ai - INFO - Log file: C:\Python\ai-menu-updater-refactored\logs\app.log
+2025-03-06 19:59:32,245 - services.utils.service_registry - INFO - Registered service: classification
+2025-03-06 19:59:32,246 - services.utils.service_registry - INFO - Registered service: rules
+2025-03-06 19:59:32,247 - services.utils.service_registry - INFO - Registered service: sql_generator
+2025-03-06 19:59:32,247 - services.utils.service_registry - INFO - Registered service: execution
+2025-03-06 19:59:32,247 - services.utils.service_registry - INFO - Registered service: response
+2025-03-06 19:59:32,248 - services.rules.rules_service - INFO - Loading rules from storage
+2025-03-06 19:59:32,254 - services.rules.rules_service - INFO - Assigned implementations to query_rules proxy functions
+2025-03-06 19:59:32,258 - services.rules.rules_service - INFO - Loaded query rules module: menu_inquiry_rules
+2025-03-06 19:59:32,259 - services.rules.rules_service - INFO - Loaded query rules module: order_history_rules
+2025-03-06 19:59:32,260 - services.rules.rules_service - INFO - Loaded query rules module: order_ratings_rules
+2025-03-06 19:59:32,261 - services.rules.rules_service - INFO - Loaded query rules module: popular_items_rules
+2025-03-06 19:59:32,262 - services.rules.rules_service - INFO - Loaded query rules module: trend_analysis_rules
+2025-03-06 19:59:32,263 - services.sql_generator.sql_generator_factory - INFO - Creating SQL generator of type: openai
+2025-03-06 19:59:32,263 - services.sql_generator.sql_generator_factory - INFO - Using OpenAI for SQL generation.
+2025-03-06 19:59:32,429 - services.execution.sql_executor - INFO - SQLExecutor initialized with pool_size=8, max_overflow=5
+2025-03-06 19:59:32,465 - services.execution.sql_executor - INFO - SUCCESS - Database connection validated
+2025-03-06 19:59:32,483 - services.response.response_generator - INFO - OpenAI client initialized successfully
+2025-03-06 19:59:32,484 - services.response.response_generator - INFO - ElevenLabs TTS initialized successfully
+2025-03-06 19:59:32,484 - services.response.response_generator - INFO - Response generator personas not enabled. Using defaults - Text: 'professional', Verbal: 'casual'
+2025-03-06 19:59:32,484 - services.response.response_generator - INFO - Found 1 template files
+2025-03-06 19:59:32,485 - services.response.response_generator - INFO - Preloaded 2 templates
+2025-03-06 19:59:43,560 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-06 19:59:43,561 - swoop_ai - INFO - Log file: C:\Python\ai-menu-updater-refactored\logs\app.log
+2025-03-06 19:59:43,593 - services.orchestrator.orchestrator - INFO - Processing query: 'How many orders were completed on 2/21/2025?' (ID: eb087df7-df1b-4c5f-9490-f9fc3c316fd9)
+2025-03-06 19:59:43,975 - services.orchestrator.orchestrator - INFO - Query classified as: order_history
+2025-03-06 19:59:43,976 - services.rules.rules_service - INFO - Processing rules for category: order_history
+2025-03-06 19:59:43,978 - services.rules.rules_service - INFO - Loaded 16 SQL patterns from directory: order_history
+2025-03-06 19:59:43,979 - services.rules.rules_service - INFO - Added query-specific rules for category 'order_history' from module 'order_history_rules'
+2025-03-06 19:59:43,979 - services.sql_generator.openai_sql_generator - INFO - Built SQL generation prompt with 0 examples and context for order_history
+2025-03-06 19:59:43,980 - services.sql_generator.openai_sql_generator - INFO - Generating SQL with model: gpt-4o-mini, attempt: 1/3
+2025-03-06 19:59:45,095 - services.execution.sql_executor - INFO - SQL executed successfully: 1 rows affected/returned in 0.01s
+2025-03-06 19:59:45,095 - services.response.response_generator - INFO - No specific template found for category: order_history, using default
+2025-03-06 19:59:45,095 - services.response.response_generator - INFO - Using persona 'casual' for response generation
+2025-03-06 19:59:45,096 - services.response.response_generator - INFO - Response generation prompt logged to: logs\ai_prompts\openai_response_c52db40d.log
+2025-03-06 19:59:46,914 - services.orchestrator.orchestrator - INFO - No verbal response was generated
+2025-03-06 19:59:46,915 - services.orchestrator.orchestrator - INFO - Query processing completed in 3.32s
+2025-03-06 19:59:46,915 - services.orchestrator.orchestrator - INFO - 
+                Performance Breakdown:
+                - Classification: 0.38s
+                - Rule Processing: 0.00s
+                - SQL Generation: 1.10s
+                - SQL Execution: 0.01s
+                - Text Response: 1.82s
+                - TTS Generation: 0.00s
+                - Other/Unaccounted: 0.01s
+                - Total Time: 3.32s
+            
+2025-03-06 20:06:35,915 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-06 20:06:35,915 - swoop_ai - INFO - Log file: C:\Python\ai-menu-updater-refactored\logs\app.log
+2025-03-06 20:06:35,922 - services.utils.service_registry - INFO - Registered service: classification
+2025-03-06 20:06:35,923 - services.utils.service_registry - INFO - Registered service: rules
+2025-03-06 20:06:35,923 - services.utils.service_registry - INFO - Registered service: sql_generator
+2025-03-06 20:06:35,924 - services.utils.service_registry - INFO - Registered service: execution
+2025-03-06 20:06:35,924 - services.utils.service_registry - INFO - Registered service: response
+2025-03-06 20:06:35,924 - services.rules.rules_service - INFO - Loading rules from storage
+2025-03-06 20:06:35,930 - services.rules.rules_service - INFO - Assigned implementations to query_rules proxy functions
+2025-03-06 20:06:35,932 - services.rules.rules_service - INFO - Loaded query rules module: menu_inquiry_rules
+2025-03-06 20:06:35,932 - services.rules.rules_service - INFO - Loaded query rules module: order_history_rules
+2025-03-06 20:06:35,934 - services.rules.rules_service - INFO - Loaded query rules module: order_ratings_rules
+2025-03-06 20:06:35,934 - services.rules.rules_service - INFO - Loaded query rules module: popular_items_rules
+2025-03-06 20:06:35,935 - services.rules.rules_service - INFO - Loaded query rules module: trend_analysis_rules
+2025-03-06 20:06:35,935 - services.sql_generator.sql_generator_factory - INFO - Creating SQL generator of type: openai
+2025-03-06 20:06:35,935 - services.sql_generator.sql_generator_factory - INFO - Using OpenAI for SQL generation.
+2025-03-06 20:06:36,092 - services.execution.sql_executor - INFO - SQLExecutor initialized with pool_size=8, max_overflow=5
+2025-03-06 20:06:36,142 - services.execution.sql_executor - INFO - SUCCESS - Database connection validated
+2025-03-06 20:06:36,155 - services.response.response_generator - INFO - OpenAI client initialized successfully
+2025-03-06 20:06:36,155 - services.response.response_generator - INFO - ElevenLabs TTS initialized successfully
+2025-03-06 20:06:36,155 - services.response.response_generator - INFO - Response generator personas not enabled. Using defaults - Text: 'professional', Verbal: 'casual'
+2025-03-06 20:06:36,155 - services.response.response_generator - INFO - Found 1 template files
+2025-03-06 20:06:36,156 - services.response.response_generator - INFO - Preloaded 2 templates
+2025-03-06 20:06:47,511 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-06 20:06:47,512 - swoop_ai - INFO - Log file: C:\Python\ai-menu-updater-refactored\logs\app.log
+2025-03-06 20:06:47,540 - services.orchestrator.orchestrator - INFO - Processing query: 'How many orders were completed on 2/21/2025?' (ID: 0de93134-4c74-45d5-ad0f-22d984068580)
+2025-03-06 20:06:48,031 - services.orchestrator.orchestrator - INFO - Query classified as: order_history
+2025-03-06 20:06:48,032 - services.rules.rules_service - INFO - Processing rules for category: order_history
+2025-03-06 20:06:48,035 - services.rules.rules_service - INFO - Loaded 16 SQL patterns from directory: order_history
+2025-03-06 20:06:48,036 - services.rules.rules_service - INFO - Added query-specific rules for category 'order_history' from module 'order_history_rules'
+2025-03-06 20:06:48,036 - services.sql_generator.openai_sql_generator - INFO - Built SQL generation prompt with 0 examples and context for order_history
+2025-03-06 20:06:48,037 - services.sql_generator.openai_sql_generator - INFO - Generating SQL with model: gpt-4o-mini, attempt: 1/3
+2025-03-06 20:06:49,143 - services.execution.sql_executor - INFO - SQL executed successfully: 1 rows affected/returned in 0.01s
+2025-03-06 20:06:49,144 - services.response.response_generator - INFO - No specific template found for category: order_history, using default
+2025-03-06 20:06:49,144 - services.response.response_generator - INFO - Using persona 'casual' for response generation
+2025-03-06 20:06:49,145 - services.response.response_generator - INFO - Response generation prompt logged to: logs\ai_prompts\openai_response_a54f74d0.log
+2025-03-06 20:06:50,182 - services.orchestrator.orchestrator - INFO - No verbal response was generated
+2025-03-06 20:06:50,183 - services.orchestrator.orchestrator - INFO - Query processing completed in 2.64s
+2025-03-06 20:06:50,183 - services.orchestrator.orchestrator - INFO - 
+                Performance Breakdown:
+                - Classification: 0.49s
+                - Rule Processing: 0.00s
+                - SQL Generation: 1.10s
+                - SQL Execution: 0.01s
+                - Text Response: 1.04s
+                - TTS Generation: 0.00s
+                - Other/Unaccounted: 0.01s
+                - Total Time: 2.64s
+            
+2025-03-06 20:09:55,174 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-06 20:09:55,174 - swoop_ai - INFO - Log file: C:\Python\ai-menu-updater-refactored\logs\app.log
+2025-03-06 20:09:55,194 - services.utils.service_registry - INFO - Registered service: classification
+2025-03-06 20:09:55,194 - services.utils.service_registry - INFO - Registered service: rules
+2025-03-06 20:09:55,195 - services.utils.service_registry - INFO - Registered service: sql_generator
+2025-03-06 20:09:55,195 - services.utils.service_registry - INFO - Registered service: execution
+2025-03-06 20:09:55,195 - services.utils.service_registry - INFO - Registered service: response
+2025-03-06 20:09:55,195 - services.rules.rules_service - INFO - Loading rules from storage
+2025-03-06 20:09:55,201 - services.rules.rules_service - INFO - Assigned implementations to query_rules proxy functions
+2025-03-06 20:09:55,204 - services.rules.rules_service - INFO - Loaded query rules module: menu_inquiry_rules
+2025-03-06 20:09:55,206 - services.rules.rules_service - INFO - Loaded query rules module: order_history_rules
+2025-03-06 20:09:55,207 - services.rules.rules_service - INFO - Loaded query rules module: order_ratings_rules
+2025-03-06 20:09:55,208 - services.rules.rules_service - INFO - Loaded query rules module: popular_items_rules
+2025-03-06 20:09:55,210 - services.rules.rules_service - INFO - Loaded query rules module: trend_analysis_rules
+2025-03-06 20:09:55,210 - services.sql_generator.sql_generator_factory - INFO - Creating SQL generator of type: openai
+2025-03-06 20:09:55,211 - services.sql_generator.sql_generator_factory - INFO - Using OpenAI for SQL generation.
+2025-03-06 20:09:55,634 - services.execution.sql_executor - INFO - SQLExecutor initialized with pool_size=8, max_overflow=5
+2025-03-06 20:09:55,741 - services.execution.sql_executor - INFO - SUCCESS - Database connection validated
+2025-03-06 20:09:55,767 - services.response.response_generator - INFO - OpenAI client initialized successfully
+2025-03-06 20:09:55,768 - services.response.response_generator - INFO - ElevenLabs TTS initialized successfully
+2025-03-06 20:09:55,769 - services.response.response_generator - INFO - Response generator personas not enabled. Using defaults - Text: 'professional', Verbal: 'casual'
+2025-03-06 20:09:55,770 - services.response.response_generator - INFO - Found 1 template files
+2025-03-06 20:09:55,770 - services.response.response_generator - INFO - Preloaded 2 templates
+2025-03-06 22:15:00,918 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-06 22:15:00,918 - swoop_ai - INFO - Log file: C:\Python\ai-menu-updater-refactored\logs\app.log
+2025-03-06 22:15:00,942 - services.utils.service_registry - INFO - Registered service: classification
+2025-03-06 22:15:00,943 - services.utils.service_registry - INFO - Registered service: rules
+2025-03-06 22:15:00,943 - services.utils.service_registry - INFO - Registered service: sql_generator
+2025-03-06 22:15:00,943 - services.utils.service_registry - INFO - Registered service: execution
+2025-03-06 22:15:00,945 - services.utils.service_registry - INFO - Registered service: response
+2025-03-06 22:15:00,945 - services.rules.rules_service - INFO - Loading rules from storage
+2025-03-06 22:15:00,947 - services.rules.rules_service - INFO - Assigned implementations to query_rules proxy functions
+2025-03-06 22:15:00,949 - services.rules.rules_service - INFO - Loaded query rules module: menu_inquiry_rules
+2025-03-06 22:15:00,951 - services.rules.rules_service - INFO - Loaded query rules module: order_history_rules
+2025-03-06 22:15:00,952 - services.rules.rules_service - INFO - Loaded query rules module: order_ratings_rules
+2025-03-06 22:15:00,952 - services.rules.rules_service - INFO - Loaded query rules module: popular_items_rules
+2025-03-06 22:15:00,953 - services.rules.rules_service - INFO - Loaded query rules module: trend_analysis_rules
+2025-03-06 22:15:00,955 - services.sql_generator.sql_generator_factory - INFO - Creating SQL generator of type: openai
+2025-03-06 22:15:00,956 - services.sql_generator.sql_generator_factory - INFO - Using OpenAI for SQL generation.
+2025-03-06 22:15:01,118 - services.execution.sql_executor - INFO - SQLExecutor initialized with pool_size=8, max_overflow=5
+2025-03-06 22:15:01,171 - services.execution.sql_executor - INFO - SUCCESS - Database connection validated
+2025-03-06 22:15:01,188 - services.response.response_generator - INFO - OpenAI client initialized successfully
+2025-03-06 22:15:01,189 - services.response.response_generator - INFO - ElevenLabs TTS initialized successfully
+2025-03-06 22:15:01,189 - services.response.response_generator - INFO - Response generator personas not enabled. Using defaults - Text: 'professional', Verbal: 'casual'
+2025-03-06 22:15:01,190 - services.response.response_generator - INFO - Found 1 template files
+2025-03-06 22:15:01,191 - services.response.response_generator - INFO - Preloaded 2 templates
+2025-03-06 22:15:11,175 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-06 22:15:11,175 - swoop_ai - INFO - Log file: C:\Python\ai-menu-updater-refactored\logs\app.log
+2025-03-06 22:15:11,206 - services.orchestrator.orchestrator - INFO - Processing query: 'How many orders last week' (ID: ffbf604f-895e-42fb-99ad-6a5c67c353bb)
+2025-03-06 22:15:11,592 - services.orchestrator.orchestrator - INFO - Query classified as: order_history
+2025-03-06 22:15:11,593 - services.rules.rules_service - INFO - Processing rules for category: order_history
+2025-03-06 22:15:11,596 - services.rules.rules_service - INFO - Loaded 16 SQL patterns from directory: order_history
+2025-03-06 22:15:11,596 - services.rules.rules_service - INFO - Added query-specific rules for category 'order_history' from module 'order_history_rules'
+2025-03-06 22:15:11,597 - services.sql_generator.openai_sql_generator - INFO - Built SQL generation prompt with 0 examples and context for order_history
+2025-03-06 22:15:11,598 - services.sql_generator.openai_sql_generator - INFO - Generating SQL with model: gpt-4o-mini, attempt: 1/3
+2025-03-06 22:15:12,687 - services.execution.sql_executor - INFO - SQL executed successfully: 1 rows affected/returned in 0.02s
+2025-03-06 22:15:12,688 - services.response.response_generator - INFO - No specific template found for category: order_history, using default
+2025-03-06 22:15:12,688 - services.response.response_generator - INFO - Using persona 'casual' for response generation
+2025-03-06 22:15:12,689 - services.response.response_generator - INFO - Response generation prompt logged to: logs\ai_prompts\openai_response_871446c1.log
+2025-03-06 22:15:14,017 - services.orchestrator.orchestrator - INFO - No verbal response was generated
+2025-03-06 22:15:14,018 - services.orchestrator.orchestrator - INFO - Query processing completed in 2.81s
+2025-03-06 22:15:14,018 - services.orchestrator.orchestrator - INFO - 
+                Performance Breakdown:
+                - Classification: 0.39s
+                - Rule Processing: 0.00s
+                - SQL Generation: 1.07s
+                - SQL Execution: 0.02s
+                - Text Response: 1.33s
+                - TTS Generation: 0.00s
+                - Other/Unaccounted: 0.01s
+                - Total Time: 2.81s
+            
+2025-03-06 22:20:54,538 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-06 22:20:54,546 - swoop_ai - INFO - Log file: C:\Python\ai-menu-updater-refactored\logs\app.log
+2025-03-06 22:20:54,556 - services.utils.service_registry - INFO - Registered service: classification
+2025-03-06 22:20:54,556 - services.utils.service_registry - INFO - Registered service: rules
+2025-03-06 22:20:54,556 - services.utils.service_registry - INFO - Registered service: sql_generator
+2025-03-06 22:20:54,556 - services.utils.service_registry - INFO - Registered service: execution
+2025-03-06 22:20:54,556 - services.utils.service_registry - INFO - Registered service: response
+2025-03-06 22:20:54,557 - services.rules.rules_service - INFO - Loading rules from storage
+2025-03-06 22:20:54,561 - services.rules.rules_service - INFO - Assigned implementations to query_rules proxy functions
+2025-03-06 22:20:54,564 - services.rules.rules_service - INFO - Loaded query rules module: menu_inquiry_rules
+2025-03-06 22:20:54,564 - services.rules.rules_service - INFO - Loaded query rules module: order_history_rules
+2025-03-06 22:20:54,565 - services.rules.rules_service - INFO - Loaded query rules module: order_ratings_rules
+2025-03-06 22:20:54,566 - services.rules.rules_service - INFO - Loaded query rules module: popular_items_rules
+2025-03-06 22:20:54,566 - services.rules.rules_service - INFO - Loaded query rules module: trend_analysis_rules
+2025-03-06 22:20:54,566 - services.sql_generator.sql_generator_factory - INFO - Creating SQL generator of type: openai
+2025-03-06 22:20:54,567 - services.sql_generator.sql_generator_factory - INFO - Using OpenAI for SQL generation.
+2025-03-06 22:20:54,657 - services.execution.sql_executor - INFO - SQLExecutor initialized with pool_size=8, max_overflow=5
+2025-03-06 22:20:54,769 - services.execution.sql_executor - INFO - SUCCESS - Database connection validated
+2025-03-06 22:20:54,786 - services.response.response_generator - INFO - OpenAI client initialized successfully
+2025-03-06 22:20:54,787 - services.response.response_generator - INFO - ElevenLabs TTS initialized successfully
+2025-03-06 22:20:54,787 - services.response.response_generator - INFO - Response generator personas not enabled. Using defaults - Text: 'professional', Verbal: 'casual'
+2025-03-06 22:20:54,788 - services.response.response_generator - INFO - Found 1 template files
+2025-03-06 22:20:54,789 - services.response.response_generator - INFO - Preloaded 2 templates
+2025-03-06 22:25:18,133 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-06 22:25:18,133 - swoop_ai - INFO - Log file: C:\Python\ai-menu-updater-refactored\logs\app.log
+2025-03-06 22:25:18,151 - services.utils.service_registry - INFO - Registered service: classification
+2025-03-06 22:25:18,151 - services.utils.service_registry - INFO - Registered service: rules
+2025-03-06 22:25:18,152 - services.utils.service_registry - INFO - Registered service: sql_generator
+2025-03-06 22:25:18,152 - services.utils.service_registry - INFO - Registered service: execution
+2025-03-06 22:25:18,152 - services.utils.service_registry - INFO - Registered service: response
+2025-03-06 22:25:18,152 - services.rules.rules_service - INFO - Loading rules from storage
+2025-03-06 22:25:18,155 - services.rules.rules_service - INFO - Assigned implementations to query_rules proxy functions
+2025-03-06 22:25:18,159 - services.rules.rules_service - INFO - Loaded query rules module: menu_inquiry_rules
+2025-03-06 22:25:18,159 - services.rules.rules_service - INFO - Loaded query rules module: order_history_rules
+2025-03-06 22:25:18,160 - services.rules.rules_service - INFO - Loaded query rules module: order_ratings_rules
+2025-03-06 22:25:18,160 - services.rules.rules_service - INFO - Loaded query rules module: popular_items_rules
+2025-03-06 22:25:18,161 - services.rules.rules_service - INFO - Loaded query rules module: trend_analysis_rules
+2025-03-06 22:25:18,161 - services.sql_generator.sql_generator_factory - INFO - Creating SQL generator of type: openai
+2025-03-06 22:25:18,161 - services.sql_generator.sql_generator_factory - INFO - Using OpenAI for SQL generation.
+2025-03-06 22:25:18,329 - services.execution.sql_executor - INFO - SQLExecutor initialized with pool_size=8, max_overflow=5
+2025-03-06 22:25:18,367 - services.execution.sql_executor - INFO - SUCCESS - Database connection validated
+2025-03-06 22:25:18,383 - services.response.response_generator - INFO - OpenAI client initialized successfully
+2025-03-06 22:25:18,383 - services.response.response_generator - INFO - ElevenLabs TTS initialized successfully
+2025-03-06 22:25:18,383 - services.response.response_generator - INFO - Response generator personas not enabled. Using defaults - Text: 'professional', Verbal: 'casual'
+2025-03-06 22:25:18,384 - services.response.response_generator - INFO - Found 1 template files
+2025-03-06 22:25:18,385 - services.response.response_generator - INFO - Preloaded 2 templates
+2025-03-06 22:25:30,365 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-06 22:25:30,365 - swoop_ai - INFO - Log file: C:\Python\ai-menu-updater-refactored\logs\app.log
+2025-03-06 22:25:30,394 - services.orchestrator.orchestrator - INFO - Processing query: 'How many orders on 2/21/2025?' (ID: cafc9ad0-f2e6-41fa-b297-bc02bddd7895)
+2025-03-06 22:25:30,395 - services.orchestrator.orchestrator - INFO - Verbal response not requested in context (fast_mode=True)
+2025-03-06 22:25:30,754 - services.orchestrator.orchestrator - INFO - Query classified as: order_history
+2025-03-06 22:25:30,755 - services.rules.rules_service - INFO - Processing rules for category: order_history
+2025-03-06 22:25:30,757 - services.rules.rules_service - INFO - Loaded 16 SQL patterns from directory: order_history
+2025-03-06 22:25:30,759 - services.rules.rules_service - INFO - Added query-specific rules for category 'order_history' from module 'order_history_rules'
+2025-03-06 22:25:30,760 - services.sql_generator.openai_sql_generator - INFO - Built SQL generation prompt with 0 examples and context for order_history
+2025-03-06 22:25:30,766 - services.sql_generator.openai_sql_generator - INFO - Generating SQL with model: gpt-4o-mini, attempt: 1/3
+2025-03-06 22:25:31,833 - services.execution.sql_executor - INFO - SQL executed successfully: 1 rows affected/returned in 0.01s
+2025-03-06 22:25:31,834 - services.response.response_generator - INFO - [API_CALL:3765037a] Starting text response generation for query: 'How many orders on 2/21/2025?...'
+2025-03-06 22:25:31,834 - services.response.response_generator - INFO - [API_CALL:3765037a] Category: order_history, Model: gpt-4o
+2025-03-06 22:25:31,835 - services.response.response_generator - INFO - No specific template found for category: order_history, using default
+2025-03-06 22:25:31,835 - services.response.response_generator - INFO - Using persona 'casual' for response generation
+2025-03-06 22:25:31,836 - services.response.response_generator - INFO - Response generation prompt logged to: logs\ai_prompts\openai_response_7bb058c1.log
+2025-03-06 22:25:31,836 - services.response.response_generator - INFO - Sending request to OpenAI API with model: gpt-4o
+2025-03-06 22:25:33,029 - services.response.response_generator - INFO - [API_CALL:46ad7ff1] openai.chat.completions.create - SUCCESS - 1.19s
+2025-03-06 22:25:33,031 - services.orchestrator.orchestrator - INFO - No verbal response was generated
+2025-03-06 22:25:33,031 - services.orchestrator.orchestrator - INFO - Verbal response skipped because fast_mode is enabled
+2025-03-06 22:25:33,033 - services.orchestrator.orchestrator - INFO - Query processing completed in 2.64s
+2025-03-06 22:25:33,034 - services.orchestrator.orchestrator - INFO - 
+                Performance Breakdown:
+                - Classification: 0.36s
+                - Rule Processing: 0.00s
+                - SQL Generation: 1.06s
+                - SQL Execution: 0.02s
+                - Text Response: 1.20s
+                - TTS Generation: 0.00s
+                - Other/Unaccounted: 0.01s
+                - Total Time: 2.64s
+            
+2025-03-06 22:27:15,125 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-06 22:27:15,125 - swoop_ai - INFO - Log file: C:\Python\ai-menu-updater-refactored\logs\app.log
+2025-03-06 22:27:15,136 - services.utils.service_registry - INFO - Registered service: classification
+2025-03-06 22:27:15,136 - services.utils.service_registry - INFO - Registered service: rules
+2025-03-06 22:27:15,136 - services.utils.service_registry - INFO - Registered service: sql_generator
+2025-03-06 22:27:15,136 - services.utils.service_registry - INFO - Registered service: execution
+2025-03-06 22:27:15,136 - services.utils.service_registry - INFO - Registered service: response
+2025-03-06 22:27:15,136 - services.rules.rules_service - INFO - Loading rules from storage
+2025-03-06 22:27:15,141 - services.rules.rules_service - INFO - Assigned implementations to query_rules proxy functions
+2025-03-06 22:27:15,142 - services.rules.rules_service - INFO - Loaded query rules module: menu_inquiry_rules
+2025-03-06 22:27:15,142 - services.rules.rules_service - INFO - Loaded query rules module: order_history_rules
+2025-03-06 22:27:15,143 - services.rules.rules_service - INFO - Loaded query rules module: order_ratings_rules
+2025-03-06 22:27:15,143 - services.rules.rules_service - INFO - Loaded query rules module: popular_items_rules
+2025-03-06 22:27:15,144 - services.rules.rules_service - INFO - Loaded query rules module: trend_analysis_rules
+2025-03-06 22:27:15,144 - services.sql_generator.sql_generator_factory - INFO - Creating SQL generator of type: openai
+2025-03-06 22:27:15,144 - services.sql_generator.sql_generator_factory - INFO - Using OpenAI for SQL generation.
+2025-03-06 22:27:15,337 - services.execution.sql_executor - INFO - SQLExecutor initialized with pool_size=8, max_overflow=5
+2025-03-06 22:27:15,367 - services.execution.sql_executor - INFO - SUCCESS - Database connection validated
+2025-03-06 22:27:15,389 - services.response.response_generator - INFO - OpenAI client initialized successfully
+2025-03-06 22:27:15,390 - services.response.response_generator - INFO - ElevenLabs TTS initialized successfully
+2025-03-06 22:27:15,390 - services.response.response_generator - INFO - Response generator personas not enabled. Using defaults - Text: 'professional', Verbal: 'casual'
+2025-03-06 22:27:15,390 - services.response.response_generator - INFO - Found 1 template files
+2025-03-06 22:27:15,391 - services.response.response_generator - INFO - Preloaded 2 templates
+2025-03-06 22:27:30,660 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-06 22:27:30,660 - swoop_ai - INFO - Log file: C:\Python\ai-menu-updater-refactored\logs\app.log
+2025-03-06 22:27:30,690 - services.orchestrator.orchestrator - INFO - Processing query: 'How many orders were completed on 2/21/2025?' (ID: 0e949a37-56e4-4cd8-a63a-6942005987a2)
+2025-03-06 22:27:30,691 - services.orchestrator.orchestrator - INFO - Verbal response requested, disabling fast_mode (original fast_mode=False)
+2025-03-06 22:27:30,692 - services.orchestrator.orchestrator - INFO - Attempting to initialize ElevenLabs for TTS
+2025-03-06 22:27:30,692 - services.orchestrator.orchestrator - INFO - Setting ElevenLabs API key (length: 51)
+2025-03-06 22:27:31,049 - services.orchestrator.orchestrator - INFO - ElevenLabs API key validated successfully, found 27 voices
+2025-03-06 22:27:31,050 - services.orchestrator.orchestrator - INFO - ElevenLabs initialized successfully for TTS
+2025-03-06 22:27:31,445 - services.orchestrator.orchestrator - INFO - Query classified as: order_history
+2025-03-06 22:27:31,446 - services.rules.rules_service - INFO - Processing rules for category: order_history
+2025-03-06 22:27:31,451 - services.rules.rules_service - INFO - Loaded 16 SQL patterns from directory: order_history
+2025-03-06 22:27:31,451 - services.rules.rules_service - INFO - Added query-specific rules for category 'order_history' from module 'order_history_rules'
+2025-03-06 22:27:31,452 - services.sql_generator.openai_sql_generator - INFO - Built SQL generation prompt with 0 examples and context for order_history
+2025-03-06 22:27:31,453 - services.sql_generator.openai_sql_generator - INFO - Generating SQL with model: gpt-4o-mini, attempt: 1/3
+2025-03-06 22:27:32,441 - services.execution.sql_executor - INFO - SQL executed successfully: 1 rows affected/returned in 0.01s
+2025-03-06 22:27:32,441 - services.response.response_generator - INFO - [API_CALL:4b2b1115] Starting text response generation for query: 'How many orders were completed on 2/21/2025?...'
+2025-03-06 22:27:32,441 - services.response.response_generator - INFO - [API_CALL:4b2b1115] Category: order_history, Model: gpt-4o
+2025-03-06 22:27:32,441 - services.response.response_generator - INFO - No specific template found for category: order_history, using default
+2025-03-06 22:27:32,442 - services.response.response_generator - INFO - Using persona 'casual' for response generation
+2025-03-06 22:27:32,442 - services.response.response_generator - INFO - Response generation prompt logged to: logs\ai_prompts\openai_response_57cfe086.log
+2025-03-06 22:27:32,443 - services.response.response_generator - INFO - Sending request to OpenAI API with model: gpt-4o
+2025-03-06 22:27:33,331 - services.response.response_generator - INFO - [API_CALL:0150ce1a] openai.chat.completions.create - SUCCESS - 0.89s
+2025-03-06 22:27:33,337 - services.response.response_generator - INFO - Using persona 'casual' for response generation
+2025-03-06 22:27:34,170 - services.response.response_generator - INFO - Verbal text generated: 'Hey there! On February 21, 2025, we wrapped up a total of 4 orders. Not too shabby, right? If you ne...' (131 chars)
+2025-03-06 22:27:34,170 - services.response.response_generator - INFO - Using ElevenLabs voice ID: UgBBYS2sOqTuMpoF3BR0
+2025-03-06 22:27:34,171 - services.response.response_generator - INFO - Calling ElevenLabs API for text-to-speech conversion
+2025-03-06 22:27:36,219 - services.response.response_generator - INFO - [API_CALL:9f89ad60] elevenlabs.generate - SUCCESS - 2.05s
+2025-03-06 22:27:36,220 - services.response.response_generator - INFO - [VERBAL_API_CALL:9f89ad60] Successfully generated 135000 bytes of audio data
+2025-03-06 22:27:36,220 - services.response.response_generator - INFO - Using persona 'casual' for response generation
+2025-03-06 22:27:37,087 - services.response.response_generator - INFO - Verbal text generated: 'Hey there! On February 21, 2025, we completed 4 orders. Not too shabby, right? Let me know if you ne...' (117 chars)
+2025-03-06 22:27:37,088 - services.response.response_generator - INFO - Using ElevenLabs voice ID: UgBBYS2sOqTuMpoF3BR0
+2025-03-06 22:27:37,089 - services.response.response_generator - INFO - Calling ElevenLabs API for text-to-speech conversion
+2025-03-06 22:27:38,952 - services.response.response_generator - INFO - [API_CALL:dc0a6ebb] elevenlabs.generate - SUCCESS - 1.86s
+2025-03-06 22:27:38,955 - services.response.response_generator - INFO - [VERBAL_API_CALL:dc0a6ebb] Successfully generated 111177 bytes of audio data
+2025-03-06 22:27:38,956 - services.orchestrator.orchestrator - INFO - Verbal response generated: 0 chars, 135000 bytes
+2025-03-06 22:27:38,956 - services.orchestrator.orchestrator - INFO - Query processing completed in 8.27s
+2025-03-06 22:27:38,956 - services.orchestrator.orchestrator - INFO - 
+                Performance Breakdown:
+                - Classification: 0.39s
+                - Rule Processing: 0.01s
+                - SQL Generation: 0.97s
+                - SQL Execution: 0.02s
+                - Text Response: 3.78s
+                - TTS Generation: 2.74s
+                - Other/Unaccounted: 0.36s
+                - Total Time: 8.27s
+            
+2025-03-06 22:27:38,961 - frontend - INFO - Playing verbal response audio: 135000 bytes

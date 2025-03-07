@@ -1,0 +1,119 @@
+# Swoop AI Configuration
+
+# API Keys
+api:
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4o-mini"
+  gemini:
+    api_key: "${GEMINI_API_KEY}"
+    model: "gemini-1.5-Flash"
+  elevenlabs:
+    api_key: "${ELEVENLABS_API_KEY}"
+    voice_id: "UgBBYS2sOqTuMpoF3BR0"  # Casual voice from test_eleven_labs.py
+    model: "eleven_multilingual_v2"    # Default model from test_eleven_labs.py
+
+# Feature Flags
+features:
+  enable_tts: true                    # Enable text-to-speech functionality
+  enable_rich_media: true             # Enable rich media responses (charts, tables)
+  enable_caching: true                # Enable response caching
+  enable_conversation_history: true   # Enable conversation history tracking
+  enable_persona_switching: true      # Enable dynamic persona switching
+  debug_mode: false                   # Enable debug mode for more verbose logging
+
+# Database Configuration
+database:
+  connection_string: "${DB_CONNECTION_STRING}"
+  user: ${DB_USER}
+  password: ${DB_PASSWORD}
+  host: ${DB_HOST}
+  port: ${DB_PORT}
+  name: ${DB_NAME}
+  # Optimized connection settings based on test results
+  timeout: 5                           # Reduced from 10 seconds
+  connect_timeout: 3                   # Short connection timeout (3 seconds)
+  command_timeout: 5                   # Command execution timeout (5 seconds)
+  pool_size: 8                         # Moderate increase from original 5
+  max_overflow: 5                      # Moderate value for handling traffic spikes
+  min_pool_size: 3                     # Ensure we always keep at least 3 ready connections
+  max_pool_size: 13                    # Moderate increase from original 10
+  pool_timeout: 8                      # Slightly increased from original 5 seconds
+  pool_recycle: 600                    # 10 minutes instead of 5
+  pool_pre_ping: false                  # Might be causing overhead
+  max_inactive_connection_lifetime: 300 # 5 minutes
+  max_retries: 2                       # Increased number of retry attempts
+  retry_delay: 0.5                     # Delay between retries in seconds
+  application_name: "ai_menu_updater"  # For tracking in database logs
+  connect_args:
+    keepalives: 1                      # Enable keepalives to maintain connections
+    keepalives_idle: 30                # Seconds between keepalives
+    keepalives_interval: 10            # Seconds between keepalive probes
+    keepalives_count: 1                # Number of keepalive probes
+    sslmode: "prefer"  # Changed from 'ssl' to 'sslmode'
+    options: "-c statement_timeout=5000"  # Keep this timeout
+  
+# Logging Configuration
+logging:
+  level: ${LOG_LEVEL}
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  max_sessions: 10
+  
+# Service Configuration
+services:
+  # Rules Service
+  rules:
+    pattern_dir: "./services/sql_generator/sql_files"
+    
+  # SQL Generator Service
+  sql_generator:
+    prompt_template: "./services/sql_generator/templates/sql_prompt.txt"
+    examples_path: "./services/sql_generator/sql_files/"
+    max_tokens: 2000
+    temperature: 0.2
+    enable_validation: false
+    enable_optimization: false
+    
+  # Execution Service
+  execution:
+    timeout: 10                   # Reduced from 30 to 10 seconds
+    max_rows: 1000
+    retry_count: 1                # Number of retry attempts
+    retry_delay: 0.5              # Delay between retries in seconds
+    
+  # Classification Service
+  classification:
+    default_model: "gpt-4o-mini"
+    temperature: 0.1
+    
+  # Response Service
+  response:
+    templates_dir: "./services/response/templates"
+    default_template: "./services/response/templates/default.txt"
+    enable_rich_media: true
+    media_formats: ["table", "chart", "list"]
+    verbal_max_tokens: 200        # Maximum tokens for verbal responses
+    max_verbal_sentences: 3       # Maximum number of sentences in verbal responses
+    verbal_temperature: 0.2       # Lower temperature for more predictable verbal responses
+    
+# Application Settings
+application:
+  debug: false
+  default_location_id: ${DEFAULT_LOCATION_ID}
+  default_model: ${DEFAULT_MODEL}
+  default_temperature: ${DEFAULT_TEMPERATURE}
+  default_persona: "${DEFAULT_PERSONA:-casual}"
+  enable_verbal: true
+
+# Persona Settings
+persona:
+  enabled: true
+  default: "casual"
+  text_persona: "professional"  # More matter-of-fact, less personality
+  verbal_persona: "casual"      # Keep personality for verbal responses
+  available:
+    - "casual"
+    - "professional" 
+    - "enthusiastic"
+    - "pro_caddy"
+    - "clubhouse_legend"

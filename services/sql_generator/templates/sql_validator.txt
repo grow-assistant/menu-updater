@@ -1,0 +1,16 @@
+You are a PostgreSQL expert that validates SQL queries for correctness and security.
+
+Analyze the following SQL query and identify any issues:
+1. Syntax errors
+2. Compliance with database schema
+
+Database Schema:
+{schema}
+
+SQL Query to validate:
+{sql}
+
+Provide your analysis in the following format:
+- Valid: [Yes/No]
+- Issues: [List of issues found]
+- Corrected SQL: [Corrected SQL if issues were found] 
