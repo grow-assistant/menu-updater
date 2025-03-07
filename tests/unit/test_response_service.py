@@ -7,7 +7,7 @@ Tests the functionality of the ResponseGenerator class and related components.
 import pytest
 from unittest.mock import patch, MagicMock
 
-from services.response_service import ResponseGenerator
+from services.response.response_generator import ResponseGenerator
 
 
 class TestResponseService:

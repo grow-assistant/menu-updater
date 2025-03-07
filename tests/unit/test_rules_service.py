@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock, mock_open
 import os
 import json
 
-from services.rules_service import RulesManager
+from services.rules.rules_manager import RulesManager
 
 
 class TestRulesService:
@@ -19,10 +19,15 @@ class TestRulesService:
         """Test the initialization of the RulesManager."""
         with patch("services.rules.rules_manager.os.path.exists") as mock_exists:
             mock_exists.return_value = True
-            with patch("builtins.open", mock_open(read_data='{}')):
-                rules_manager = RulesManager(config=test_config)
-                assert rules_manager is not None
-                assert rules_manager.config == test_config
+            with patch("os.listdir") as mock_listdir:
+                mock_listdir.return_value = ["menu", "order_history"]
+                with patch("builtins.open", mock_open(read_data='{"test":"value"}')):
+                    rules_manager = RulesManager(config=test_config)
+                    assert rules_manager is not None
+                    assert hasattr(rules_manager, "examples_path")
+                    assert rules_manager.examples_path == test_config["services"]["sql_generator"]["examples_path"]
+                    assert hasattr(rules_manager, "rules")
+                    assert isinstance(rules_manager.rules, dict)
 
     def test_load_rules(self, mock_rules_manager):
         """Test loading rules from files."""

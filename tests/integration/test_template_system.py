@@ -23,7 +23,7 @@ from services.sql_generator.prompt_builder import SQLPromptBuilder
 from services.response.prompt_builder import ResponsePromptBuilder
 from services.response.response_generator import ResponseGenerator
 
-from orchestrator.orchestrator import Orchestrator
+from services.orchestrator.orchestrator import Orchestrator
 
 
 class TestTemplateSystem:

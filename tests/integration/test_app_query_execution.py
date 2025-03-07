@@ -109,6 +109,9 @@ class TestAppQueryExecution:
                     
                     # Verify the mock was called
                     mock_classify.assert_called_once_with(query)
+
+                    # Test passed if we got here without exceptions
+                    assert result is not None
             else:
                 # If classify exists, just test it directly
                 config = {
@@ -131,4 +134,5 @@ class TestAppQueryExecution:
                 # This should now execute without errors
                 result = orchestrator.process_query(query, context)
 
-""" 
+                # Test passed if we got here without exceptions
+                assert result is not None 

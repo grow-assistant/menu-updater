@@ -157,3 +157,80 @@ WHERE
                 - Total Time: 10.47s
             
 2025-03-07 06:15:09,781 - frontend - INFO - Playing verbal response audio: 101564 bytes
+2025-03-07 10:29:20,317 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-07 10:29:20,358 - swoop_ai - INFO - Log file: C:\Python\ai-menu-updater-refactored\logs\app.log
+2025-03-07 10:29:20,365 - services.utils.service_registry - INFO - Registered service: classification
+2025-03-07 10:29:20,365 - services.utils.service_registry - INFO - Registered service: rules
+2025-03-07 10:29:20,366 - services.utils.service_registry - INFO - Registered service: sql_generator
+2025-03-07 10:29:20,366 - services.utils.service_registry - INFO - Registered service: execution
+2025-03-07 10:29:20,367 - services.utils.service_registry - INFO - Registered service: response
+2025-03-07 10:29:20,367 - services.rules.rules_service - INFO - Loading rules from storage
+2025-03-07 10:29:20,373 - services.rules.rules_service - INFO - Assigned implementations to query_rules proxy functions
+2025-03-07 10:29:20,377 - services.rules.rules_service - INFO - Loaded query rules module: menu_inquiry_rules
+2025-03-07 10:29:20,378 - services.rules.rules_service - INFO - Loaded query rules module: order_history_rules
+2025-03-07 10:29:20,379 - services.rules.rules_service - INFO - Loaded query rules module: order_ratings_rules
+2025-03-07 10:29:20,380 - services.rules.rules_service - INFO - Loaded query rules module: popular_items_rules
+2025-03-07 10:29:20,380 - services.rules.rules_service - INFO - Loaded query rules module: trend_analysis_rules
+2025-03-07 10:29:20,380 - services.sql_generator.sql_generator_factory - INFO - Creating SQL generator of type: gemini
+2025-03-07 10:29:20,380 - services.sql_generator.sql_generator_factory - INFO - Using Gemini for SQL generation.
+2025-03-07 10:29:20,384 - services.sql_generator.gemini_sql_generator - INFO - SQLGenerator initialized with max_tokens=1024, temperature=0.2
+2025-03-07 10:29:20,578 - services.execution.sql_executor - INFO - SQLExecutor initialized with pool_size=8, max_overflow=5
+2025-03-07 10:29:20,684 - services.execution.sql_executor - INFO - SUCCESS - Database connection validated
+2025-03-07 10:29:20,791 - services.response.response_generator - INFO - OpenAI client initialized successfully
+2025-03-07 10:29:20,791 - services.response.response_generator - INFO - ElevenLabs TTS initialized successfully
+2025-03-07 10:29:20,792 - services.response.response_generator - INFO - Response generator personas not enabled. Using defaults - Text: 'professional', Verbal: 'casual'
+2025-03-07 10:29:20,792 - services.response.response_generator - INFO - Found 1 template files
+2025-03-07 10:29:20,793 - services.response.response_generator - INFO - Preloaded 2 templates
+2025-03-07 10:29:35,466 - swoop_ai - INFO - Logging initialized at level INFO
+2025-03-07 10:29:35,466 - swoop_ai - INFO - Log file: C:\Python\ai-menu-updater-refactored\logs\app.log
+2025-03-07 10:29:35,496 - services.orchestrator.orchestrator - INFO - Processing query: 'How many orders were completed on 2/21/2025?' (ID: af112c62-3a51-4c18-a276-af4c49147c85)
+2025-03-07 10:29:35,496 - services.orchestrator.orchestrator - INFO - Verbal response requested, disabling fast_mode (original fast_mode=False)
+2025-03-07 10:29:35,497 - services.orchestrator.orchestrator - INFO - Attempting to initialize ElevenLabs for TTS
+2025-03-07 10:29:35,497 - services.orchestrator.orchestrator - INFO - Setting ElevenLabs API key (length: 51)
+2025-03-07 10:29:35,828 - services.orchestrator.orchestrator - INFO - ElevenLabs API key validated successfully, found 27 voices
+2025-03-07 10:29:35,828 - services.orchestrator.orchestrator - INFO - ElevenLabs initialized successfully for TTS
+2025-03-07 10:29:36,223 - services.orchestrator.orchestrator - INFO - Query classified as: order_history
+2025-03-07 10:29:36,224 - services.rules.rules_service - INFO - Processing rules for category: order_history
+2025-03-07 10:29:36,225 - services.rules.rules_service - INFO - Loaded 16 SQL patterns from directory: order_history
+2025-03-07 10:29:36,226 - services.rules.rules_service - INFO - Added query-specific rules for category 'order_history' from module 'order_history_rules'
+2025-03-07 10:29:36,226 - services.sql_generator.gemini_sql_generator - INFO - Built SQL generation prompt with 0 examples and context for order_history
+2025-03-07 10:29:36,227 - services.sql_generator.gemini_sql_generator - INFO - Generating SQL with model: gemini-2.0-flash, attempt: 1/3
+2025-03-07 10:29:37,336 - services.sql_generator.gemini_sql_generator - INFO - Extracted SQL (length: 321): SELECT
+COUNT(o.id) -- Count the number of order IDs
+FROM orders o
+WHERE
+(o.updated_at - INTERVAL '7 ...
+2025-03-07 10:29:37,382 - services.execution.sql_executor - INFO - SQL executed successfully: 1 rows affected/returned in 0.04s
+2025-03-07 10:29:37,382 - services.response.response_generator - INFO - [API_CALL:a8116af0] Starting text response generation for query: 'How many orders were completed on 2/21/2025?...'
+2025-03-07 10:29:37,383 - services.response.response_generator - INFO - [API_CALL:a8116af0] Category: order_history, Model: gpt-4o
+2025-03-07 10:29:37,383 - services.response.response_generator - INFO - No specific template found for category: order_history, using default
+2025-03-07 10:29:37,383 - services.response.response_generator - INFO - Using persona 'casual' for response generation
+2025-03-07 10:29:37,385 - services.response.response_generator - INFO - Response generation prompt logged to: logs\ai_prompts\openai_response_519051e8.log
+2025-03-07 10:29:37,385 - services.response.response_generator - INFO - Sending request to OpenAI API with model: gpt-4o
+2025-03-07 10:29:38,472 - services.response.response_generator - INFO - [API_CALL:9628a30b] openai.chat.completions.create - SUCCESS - 1.09s
+2025-03-07 10:29:38,474 - services.response.response_generator - INFO - Using persona 'casual' for response generation
+2025-03-07 10:29:39,574 - services.response.response_generator - INFO - Verbal text generated: 'Hey there! On February 21, 2025, we completed 4 orders. Not too shabby, right?...' (78 chars)
+2025-03-07 10:29:39,575 - services.response.response_generator - INFO - Using ElevenLabs voice ID: UgBBYS2sOqTuMpoF3BR0
+2025-03-07 10:29:39,576 - services.response.response_generator - INFO - Calling ElevenLabs API for text-to-speech conversion
+2025-03-07 10:29:41,174 - services.response.response_generator - INFO - [API_CALL:a7c51783] elevenlabs.generate - SUCCESS - 1.60s
+2025-03-07 10:29:41,176 - services.response.response_generator - INFO - [VERBAL_API_CALL:a7c51783] Successfully generated 86935 bytes of audio data
+2025-03-07 10:29:41,176 - services.response.response_generator - INFO - Using persona 'casual' for response generation
+2025-03-07 10:29:42,468 - services.response.response_generator - INFO - Verbal text generated: 'Hey there! On February 21, 2025, we completed 4 orders. Not too shabby, right? If you need more deta...' (122 chars)
+2025-03-07 10:29:42,468 - services.response.response_generator - INFO - Using ElevenLabs voice ID: UgBBYS2sOqTuMpoF3BR0
+2025-03-07 10:29:42,468 - services.response.response_generator - INFO - Calling ElevenLabs API for text-to-speech conversion
+2025-03-07 10:29:44,534 - services.response.response_generator - INFO - [API_CALL:c3d1fd85] elevenlabs.generate - SUCCESS - 2.07s
+2025-03-07 10:29:44,536 - services.response.response_generator - INFO - [VERBAL_API_CALL:c3d1fd85] Successfully generated 135000 bytes of audio data
+2025-03-07 10:29:44,537 - services.orchestrator.orchestrator - INFO - Verbal response generated: 0 chars, 86935 bytes
+2025-03-07 10:29:44,537 - services.orchestrator.orchestrator - INFO - Query processing completed in 9.04s
+2025-03-07 10:29:44,537 - services.orchestrator.orchestrator - INFO - 
+                Performance Breakdown:
+                - Classification: 0.40s
+                - Rule Processing: 0.00s
+                - SQL Generation: 1.11s
+                - SQL Execution: 0.05s
+                - Text Response: 3.79s
+                - TTS Generation: 3.36s
+                - Other/Unaccounted: 0.33s
+                - Total Time: 9.04s
+            
+2025-03-07 10:29:44,547 - frontend - INFO - Playing verbal response audio: 86935 bytes
