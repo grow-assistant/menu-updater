@@ -15,7 +15,7 @@ def mock_config():
         "api": {
             "gemini": {
                 "api_key": "test_api_key",
-                "model": "gemini-1.5-Flash",
+                "model": "gemini-2.0-flash",
                 "temperature": 0.2,
                 "max_tokens": 1024
             }
@@ -142,7 +142,7 @@ class TestEnhancedSQLGenerator:
                 # Check the SQL
                 assert result["sql"] == "SELECT * FROM menu_items WHERE category = 'Appetizers'"
                 assert result["attempts"] == 1
-                assert result["model"] == "gemini-1.5-Flash"
+                assert result["model"] == "gemini-2.0-flash"
     
     def test_generate_sql_with_validation_failure(self, sql_generator, mock_genai):
         """Test SQL generation with validation failure and retry."""

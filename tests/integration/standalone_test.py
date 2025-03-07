@@ -61,7 +61,7 @@ def run_real_test():
             },
             "gemini": {
                 "api_key": os.environ.get("GEMINI_API_KEY"),
-                "model": "gemini-1.5-Flash"
+                "model": "gemini-2.0-flash"
             },
             "elevenlabs": {
                 "api_key": os.environ.get("ELEVENLABS_API_KEY")
@@ -93,7 +93,7 @@ def run_real_test():
                 "cache_enabled": True
             },
             "sql_generator": {
-                "model": "gemini-1.5-Flash",
+                "model": "gemini-2.0-flash",
                 "temperature": 0.2,
                 "max_tokens": 2000,
                 "prompt_template": os.path.join(PROJECT_ROOT, "services/sql_generator/templates/sql_prompt.txt"),

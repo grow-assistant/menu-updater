@@ -21,7 +21,7 @@ class GeminiSQLGenerator:
         """Initialize the enhanced Gemini SQL generator."""
         # Configure Gemini API
         api_key = config["api"]["gemini"]["api_key"]
-        self.model = config["api"]["gemini"].get("model", "gemini-1.5-Flash")
+        self.model = config["api"]["gemini"].get("model", "gemini-2.0-flash")
         self.temperature = config["api"]["gemini"].get("temperature", 0.2)
         self.max_tokens = config["api"]["gemini"].get("max_tokens", 1024)
         genai.configure(api_key=api_key)
