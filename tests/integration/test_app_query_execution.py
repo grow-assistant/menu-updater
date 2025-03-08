@@ -20,7 +20,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from services.classification.classifier import ClassificationService
-from services.orchestrator.orchestrator import OrchestratorService
+from services.orchestrator.orchestrator import Orchestrator as OrchestratorService
 
 
 class TestAppQueryExecution:
@@ -130,5 +130,3 @@ class TestAppQueryExecution:
                 
                 # This should now execute without errors
                 result = orchestrator.process_query(query, context)
-
-""" 

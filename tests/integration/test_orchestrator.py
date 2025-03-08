@@ -8,7 +8,7 @@ between different services to process queries.
 import pytest
 from unittest.mock import patch, MagicMock
 
-from orchestrator import Orchestrator
+from services.orchestrator.orchestrator import Orchestrator
 
 
 class TestOrchestratorIntegration:

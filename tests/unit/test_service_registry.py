@@ -168,12 +168,14 @@ class TestServiceRegistry:
         # Setup services with different health states
         service1 = MagicMock()
         service1.health_check.return_value = False
-        
-        service2 = MagicMock()  # No health_check method
-        
+
+        service2 = MagicMock()  
+        # Service2 should not have a health_check method
+        del service2.health_check
+
         service3 = MagicMock()
         service3.health_check.side_effect = Exception("Health check failed")
-        
+
         ServiceRegistry._services = {
             "service1": {
                 "factory": MagicMock(),
@@ -196,21 +198,23 @@ class TestServiceRegistry:
                 "healthy": True
             }
         }
-        
+
         # Mock get_service to return a mock for service4
         original_get_service = ServiceRegistry.get_service
-        
+
         def mock_get_service(service_name):
             if service_name == "service4":
-                return MagicMock()
+                service4 = MagicMock()
+                service4.health_check.return_value = True
+                return service4
             return original_get_service(service_name)
-        
+
         with patch.object(ServiceRegistry, 'get_service', side_effect=mock_get_service):
             # Call check_health
             results = ServiceRegistry.check_health()
-        
+
         # Verify health status for each service
         assert results["service1"] is False  # Explicitly returned False
         assert results["service2"] is True   # No health_check method, assume healthy
-        assert results["service3"] is False  # Health check threw exception
-        assert results["service4"] is True   # Successfully instantiated 
+        assert results["service3"] is False  # Exception during health check
+        assert results["service4"] is True   # Health check returns True 

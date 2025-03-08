@@ -6,119 +6,182 @@ Tests the functionality of the ClassificationService class and related component
 
 import pytest
 from unittest.mock import patch, MagicMock
+import json
 
-from services.classification import ClassificationService
+from services.classification.classifier import ClassificationService
 
 
 class TestClassificationService:
     """Test cases for the Classification Service."""
 
-    def test_init_classification_service(self, mock_openai_client, test_config):
+    def test_init_classification_service(self, test_config):
         """Test the initialization of the ClassificationService."""
-        classification_service = ClassificationService(
-            ai_client=mock_openai_client,
-            config=test_config
-        )
-        assert classification_service is not None
-        assert classification_service.ai_client == mock_openai_client
-        assert classification_service.config == test_config
-
-    def test_classify_query(self, mock_classifier):
-        """Test classifying a query to determine its type."""
-        # Test with mocked classify_query
-        query_type, query_info = mock_classifier.classify_query(
-            "Show me menu items at Idle Hour"
-        )
-        assert query_type == "sql_query"
-        assert query_info["query_type"] == "menu_query"
-        assert query_info["date_range"] == "last week"
-
-    def test_classify_query_no_ai_client(self, test_config):
-        """Test classifying a query without an AI client."""
-        classifier = ClassificationService(
-            ai_client=None,
-            config=test_config
-        )
+        # Add OpenAI API key to test config
+        config = test_config.copy()
+        config["api"] = {"openai": {"api_key": "test_api_key", "model": "gpt-4o-mini"}}
         
-        with patch.object(classifier, "analyze_query_pattern") as mock_analyze:
-            mock_analyze.return_value = ("sql_query", {"query_type": "menu_query"})
-            
-            query_type, query_info = classifier.classify_query("Show me menu items at Idle Hour")
-            assert query_type == "sql_query"
-            assert query_info["query_type"] == "menu_query"
+        classification_service = ClassificationService(config=config)
+        assert classification_service is not None
+        assert classification_service.config == config
+        assert classification_service.api_key == "test_api_key"
+        assert classification_service.model == "gpt-4o-mini"
 
-    def test_build_classification_prompt(self, mock_classifier):
-        """Test building a prompt for query classification."""
-        with patch.object(mock_classifier, "build_classification_prompt") as mock_build:
-            mock_build.return_value = "Test classification prompt"
+    def test_classify(self, test_config):
+        """Test the classify method."""
+        # Create a config with API key
+        config = test_config.copy()
+        config["api"] = {"openai": {"api_key": "test_api_key", "model": "gpt-4o-mini"}}
+        
+        # Create a mock for openai.chat.completions.create
+        with patch('services.classification.classifier.openai.chat.completions.create') as mock_create, \
+             patch('services.classification.classifier.ClassificationService.classify_query') as mock_classify_query:
             
-            prompt = mock_classifier.build_classification_prompt("Show me menu items at Idle Hour")
-            assert prompt == "Test classification prompt"
-
-    def test_parse_classification_response(self, mock_classifier):
-        """Test parsing the classification response from AI."""
-        with patch.object(mock_classifier, "parse_classification_response") as mock_parse:
-            mock_parse.return_value = ("sql_query", {"query_type": "menu_query"})
-            
-            ai_response = """
-            {
-                "query_type": "sql_query",
-                "query_info": {
-                    "category": "menu_query"
-                }
+            # Set up the mock response
+            mock_classify_query.return_value = {
+                "query_type": "menu_items",
+                "confidence": 0.9,
+                "time_period_clause": "last_week",
+                "is_followup": False,
+                "from_cache": False
             }
-            """
             
-            query_type, query_info = mock_classifier.parse_classification_response(ai_response)
-            assert query_type == "sql_query"
-            assert query_info["query_type"] == "menu_query"
+            # Create the classifier and call the classify method
+            classifier = ClassificationService(config=config)
+            result = classifier.classify("Show me menu items at Idle Hour")
+            
+            # Verify the result
+            assert result["category"] == "menu_items"
+            assert result["confidence"] == 0.9
+            assert result["time_period_clause"] == "last_week"
+            assert result["is_followup"] is False
 
-    def test_analyze_query_pattern_menu_query(self, mock_classifier):
-        """Test analyzing a menu query pattern."""
-        with patch.object(mock_classifier, "analyze_query_pattern") as mock_analyze:
-            mock_analyze.return_value = ("sql_query", {"query_type": "menu_query"})
+    def test_classify_with_cache(self, test_config):
+        """Test the classify method with caching."""
+        # Create a config with API key
+        config = test_config.copy()
+        config["api"] = {"openai": {"api_key": "test_api_key", "model": "gpt-4o-mini"}}
+        
+        # Create a mock for classify_query
+        with patch('services.classification.classifier.ClassificationService.classify_query') as mock_classify_query:
+            # Set up responses
+            first_response = {
+                "query_type": "menu_items",
+                "confidence": 0.9,
+                "time_period_clause": "last_week",
+                "is_followup": False,
+                "from_cache": False,
+                "classification_method": "ai"
+            }
+            second_response = {
+                "query_type": "menu_items",
+                "confidence": 0.9,
+                "time_period_clause": "last_week",
+                "is_followup": False,
+                "from_cache": True,
+                "classification_method": "cached"
+            }
             
-            query_type, query_info = mock_classifier.analyze_query_pattern("Show me menu items at Idle Hour")
-            assert query_type == "sql_query"
-            assert query_info["query_type"] == "menu_query"
+            # Need to use side_effect to return different values on subsequent calls
+            mock_classify_query.side_effect = [first_response, second_response]
+            
+            # Create the classifier
+            classifier = ClassificationService(config=config)
+            
+            # Call classify twice with the same query
+            result1 = classifier.classify("Show me menu items at Idle Hour")
+            result2 = classifier.classify("Show me menu items at Idle Hour")
+            
+            # The classify method returns a transformed dictionary with different keys
+            # Verify correct transformation of keys and values
+            assert result1["category"] == "menu_items"  # query_type becomes category
+            assert result2["category"] == "menu_items"
+            
+            # Verify that both classify_query calls were made
+            assert mock_classify_query.call_count == 2
+            
+            # Check that the second call to classify_query was made with the cache parameter
+            # Note: from_cache isn't passed through to the final result since classify
+            # transforms the result to match what the orchestrator expects
+            mock_classify_query.assert_any_call("Show me menu items at Idle Hour", None, True)
 
-    def test_analyze_query_pattern_menu_update(self, mock_classifier):
-        """Test analyzing a menu update pattern."""
-        with patch.object(mock_classifier, "analyze_query_pattern") as mock_analyze:
-            mock_analyze.return_value = (
-                "menu_update", 
-                {"query_type": "menu_update", "update_type": "price_update", "item_name": "Caesar Salad", "new_price": 12.99}
-            )
+    def test_classify_fallback(self, test_config):
+        """Test the classify method's fallback mechanism."""
+        # Create a config with API key
+        config = test_config.copy()
+        config["api"] = {"openai": {"api_key": "test_api_key", "model": "gpt-4o-mini"}}
+        
+        # Let's directly check the fallback behavior by mocking the openai.chat.completions.create function
+        with patch('services.classification.classifier.openai.chat.completions.create') as mock_create:
+            # Make the API call raise an exception to trigger the fallback
+            mock_create.side_effect = Exception("API Error")
             
-            query_type, query_info = mock_classifier.analyze_query_pattern("Change the price of Caesar Salad to $12.99")
-            assert query_type == "menu_update"
-            assert query_info["update_type"] == "price_update"
-            assert query_info["item_name"] == "Caesar Salad"
-            assert query_info["new_price"] == 12.99
+            # Create the classifier and call the classify method
+            classifier = ClassificationService(config=config)
+            result = classifier.classify("Show me menu items at Idle Hour")
+            
+            # Verify the fallback result based on the transformation done by classify method
+            assert result["category"] == "general_question"  # query_type becomes category
+            assert "confidence" in result
+            assert "time_period_clause" in result
+            assert "is_followup" in result
+            
+            # Verify that the OpenAI API was called once (and failed)
+            assert mock_create.call_count == 1
 
-    def test_analyze_query_pattern_general_query(self, mock_classifier):
-        """Test analyzing a general query pattern."""
-        with patch.object(mock_classifier, "analyze_query_pattern") as mock_analyze:
-            mock_analyze.return_value = ("general", {"query_type": "general"})
+    def test_health_check_success(self, test_config):
+        """Test the health_check method with a successful API response."""
+        # Create a config with API key
+        config = test_config.copy()
+        config["api"] = {"openai": {"api_key": "test_api_key", "model": "gpt-4o-mini"}}
+        
+        # Mock the openai.models.list method to simulate a successful API call
+        with patch('services.classification.classifier.openai.models.list') as mock_list:
+            mock_list.return_value = ["model1", "model2"]
             
-            query_type, query_info = mock_classifier.analyze_query_pattern("What's the weather like today?")
-            assert query_type == "general"
-            assert query_info["query_type"] == "general"
+            # Create the classifier and call the health_check method
+            classifier = ClassificationService(config=config)
+            result = classifier.health_check()
+            
+            # Verify the result
+            assert result is True
+            assert mock_list.call_count == 1
 
-    def test_extract_price_update_info(self, mock_classifier):
-        """Test extracting price update information from a query."""
-        with patch.object(mock_classifier, "extract_price_update_info") as mock_extract:
-            mock_extract.return_value = {"item_name": "Caesar Salad", "new_price": 12.99}
+    def test_health_check_failure(self, test_config):
+        """Test the health_check method with a failed API call."""
+        # Create a config with API key
+        config = test_config.copy()
+        config["api"] = {"openai": {"api_key": "test_api_key", "model": "gpt-4o-mini"}}
+        
+        # Mock the openai.models.list method to simulate a failed API call
+        with patch('services.classification.classifier.openai.models.list') as mock_list:
+            mock_list.side_effect = Exception("API Error")
             
-            info = mock_classifier.extract_price_update_info("Change the price of Caesar Salad to $12.99")
-            assert info["item_name"] == "Caesar Salad"
-            assert info["new_price"] == 12.99
+            # Create the classifier and call the health_check method
+            classifier = ClassificationService(config=config)
+            result = classifier.health_check()
+            
+            # Verify the result
+            assert result is False
+            assert mock_list.call_count == 1
 
-    def test_extract_availability_update_info(self, mock_classifier):
-        """Test extracting availability update information from a query."""
-        with patch.object(mock_classifier, "extract_availability_update_info") as mock_extract:
-            mock_extract.return_value = {"item_name": "Caesar Salad", "is_disabled": True}
-            
-            info = mock_classifier.extract_availability_update_info("Disable the Caesar Salad")
-            assert info["item_name"] == "Caesar Salad"
-            assert info["is_disabled"] is True 
+    def test_clear_cache(self, test_config):
+        """Test the clear_cache method."""
+        # Create a config with API key
+        config = test_config.copy()
+        config["api"] = {"openai": {"api_key": "test_api_key", "model": "gpt-4o-mini"}}
+        
+        # Create the classifier
+        classifier = ClassificationService(config=config)
+        
+        # Add an item to the cache
+        normalized_query = classifier._normalize_query("test query")
+        classifier._classification_cache[normalized_query] = {"test": "data"}
+        
+        # Verify the cache has an item
+        assert len(classifier._classification_cache) == 1
+        
+        # Call the clear_cache method
+        classifier.clear_cache()
+        
+        # Verify the cache is empty
+        assert len(classifier._classification_cache) == 0 

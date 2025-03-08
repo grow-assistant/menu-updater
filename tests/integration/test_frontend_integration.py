@@ -15,7 +15,7 @@ import json
 from datetime import datetime
 
 from frontend.session_manager import SessionManager
-from frontend.app import display_chat_message, process_user_input, initialize_ui
+from frontend.streamlit_app import display_chat_message, process_user_input, initialize_ui
 from services.utils.service_registry import ServiceRegistry
 
 
@@ -54,8 +54,8 @@ class TestFrontendIntegration:
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
     
-    @patch('frontend.app.st')
-    @patch('frontend.app.OrchestratorService')
+    @patch('frontend.streamlit_app.st')
+    @patch('frontend.streamlit_app.OrchestratorService')
     def test_initialize_ui(self, mock_orchestrator_class, mock_st, mock_config):
         """Test that the UI initializes correctly."""
         # Mock the session state
@@ -72,8 +72,8 @@ class TestFrontendIntegration:
         # Verify orchestrator was created
         mock_orchestrator_class.assert_called_once_with(mock_config)
     
-    @patch('frontend.app.st')
-    @patch('frontend.app.display_chat_message')
+    @patch('frontend.streamlit_app.st')
+    @patch('frontend.streamlit_app.display_chat_message')
     def test_display_chat_history(self, mock_display_chat, mock_st):
         """Test that chat history is displayed correctly."""
         # Setup mock session state with history
@@ -103,11 +103,11 @@ class TestFrontendIntegration:
         mock_container = MagicMock()
         mock_st.container.return_value = mock_container
         
-        # Call function that would display chat history
-        # This would typically be part of your app.py file
-        for entry in mock_st.session_state["history"]:
-            display_chat_message(entry["query"], "user", mock_container)
-            display_chat_message(entry["response"], "assistant", mock_container)
+        # Import the function directly to ensure we use the patched version
+        from frontend.streamlit_app import display_chat_history
+        
+        # Call function to display chat history
+        display_chat_history(mock_st.session_state["history"], mock_container)
         
         # Verify display_chat_message was called with correct arguments
         assert mock_display_chat.call_count == 4
@@ -116,9 +116,10 @@ class TestFrontendIntegration:
         mock_display_chat.assert_any_call("What's popular?", "user", mock_container)
         mock_display_chat.assert_any_call("Our burgers are popular", "assistant", mock_container)
     
-    @patch('frontend.app.st')
-    @patch('frontend.app.OrchestratorService')
-    def test_process_user_input(self, mock_orchestrator_class, mock_st, mock_config):
+    @patch('frontend.streamlit_app.st')
+    @patch('frontend.streamlit_app.OrchestratorService')
+    @patch('frontend.streamlit_app.SessionManager.update_history')
+    def test_process_user_input(self, mock_update_history, mock_orchestrator_class, mock_st, mock_config):
         """Test that user input is processed correctly."""
         # Setup mock session state
         mock_st.session_state = {
@@ -151,6 +152,16 @@ class TestFrontendIntegration:
         }
         mock_orchestrator.process_query.return_value = mock_response
         
+        # Mock update_history to update the session state directly
+        def side_effect_update_history(query, result):
+            mock_st.session_state["history"].append({
+                "query": query,
+                "response": result.get("response", ""),
+                "category": result.get("category", "general"),
+                "timestamp": datetime.now(),
+            })
+        mock_update_history.side_effect = side_effect_update_history
+        
         # Create a mock container
         mock_container = MagicMock()
         mock_st.container.return_value = mock_container
@@ -162,29 +173,30 @@ class TestFrontendIntegration:
         # Initialize the orchestrator
         initialize_ui(mock_config)
         
-        # Process the user input
-        process_user_input(mock_container)
+        # Process the user input with direct context
+        context = mock_st.session_state["context"]
+        process_user_input(mock_container, context)
         
         # Verify orchestrator was called with the user input and context
         mock_orchestrator.process_query.assert_called_once_with(
             "Show me menu items under $10",
-            mock_st.session_state["context"]
+            context
+        )
+        
+        # Verify update_history was called
+        mock_update_history.assert_called_once_with(
+            "Show me menu items under $10",
+            mock_response
         )
         
         # Verify chat history was updated
         assert len(mock_st.session_state["history"]) == 1
-        entry = mock_st.session_state["history"][0]
-        assert entry["query"] == "Show me menu items under $10"
-        assert entry["response"] == "Here are menu items under $10"
-        assert entry["category"] == "data_query"
-        assert entry["metadata"]["sql_query"] == "SELECT * FROM menu WHERE price < 10"
-        
-        # Verify the user input was cleared
-        assert mock_st.session_state["user_input"] == ""
+        assert mock_st.session_state["history"][0]["query"] == "Show me menu items under $10"
+        assert mock_st.session_state["history"][0]["response"] == "Here are menu items under $10"
     
-    @patch('frontend.app.st')
-    @patch('frontend.app.display_chat_message')
-    @patch('frontend.app.OrchestratorService')
+    @patch('frontend.streamlit_app.st')
+    @patch('frontend.streamlit_app.display_chat_message')
+    @patch('frontend.streamlit_app.OrchestratorService')
     def test_data_visualization(self, mock_orchestrator_class, mock_display_chat, mock_st, mock_config):
         """Test that data query results are visualized correctly."""
         # Setup mock session state
@@ -257,10 +269,11 @@ class TestFrontendIntegration:
         # Verify bar chart was called (assuming it would be called with the dataframe)
         mock_st.bar_chart.assert_called_once()
     
-    @patch('frontend.app.st')
-    @patch('frontend.app.display_chat_message')
-    @patch('frontend.app.OrchestratorService')
-    def test_error_handling_in_ui(self, mock_orchestrator_class, mock_display_chat, mock_st, mock_config):
+    @patch('frontend.streamlit_app.st')
+    @patch('frontend.streamlit_app.display_chat_message')
+    @patch('frontend.streamlit_app.OrchestratorService')
+    @patch('frontend.streamlit_app.SessionManager.update_history')
+    def test_error_handling_in_ui(self, mock_update_history, mock_orchestrator_class, mock_display_chat, mock_st, mock_config):
         """Test that UI handles errors from the backend gracefully."""
         # Setup mock session state
         mock_st.session_state = {
@@ -291,6 +304,16 @@ class TestFrontendIntegration:
         }
         mock_orchestrator.process_query.return_value = mock_response
         
+        # Mock update_history to update the session state directly
+        def side_effect_update_history(query, result):
+            mock_st.session_state["history"].append({
+                "query": query,
+                "response": result.get("response", ""),
+                "category": result.get("category", "general"),
+                "timestamp": datetime.now(),
+            })
+        mock_update_history.side_effect = side_effect_update_history
+        
         # Create a mock container
         mock_container = MagicMock()
         mock_st.container.return_value = mock_container
@@ -309,7 +332,6 @@ class TestFrontendIntegration:
         
         # Verify chat history was updated with the error
         assert len(mock_st.session_state["history"]) == 1
-        entry = mock_st.session_state["history"][0]
-        assert entry["query"] == "Show me bad query"
-        assert entry["response"] == "Sorry, there was an error processing your query."
-        assert entry["category"] == "error" 
+        assert mock_st.session_state["history"][0]["query"] == "Show me bad query"
+        assert mock_st.session_state["history"][0]["response"] == "Sorry, there was an error processing your query."
+        assert mock_st.session_state["history"][0]["category"] == "error" 

@@ -9,15 +9,15 @@ import pytest
 from unittest.mock import MagicMock, patch
 from typing import Dict, Any
 
-from services.classification.classification import ClassificationService
+from services.classification.classifier import ClassificationService
 from services.classification.prompt_builder import ClassificationPromptBuilder
-from services.sql_service.prompt_builder import SQLPromptBuilder
+from services.sql_generator.prompt_builder import SQLPromptBuilder
 from services.sql_generator.sql_generator import SQLGenerator
 from services.response.response_generator import ResponseGenerator
 from services.response.prompt_builder import ResponsePromptBuilder
 from services.rules.rules_manager import RulesManager
 from services.utils.prompt_loader import PromptLoader
-from orchestrator.orchestrator import Orchestrator
+from services.orchestrator.orchestrator import Orchestrator
 
 
 class TestPromptIntegration:
@@ -52,7 +52,7 @@ class TestPromptIntegration:
     @pytest.fixture
     def mock_sql_generator(self, mock_prompt_loader):
         """Create a mock SQLGenerator with the template-based prompt builder."""
-        with patch('services.sql_service.prompt_builder.get_prompt_loader', 
+        with patch('services.sql_generator.prompt_builder.get_prompt_loader', 
                    return_value=mock_prompt_loader):
             service = SQLGenerator()
             
