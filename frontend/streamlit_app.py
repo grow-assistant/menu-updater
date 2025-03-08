@@ -334,6 +334,7 @@ def run_app():
             # Play verbal response if available
             if result.get("verbal_audio"):
                 import base64
+                logger.info("Playing verbal response audio")
                 audio_base64 = base64.b64encode(result["verbal_audio"]).decode()
                 audio_html = f"""
                     <audio autoplay="true" style="display:block; margin-top:10px;">
@@ -342,7 +343,7 @@ def run_app():
                     </audio>
                 """
                 st.markdown(audio_html, unsafe_allow_html=True)
-                logger.info(f"Playing verbal response audio: {len(result['verbal_audio'])} bytes")
+                st.info("🔊 Verbal response is playing...")
             
             # Optionally show SQL and results in an expandable section
             if result.get("sql_query"):
@@ -438,5 +439,71 @@ def test_elevenlabs_audio():
         }
 
 
+def load_config():
+    """Load the application configuration from file or environment variables."""
+    import os
+    import json
+    
+    # First check for a config file
+    config_path = os.environ.get("CONFIG_PATH", "config/app_config.json")
+    
+    if os.path.exists(config_path):
+        with open(config_path, "r") as f:
+            return json.load(f)
+    
+    # Fall back to default configuration
+    return {
+        "api": {
+            "openai": {
+                "api_key": os.environ.get("OPENAI_API_KEY", ""),
+                "model": os.environ.get("OPENAI_MODEL", "gpt-4")
+            },
+            "elevenlabs": {
+                "api_key": os.environ.get("ELEVENLABS_API_KEY", ""),
+                "voice_id": os.environ.get("ELEVENLABS_VOICE_ID", "")
+            }
+        },
+        "database": {
+            "path": os.environ.get("DB_PATH", "data/menu_db.sqlite")
+        },
+        "services": {
+            "classification": {
+                "confidence_threshold": 0.7
+            }
+        }
+    }
+
+
+def initialize_app():
+    """Initialize the application and all services."""
+    # Load configuration
+    config = load_config()
+    
+    # Create and initialize orchestrator
+    orchestrator = Orchestrator(config)
+    st.session_state.orchestrator = orchestrator
+    
+    # Initialize session state
+    SessionManager.initialize_session()
+    
+    # Other initialization as needed
+    
+    return orchestrator
+
+
+# App entry point
+def main():
+    st.title("AI Menu Assistant")
+    
+    # Initialize app if needed
+    if "orchestrator" not in st.session_state:
+        with st.spinner("Initializing application..."):
+            orchestrator = initialize_app()
+            st.success("Application initialized successfully!")
+    
+    # Rest of your app code
+    # ...
+
+
 if __name__ == "__main__":
-    run_app()
+    main()

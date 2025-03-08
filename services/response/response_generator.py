@@ -13,12 +13,16 @@ import uuid
 import re
 import concurrent.futures
 from collections import OrderedDict
+import secrets
+import copy
 
 from openai import OpenAI
 # Import persona utilities
 from resources.ui.personas import get_prompt_instructions, get_voice_settings
 import elevenlabs
 from elevenlabs import play
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +76,20 @@ class ResponseGenerator:
         # Initialize ElevenLabs API
         if self.elevenlabs_api_key:
             # Set the API key for elevenlabs module
-            elevenlabs.set_api_key(self.elevenlabs_api_key)
-            self.elevenlabs_client = True  # Just a flag to indicate ElevenLabs is available
-            logger.info("ElevenLabs TTS initialized successfully")
+            try:
+                import elevenlabs
+                elevenlabs.set_api_key(self.elevenlabs_api_key)
+                # Verify the API key works by fetching voices
+                voices = elevenlabs.voices()
+                if voices:
+                    logger.info(f"ElevenLabs TTS initialized successfully with {len(voices)} available voices")
+                    self.elevenlabs_client = True  # Just a flag to indicate ElevenLabs is available
+                else:
+                    logger.warning("ElevenLabs API key accepted but no voices available, TTS may not work properly")
+                    self.elevenlabs_client = False
+            except Exception as e:
+                logger.error(f"Failed to initialize ElevenLabs: {str(e)}")
+                self.elevenlabs_client = False
         else:
             self.elevenlabs_client = None
             logger.warning("ElevenLabs API key not provided. Verbal responses will not be available.")
@@ -108,6 +123,10 @@ class ResponseGenerator:
             self.verbal_persona = "casual"
             logger.info(f"Response generator personas not enabled. Using defaults - Text: '{self.text_persona}', Verbal: '{self.verbal_persona}'")
         
+        # Set the current persona to the default value
+        self.current_persona = self.persona
+        logger.info(f"Current persona set to: {self.current_persona}")
+        
         # Model configuration
         self.temperature = config.get("services", {}).get("response", {}).get("temperature", 0.7)
         self.max_tokens = config.get("services", {}).get("response", {}).get("max_tokens", 1000)
@@ -117,7 +136,10 @@ class ResponseGenerator:
         self.verbal_temperature = config.get("services", {}).get("response", {}).get("verbal_temperature", 0.7)
         self.verbal_max_tokens = config.get("services", {}).get("response", {}).get("verbal_max_tokens", 100)
         
+        # Flag to determine whether to generate a dedicated verbal response or use the text response
+        # Default: True (generate dedicated verbal response)
         self.generate_dedicated_verbal = config.get("services", {}).get("response", {}).get("generate_dedicated_verbal", True)
+        logger.info(f"Verbal response generation mode: {'Dedicated verbal' if self.generate_dedicated_verbal else 'Extract from text'}")
         
         # Enable rich media formatting like Markdown and HTML
         self.enable_rich_media = config.get("services", {}).get("response", {}).get("enable_rich_media", True)
@@ -262,23 +284,62 @@ class ResponseGenerator:
                      start_time: float, end_time: float, success: bool, 
                      response_data: Any = None, error: str = None) -> None:
         """
-        Log detailed information about an API call for debugging purposes.
+        Log an API call with detailed information.
         
         Args:
-            api_name: Name of the API service (e.g., 'openai', 'elevenlabs')
-            endpoint: Specific endpoint or method called
-            params: Parameters sent to the API
-            start_time: API call start time
-            end_time: API call end time
-            success: Whether the call was successful
-            response_data: Optional summary of response data
-            error: Error message if the call failed
+            api_name: Name of the API (e.g., 'openai', 'elevenlabs')
+            endpoint: API endpoint or method called
+            params: Parameters passed to the API
+            start_time: Start time of the API call
+            end_time: End time of the API call
+            success: Whether the API call was successful
+            response_data: Response data from the API (optional)
+            error: Error message if the API call failed (optional)
         """
-        call_id = str(uuid.uuid4())[:8]
-        duration = end_time - start_time
-        
-        # Update API call statistics
-        if api_name in self.api_calls:
+        try:
+            # Generate a unique call ID
+            call_id = secrets.token_hex(4)
+            
+            # Calculate duration
+            duration = end_time - start_time
+            
+            # Sanitize parameters for logging (remove sensitive data)
+            safe_params = copy.deepcopy(params) if params else {}
+            
+            # Remove sensitive data from parameters
+            if "api_key" in safe_params:
+                safe_params["api_key"] = f"[REDACTED:{len(str(safe_params['api_key']))}]"
+                
+            # For ElevenLabs calls, don't log the full text to avoid huge log files
+            if api_name == "elevenlabs" and "text" in safe_params and len(safe_params["text"]) > 100:
+                safe_params["text"] = safe_params["text"][:100] + "... [truncated]"
+            
+            # For response data, handle special cases
+            safe_response = None
+            if response_data:
+                if api_name == "elevenlabs" and isinstance(response_data, dict) and "audio" in response_data:
+                    # For ElevenLabs, don't log the audio data, just its size
+                    audio_data = response_data.get("audio")
+                    audio_size = len(audio_data) if audio_data else 0
+                    safe_response = {
+                        "audio_size_bytes": audio_size,
+                        "audio": f"[BINARY_DATA:{audio_size} bytes]"
+                    }
+                    # Include other non-binary data
+                    for k, v in response_data.items():
+                        if k != "audio" and k != "audio_bytes":
+                            safe_response[k] = v
+                elif api_name == "elevenlabs" and isinstance(response_data, bytes):
+                    # If the response is just bytes, log the size
+                    safe_response = f"[BINARY_DATA:{len(response_data)} bytes]"
+                else:
+                    # For other APIs, use the full response or a summary
+                    safe_response = self._sanitize_response(response_data)
+            
+            # Log the API call in a standardized format
+            logger.info(f"[API_CALL:{call_id}] {api_name}.{endpoint} - {'SUCCESS' if success else 'FAILURE'} - {duration:.2f}s")
+            
+            # Add to the API call history for latency stats
             self.api_calls[api_name]["total_calls"] += 1
             if success:
                 self.api_calls[api_name]["success_calls"] += 1
@@ -291,54 +352,41 @@ class ResponseGenerator:
                     self.api_calls[api_name]["total_audio_bytes"] += response_data["audio_bytes"]
             else:
                 self.api_calls[api_name]["error_calls"] += 1
-        
-        # Create a detailed log entry
-        log_entry = {
-            "timestamp": datetime.now().isoformat(),
-            "call_id": call_id,
-            "api": api_name,
-            "endpoint": endpoint,
-            "duration_seconds": duration,
-            "success": success,
-            "params": {k: v for k, v in params.items() if k not in ["messages", "text"]}  # Avoid logging full prompts
-        }
-        
-        # Add request summary if available
-        if api_name == "openai" and "messages" in params:
-            # Summarize the messages without including full content
-            log_entry["request_summary"] = {
-                "message_count": len(params["messages"]),
-                "system_message_length": len(params["messages"][0]["content"]) if params["messages"] and params["messages"][0]["role"] == "system" else 0,
-                "user_message_length": sum(len(m["content"]) for m in params["messages"] if m["role"] == "user")
-            }
-        elif api_name == "elevenlabs" and "text" in params:
-            log_entry["request_summary"] = {
-                "text_length": len(params["text"]),
-                "text_preview": params["text"][:50] + "..." if len(params["text"]) > 50 else params["text"]
-            }
-        
-        # Add response summary or error details
-        if success and response_data:
-            if api_name == "openai":
-                log_entry["response_summary"] = {
-                    "tokens": response_data.get("usage", {}).get("total_tokens", 0),
-                    "completion_length": len(response_data.get("choices", [{}])[0].get("message", {}).get("content", "")) if response_data.get("choices") else 0
-                }
-            elif api_name == "elevenlabs":
-                log_entry["response_summary"] = {
-                    "audio_bytes": len(response_data.get("audio", b"")) if isinstance(response_data.get("audio"), bytes) else 0
-                }
-        elif error:
-            log_entry["error"] = error
-        
-        # Log to both console and file
-        logger.info(f"[API_CALL:{call_id}] {api_name}.{endpoint} - {'SUCCESS' if success else 'FAILED'} - {duration:.2f}s")
-        
-        # Write detailed log to file
-        with open(self.api_log_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(log_entry) + "\n")
             
-        return call_id
+            # Limit the size of the API call history
+            if api_name == "openai" and len(self.api_calls[api_name]) > 100:
+                self.api_calls[api_name] = self.api_calls[api_name][-100:]
+            
+            return call_id
+                
+        except Exception as e:
+            logger.error(f"Error logging API call: {str(e)}")
+            return "error"
+    
+    def _sanitize_response(self, response_data):
+        """Sanitize response data for logging."""
+        if isinstance(response_data, (str, int, float, bool)) or response_data is None:
+            return response_data
+        elif isinstance(response_data, bytes):
+            return f"[BINARY_DATA:{len(response_data)} bytes]"
+        elif isinstance(response_data, dict):
+            # For dictionaries, check each value
+            safe_dict = {}
+            for k, v in response_data.items():
+                # Skip binary data or very large string values
+                if isinstance(v, bytes):
+                    safe_dict[k] = f"[BINARY_DATA:{len(v)} bytes]"
+                elif isinstance(v, str) and len(v) > 500:
+                    safe_dict[k] = v[:500] + "... [truncated]"
+                else:
+                    safe_dict[k] = self._sanitize_response(v)
+            return safe_dict
+        elif isinstance(response_data, (list, tuple)):
+            # For lists/tuples, apply to each item
+            return [self._sanitize_response(item) for item in response_data[:10]] + (["..."] if len(response_data) > 10 else [])
+        else:
+            # For other types, convert to string
+            return str(type(response_data))
 
     def generate(
         self, 
@@ -377,7 +425,12 @@ class ResponseGenerator:
         
         # Format results for the prompt (can be quite large)
         if query_results:
-            results_text = json.dumps(query_results, indent=2)
+            # Check if query_results is a list or a dict with 'results' key
+            if isinstance(query_results, dict) and 'results' in query_results:
+                formatted_results = query_results['results']
+            else:
+                formatted_results = query_results
+            results_text = json.dumps(formatted_results, indent=2)
         else:
             results_text = "No database results available."
             
@@ -716,6 +769,20 @@ User Query: {query}
             True if healthy, False otherwise
         """
         try:
+            # Log detailed status
+            logger.info("=== Response Generator Health Check ===")
+            logger.info(f"OpenAI client: {'Available' if self.client else 'Not available'}")
+            logger.info(f"ElevenLabs client: {'Available' if self.elevenlabs_client else 'Not available'}")
+            logger.info(f"Current persona: {self.current_persona if hasattr(self, 'current_persona') else self.persona}")
+            logger.info(f"Text persona: {self.text_persona}")
+            logger.info(f"Verbal persona: {self.verbal_persona}")
+            logger.info(f"Generate dedicated verbal: {self.generate_dedicated_verbal}")
+            logger.info(f"Default model: {self.default_model}")
+            logger.info(f"Verbal model: {self.verbal_model}")
+            logger.info(f"Max verbal sentences: {self.max_verbal_sentences}")
+            logger.info(f"Enable rich media: {self.enable_rich_media}")
+            logger.info("=======================================")
+            
             # Simple test query
             response = self.client.chat.completions.create(
                 model=self.default_model,
@@ -725,9 +792,10 @@ User Query: {query}
                 ],
                 max_tokens=5
             )
-            return response is not None
+            
+            return True
         except Exception as e:
-            logger.error(f"Health check failed: {e}")
+            logger.error(f"Health check failed: {str(e)}")
             return False
     
     def set_persona(self, persona_name: str) -> None:
@@ -763,7 +831,11 @@ User Query: {query}
             self.persona = persona_name
             self.text_persona = persona_name
             self.verbal_persona = persona_name
-            logger.info(f"Response generator persona set to: {persona_name}")
+            logger.info(f"Response generator persona set to '{persona_name}' for all response types")
+            
+        # Update the current persona
+        self.current_persona = persona_name if isinstance(persona_name, str) else persona_name.get('default', 'casual')
+        logger.info(f"Current persona set to: {self.current_persona}")
     
     def generate_verbal_response(self, query: str, category: str, response_rules: Dict[str, Any], 
                                 query_results: Optional[List[Dict[str, Any]]], context: Dict[str, Any]) -> Optional[bytes]:
@@ -788,75 +860,17 @@ User Query: {query}
                 logger.warning("No verbal text was generated to convert to speech")
                 return None
                 
-            logger.info(f"Verbal text generated: '{verbal_text[:100]}...' ({len(verbal_text)} chars)")
-            
-            # Get voice settings based on current persona
-            voice_settings = get_voice_settings(self.persona)
-            voice_id = voice_settings.get('voice_id')
-            
-            if not voice_id:
-                logger.warning("No voice ID configured for persona: {self.persona}")
-                voice_id = "EXAVITQu4vr4xnSDxMaL"  # Use default voice
-                
-            logger.info(f"Using ElevenLabs voice ID: {voice_id}")
-            
-            # Prepare parameters for ElevenLabs API call
-            elevenlabs_params = {
-                "text": verbal_text,
-                "voice": voice_id,
-                "model": "eleven_multilingual_v2"
-            }
+            # Log verbal text without including full content in logs
+            log_text = verbal_text[:100] + "..." if len(verbal_text) > 100 else verbal_text
+            logger.info(f"Verbal text generated: '{log_text}' ({len(verbal_text)} chars)")
             
             # Generate audio with ElevenLabs with detailed logging
-            start_time = time.time()
-            logger.info("Calling ElevenLabs API for text-to-speech conversion")
+            audio_data = self._elevenlabs_tts(verbal_text)
             
-            try:
-                audio_data = elevenlabs.generate(**elevenlabs_params)
-                end_time = time.time()
-                
-                if audio_data:
-                    # Log the successful API call
-                    call_id = self._log_api_call(
-                        api_name="elevenlabs",
-                        endpoint="generate",
-                        params=elevenlabs_params,
-                        start_time=start_time,
-                        end_time=end_time,
-                        success=True,
-                        response_data={"audio": audio_data, "audio_bytes": len(audio_data)}
-                    )
-                    
-                    logger.info(f"[VERBAL_API_CALL:{call_id}] Successfully generated {len(audio_data)} bytes of audio data")
-                    return audio_data
-                else:
-                    # Log the unsuccessful API call (no error but empty response)
-                    call_id = self._log_api_call(
-                        api_name="elevenlabs",
-                        endpoint="generate",
-                        params=elevenlabs_params,
-                        start_time=start_time,
-                        end_time=time.time(),
-                        success=False,
-                        error="ElevenLabs returned empty audio data"
-                    )
-                    
-                    logger.error(f"[VERBAL_API_CALL:{call_id}] ElevenLabs returned empty audio data")
-                    return None
-                    
-            except Exception as e:
-                # Log the failed API call
-                call_id = self._log_api_call(
-                    api_name="elevenlabs",
-                    endpoint="generate",
-                    params=elevenlabs_params,
-                    start_time=start_time,
-                    end_time=time.time(),
-                    success=False,
-                    error=str(e)
-                )
-                
-                logger.error(f"[VERBAL_API_CALL:{call_id}] Error calling ElevenLabs API: {str(e)}")
+            if audio_data:
+                return audio_data
+            else:
+                logger.error("ElevenLabs returned empty audio data")
                 return None
                 
         except Exception as e:
@@ -866,9 +880,26 @@ User Query: {query}
     def _generate_verbal_text(self, query: str, category: str, response_rules: Dict[str, Any],
                            query_results: Optional[List[Dict[str, Any]]], context: Dict[str, Any]) -> Optional[str]:
         """Generate a concise verbal text for TTS conversion"""
+        logger.info(f"Starting _generate_verbal_text for query: {query[:50]}...")
+        
         try:
+            # First check if OpenAI client is available
+            if not self.client:
+                logger.error("OpenAI client not initialized. Attempting to reinitialize...")
+                if self.openai_api_key:
+                    try:
+                        self.client = OpenAI(api_key=self.openai_api_key)
+                        logger.info("Successfully reinitialized OpenAI client")
+                    except Exception as e:
+                        logger.error(f"Failed to reinitialize OpenAI client: {str(e)}")
+                        return None
+                else:
+                    logger.error("No OpenAI API key available. Cannot generate verbal text.")
+                    return None
+                
             # Generate a concise verbal response
             if self.generate_dedicated_verbal:
+                logger.info("Using dedicated concise verbal response generation")
                 # Generate a dedicated concise verbal response
                 prompt = f"""Create a brief and clear spoken response for the question:
                 "{query}"
@@ -880,37 +911,70 @@ User Query: {query}
                 
                 if query_results:
                     prompt += f"\n\nRelevant data: {str(query_results)[:500]}"
+                    
+                logger.info(f"Verbal prompt: {prompt[:100]}...")
                 
-                # Get response using model
-                verbal_response = self.client.chat.completions.create(
-                    model=self.verbal_model,
-                    messages=[
-                        {"role": "system", "content": self._build_system_message(category, context.get('persona', self.verbal_persona))},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=self.verbal_temperature,
-                    max_tokens=self.verbal_max_tokens
-                )
-                
-                verbal_text = verbal_response.choices[0].message.content
-                
-                # Ensure the verbal text isn't too long
-                if len(verbal_text.split()) > 100:  # Arbitrary limit of 100 words
-                    sentences = verbal_text.split('. ')
-                    verbal_text = '. '.join(sentences[:self.max_verbal_sentences]) + ('.' if not sentences[0].endswith('.') else '')
+                try:
+                    # Get response using model
+                    logger.info(f"Making OpenAI API call for verbal text with model: {self.verbal_model}")
+                    verbal_response = self.client.chat.completions.create(
+                        model=self.verbal_model,
+                        messages=[
+                            {"role": "system", "content": self._build_system_message(category, context.get('persona', self.verbal_persona))},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=self.verbal_temperature,
+                        max_tokens=self.verbal_max_tokens
+                    )
+                    
+                    if not verbal_response or not verbal_response.choices:
+                        logger.error("OpenAI returned an empty response for verbal text")
+                        return None
+                        
+                    verbal_text = verbal_response.choices[0].message.content
+                    
+                    # Ensure the verbal text isn't too long
+                    if len(verbal_text.split()) > 100:  # Arbitrary limit of 100 words
+                        sentences = verbal_text.split('. ')
+                        verbal_text = '. '.join(sentences[:self.max_verbal_sentences]) + ('.' if not sentences[0].endswith('.') else '')
+                    
+                    logger.info(f"Successfully generated verbal text: {verbal_text[:50]}...")
+                    return verbal_text
+                    
+                except Exception as e:
+                    logger.error(f"Error calling OpenAI API for verbal text: {str(e)}")
+                    import traceback
+                    logger.error(f"Stack trace: {traceback.format_exc()}")
+                    return None
             else:
+                logger.info("Using portion of regular text response for verbal")
                 # Use a portion of the regular text response
-                response = self.generate(query, category, response_rules, query_results, context)
-                response_text = response["response"]
+                try:
+                    response = self.generate(query, category, response_rules, query_results, context)
+                    
+                    if not response or "response" not in response:
+                        logger.error("Failed to generate base text response for verbal extraction")
+                        return None
+                        
+                    response_text = response["response"]
+                    
+                    # Extract first few sentences for verbal response
+                    sentences = response_text.split('. ')
+                    verbal_text = '. '.join(sentences[:self.max_verbal_sentences]) + ('.' if not sentences[0].endswith('.') else '')
+                    
+                    logger.info(f"Successfully extracted verbal text from base response: {verbal_text[:50]}...")
+                    return verbal_text
+                    
+                except Exception as e:
+                    logger.error(f"Error extracting verbal text from base response: {str(e)}")
+                    import traceback
+                    logger.error(f"Stack trace: {traceback.format_exc()}")
+                    return None
                 
-                # Extract first few sentences for verbal response
-                sentences = response_text.split('. ')
-                verbal_text = '. '.join(sentences[:self.max_verbal_sentences]) + ('.' if not sentences[0].endswith('.') else '')
-                
-            return verbal_text
-            
         except Exception as e:
-            logger.error(f"Error generating verbal text: {str(e)}")
+            logger.error(f"Error in _generate_verbal_text: {str(e)}")
+            import traceback
+            logger.error(f"Stack trace: {traceback.format_exc()}")
             return None
     
     def generate_with_verbal(
@@ -922,63 +986,126 @@ User Query: {query}
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Generate both text and verbal responses using multi-threading for efficiency.
+        Generate both text and verbal responses in parallel.
         
-        Args:
-            Same as generate()
-            
-        Returns:
-            Response dictionary with both text response and verbal audio
+        Returns a dictionary with both response types.
         """
-        # Check if elevenlabs is available to avoid wasted processing
-        enable_verbal = context.get("enable_verbal", False) and self.elevenlabs_client
+        logger.info(f"Starting generate_with_verbal for query: {query[:50]}...")
         
-        # Define the text and verbal response generation functions
-        def generate_text_response():
-            # Use text-specific persona for text response
-            text_persona = context.get("text_persona", self.text_persona)
-            text_context = context.copy()
-            text_context["persona"] = text_persona
-            
-            return self.generate(
-                query, 
-                category, 
-                response_rules, 
-                query_results, 
-                text_context
-            )
-        
-        def generate_verbal_response_wrapper():
-            # Use verbal-specific persona for speech
-            verbal_persona = context.get("verbal_persona", self.verbal_persona)
-            verbal_context = context.copy()
-            verbal_context["persona"] = verbal_persona
-            
-            return self.generate_verbal_response(
-                query, 
-                category, 
-                response_rules, 
-                query_results, 
-                verbal_context
-            )
-            
-        # Generate both responses, with text generation always running
-        text_response = generate_text_response()
+        text_response = {}
         verbal_audio = None
         
-        # Generate verbal response if enabled
-        if enable_verbal:
-            try:
-                # Generate verbal response
-                verbal_audio = generate_verbal_response_wrapper()
+        # Store the verbal text to avoid regenerating it
+        verbal_text = None
+        
+        try:
+            # SEQUENTIAL MODE: Use sequential execution instead of parallel
+            logger.info("SEQUENTIAL MODE: Running text response generation first")
+            
+            # Generate text response
+            original_persona = self.current_persona
+            if self.text_persona:
+                self.set_persona(self.text_persona)
+                logger.info(f"Using text persona: {self.text_persona} for text response")
                 
-                # Mark that we have verbal response
-                if verbal_audio:
-                    text_response["has_verbal"] = True
-                    text_response["verbal_audio"] = verbal_audio
+            text_response = self.generate(
+                query, 
+                category, 
+                response_rules, 
+                query_results, 
+                context
+            )
+            
+            logger.info(f"Text response generated successfully: {len(text_response.get('response', '')) if text_response else 0} characters")
+            
+            # Restore original persona for text
+            if self.text_persona:
+                self.set_persona(original_persona)
+                
+            # Generate verbal response
+            logger.info("SEQUENTIAL MODE: Now running verbal response generation")
+            
+            # Use verbal-specific persona for speech
+            original_persona = self.current_persona
+            if self.verbal_persona:
+                self.set_persona(self.verbal_persona)
+                logger.info(f"Using verbal persona: {self.verbal_persona} for verbal response")
+            
+            try:
+                logger.info("Generating verbal text...")
+                verbal_text = self._generate_verbal_text(
+                    query, 
+                    category, 
+                    response_rules, 
+                    query_results, 
+                    context
+                )
+                
+                if not verbal_text:
+                    logger.error("Failed to generate verbal text, trying direct approach")
+                    # Try a direct approach with a simpler prompt
+                    try:
+                        # Direct approach with minimal dependencies
+                        if self.client:
+                            prompt = f"Create a very brief verbal response (1-2 sentences) for: '{query}'"
+                            logger.info(f"Using direct prompt: {prompt}")
+                            
+                            response = self.client.chat.completions.create(
+                                model=self.verbal_model,
+                                messages=[{"role": "user", "content": prompt}],
+                                temperature=0.7,
+                                max_tokens=100
+                            )
+                            
+                            if response and response.choices:
+                                verbal_text = response.choices[0].message.content
+                                logger.info(f"Direct verbal text generation succeeded: {verbal_text[:50]}...")
+                    except Exception as e:
+                        logger.error(f"Direct verbal text generation failed: {str(e)}")
+                
+                if verbal_text:
+                    logger.info(f"Generated verbal text ({len(verbal_text)} chars)")
+                    try:
+                        # Generate TTS only once
+                        logger.info("Attempting to generate verbal audio...")
+                        verbal_audio = self._elevenlabs_tts(verbal_text)
+                        if verbal_audio:
+                            # Only log that audio was generated, not the size or content
+                            logger.info("Successfully generated verbal audio")
+                        else:
+                            logger.error("Failed to generate verbal audio from ElevenLabs TTS")
+                    except Exception as e:
+                        logger.error(f"Error in TTS generation: {str(e)}")
+                        import traceback
+                        logger.error(f"Stack trace: {traceback.format_exc()}")
+                else:
+                    logger.error("No verbal text was generated")
             except Exception as e:
-                logger.error(f"Error generating verbal response: {str(e)}")
-                # Continue with text response even if verbal fails
+                logger.error(f"Error in verbal text generation: {str(e)}")
+                import traceback
+                logger.error(f"Stack trace: {traceback.format_exc()}")
+            
+            # Restore original persona for verbal
+            if self.verbal_persona:
+                self.set_persona(original_persona)
+                
+            # Add verbal response to the text response if available
+            if verbal_audio:
+                text_response["verbal_audio"] = verbal_audio
+                text_response["verbal_text"] = verbal_text
+                # Only log that audio was added, not the audio data itself
+                logger.info("Added verbal audio to response")
+            else:
+                if verbal_text:
+                    logger.warning("Verbal text was generated but no verbal audio was produced")
+                else:
+                    logger.warning("No verbal text or audio generated")
+                
+        except Exception as e:
+            logger.error(f"Error in generate_with_verbal: {str(e)}")
+            import traceback
+            logger.error(f"Stack trace: {traceback.format_exc()}")
+            # Continue with text response even if verbal fails
         
         return text_response
 
@@ -1027,3 +1154,128 @@ User Query: {query}
         logger.debug(f"Current generation queue: {self._get_queue_status()}")
         logger.debug(f"Model load times: {self._get_model_load_times()}")
         logger.debug(f"Template cache status: {self._get_template_cache_stats()}") 
+
+    def _elevenlabs_tts(self, text: str) -> Optional[bytes]:
+        """
+        Generate audio with ElevenLabs TTS.
+        
+        Args:
+            text: Text to convert to speech
+            
+        Returns:
+            Audio data as bytes, or None if generation failed
+        """
+        try:
+            if not text or not text.strip():
+                logger.warning("Cannot generate TTS with empty text")
+                return None
+            
+            # Check if ElevenLabs client is initialized
+            if not self.elevenlabs_client:
+                logger.error("ElevenLabs client not initialized. Cannot generate TTS.")
+                return None
+                
+            # Log that we're attempting TTS generation    
+            logger.info("Attempting to generate TTS audio")
+            
+            # Import elevenlabs with enhanced error handling
+            try:
+                import elevenlabs
+                logger.info("ElevenLabs module successfully imported")
+                
+                # Verify the module has the required functions
+                if not hasattr(elevenlabs, 'generate') or not hasattr(elevenlabs, 'set_api_key'):
+                    logger.error("ElevenLabs module missing required functions. Make sure you have the latest version installed.")
+                    return None
+                    
+            except ImportError:
+                logger.error("ElevenLabs module not installed. Cannot generate TTS.")
+                return None
+                
+            # Make sure we set the API key directly before generation
+            if self.elevenlabs_api_key:
+                try:
+                    # Set the API key for this specific generation call
+                    logger.info("Setting ElevenLabs API key")
+                    elevenlabs.set_api_key(self.elevenlabs_api_key)
+                except Exception as api_key_error:
+                    logger.error(f"Failed to set ElevenLabs API key: {str(api_key_error)}")
+                    return None
+            else:
+                logger.error("No ElevenLabs API key available. Cannot generate TTS.")
+                return None
+                
+            # Get voice settings based on current persona - use current_persona if available
+            current_persona = self.current_persona if hasattr(self, 'current_persona') else self.persona
+            voice_settings = get_voice_settings(current_persona)
+            voice_id = voice_settings.get('voice_id')
+            
+            if not voice_id:
+                logger.warning(f"No voice ID configured for persona: {current_persona}")
+                # Default to a known good voice ID
+                voice_id = "EXAVITQu4vr4xnSDxMaL"  
+                
+            logger.info(f"Using ElevenLabs voice ID: {voice_id}")
+            
+            # Prepare parameters for ElevenLabs API call
+            elevenlabs_params = {
+                "text": text,
+                "voice": voice_id,
+                "model": "eleven_multilingual_v2"
+            }
+            
+            # Generate audio with ElevenLabs using a timeout to prevent hanging
+            start_time = time.time()
+            logger.info("Calling ElevenLabs API for text-to-speech conversion")
+            
+            try:
+                # Use a timeout mechanism - importing signal and setting a timeout
+                # if supported by the platform
+                has_timeout_support = False
+                try:
+                    import signal
+                    
+                    def timeout_handler(signum, frame):
+                        raise TimeoutError("ElevenLabs API call timed out after 30 seconds")
+                    
+                    # Set the timeout for 30 seconds
+                    if hasattr(signal, 'SIGALRM'):
+                        has_timeout_support = True
+                        signal.signal(signal.SIGALRM, timeout_handler)
+                        signal.alarm(30)
+                except (ImportError, AttributeError):
+                    # Signal module or SIGALRM not available (e.g., on Windows)
+                    pass
+                    
+                # Generate the audio
+                audio_data = elevenlabs.generate(**elevenlabs_params)
+                
+                # Cancel the alarm if it was set
+                if has_timeout_support and hasattr(signal, 'alarm'):
+                    signal.alarm(0)
+                
+                end_time = time.time()
+                
+                if audio_data:
+                    # Only log success, not the audio data details
+                    logger.info(f"Successfully generated audio in {end_time - start_time:.2f}s")
+                    return audio_data
+                else:
+                    logger.error("ElevenLabs returned empty audio data")
+                    return None
+                    
+            except TimeoutError as timeout_err:
+                logger.error(f"ElevenLabs API call timed out: {str(timeout_err)}")
+                return None
+            except Exception as gen_err:
+                logger.error(f"Error generating audio: {str(gen_err)}")
+                import traceback
+                logger.error(f"Audio generation error stack trace: {traceback.format_exc()}")
+                return None
+                
+        except Exception as e:
+            # Log the failed API call with detailed error information
+            logger.error(f"Error calling ElevenLabs API: {str(e)}")
+            import traceback
+            logger.error(f"Stack trace: {traceback.format_exc()}")
+            return None 

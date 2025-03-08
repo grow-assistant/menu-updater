@@ -48,69 +48,60 @@ class ClassificationPromptBuilder:
         self.analysis_types = {
             "item_performance": [
                 "popular", "bestseller", "best seller", "top selling", "most ordered",
-                "least ordered", "worst seller", "worst performing"
-            ],
-            "sales_trends": [
-                "trend", "trending", "increasing", "decreasing", "growth", "decline"
+                "least popular", "worst selling", "least ordered"
             ],
             "customer_preferences": [
-                "preference", "favorite", "most liked", "highest rated", "best reviewed"
+                "favorite", "preferred", "like", "enjoy", "customer favorite",
+                "dislike", "hate", "avoid"
             ],
-            "pricing_analysis": [
-                "price analysis", "pricing strategy", "price comparison", "margin", "profit"
+            "time_analysis": [
+                "trend", "over time", "history", "historical", "pattern",
+                "season", "seasonal", "monthly", "weekly", "daily", "hourly"
+            ],
+            "geographical_analysis": [
+                "location", "region", "area", "city", "state", "country",
+                "branch", "store", "outlet"
             ]
         }
     
     def _init_examples(self) -> None:
-        """Initialize examples for each query type."""
+        """Initialize example queries for each category."""
         self.examples = {
             "order_history": [
-                "Show me orders from last week",
-                "List all orders from January",
-                "How many orders did we get yesterday?",
-                "Display transactions from March 1-15"
+                "Show me my order history from the past week",
+                "What did I order last month?",
+                "List all my purchases from January",
+                "Show me what I ordered on December 25th"
             ],
-            "update_price": [
-                "Change the price of margherita pizza to $12.99",
-                "Update caesar salad price to $8.50",
-                "Set new price for chicken wings to $14",
-                "Increase the price of all desserts by 5%"
+            "trend_analysis": [
+                "How have burger sales changed over the past 3 months?",
+                "Show me the weekly trend for salad orders",
+                "What's the sales pattern for coffee in the morning vs afternoon?",
+                "Has the popularity of vegetarian options increased since last year?"
             ],
-            "disable_item": [
-                "Remove the seafood pasta from the menu",
-                "Disable the tiramisu dessert",
-                "Take the veggie burger off the menu temporarily",
-                "Deactivate all seasonal items"
+            "popular_items": [
+                "What are the most popular desserts?",
+                "Which appetizers sell best on weekends?",
+                "Show me the top 5 best-selling items this month",
+                "What's the most ordered breakfast item before 9am?"
             ],
-            "enable_item": [
-                "Add back the mushroom risotto to the menu",
-                "Enable the chocolate lava cake",
-                "Make the summer salad available again",
-                "Reactivate all holiday specials"
+            "order_ratings": [
+                "What's the average rating for the chicken sandwich?",
+                "Show me dishes with the highest customer ratings",
+                "Which menu items received poor reviews last month?",
+                "What's the trend in satisfaction scores for the new pizza?"
             ],
-            "query_menu": [
-                "Show me all appetizers on the menu",
-                "Which desserts do we offer?",
-                "List all gluten-free options",
-                "How many vegetarian dishes do we have?"
-            ],
-            "query_performance": [
-                "What's our busiest day of the week?",
-                "Show me sales data for February",
-                "How did the new burger perform last month?",
-                "Compare lunch vs dinner revenue"
-            ],
-            "query_ratings": [
-                "What's our average customer rating?",
-                "Show me the worst-rated dishes",
-                "How has our customer satisfaction changed over time?",
-                "What feedback did we get about the new pasta dish?"
+            "menu_inquiry": [
+                "What vegetarian options do you have?",
+                "How much is the deluxe burger?",
+                "Does the chicken salad contain nuts?",
+                "When will the seasonal menu be available?"
             ],
             "general_question": [
-                "What hours are you open tomorrow?",
-                "Do you offer catering services?",
-                "How can I apply for a job?",
-                "What's your cancellation policy?"
+                "What are your opening hours?",
+                "Do you offer delivery service?",
+                "How can I place a catering order?",
+                "Where is your nearest location?"
             ]
         }
     
@@ -128,8 +119,71 @@ class ClassificationPromptBuilder:
         current_date = datetime.now().strftime('%Y-%m-%d')
         current_time = datetime.now().strftime('%H:%M:%S')
         
-        # Load the base classification system prompt
-        system_prompt = self.prompt_loader.load_template("classification_system_prompt")
+        # Create a custom system prompt with instructions for time period extraction
+        system_prompt = """You are an AI assistant specialized in classifying restaurant menu-related queries. 
+Your task is to:
+1. FIRST determine if the query is a follow-up question
+2. Analyze the user's query
+3. Categorize it into one of these types:
+{categories}
+
+4. IDENTIFY ANY TIME PERIOD INFORMATION and convert it to a SQL WHERE clause for the 'updated_at' column.
+
+FOLLOW-UP QUESTION DETECTION:
+- A follow-up question often refers to previous information without explicitly stating it
+- Look for phrases like "those orders", "that time", "them", "those items", etc.
+- If the query seems incomplete without prior context, it's likely a follow-up
+- Example: "Who placed those orders?" is a follow-up to a previous query about orders
+- Example: "What items were included?" is a follow-up to a previous order discussion
+
+When classifying follow-up questions:
+- Maintain the same query_type as the most logical parent query
+- For instance, a follow-up to an "order_history" query is also an "order_history" query
+- "Who placed those orders?" should be classified as "order_history"
+- "What were the most popular items in that period?" should be classified as "popular_items"
+
+Examples of time period information and corresponding WHERE clauses:
+- "last week" → WHERE updated_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)
+- "past 3 months" → WHERE updated_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
+- "January" → WHERE MONTH(updated_at) = 1
+- "2023" → WHERE YEAR(updated_at) = 2023
+- "between March and June" → WHERE updated_at BETWEEN '2023-03-01' AND '2023-06-30'
+- "yesterday" → WHERE updated_at = DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)
+- "weekends over the past month" → WHERE DAYOFWEEK(updated_at) IN (1, 7) AND updated_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH)
+
+The CURRENT DATE is: {current_date}
+The CURRENT TIME is: {current_time}
+
+Here are examples of different query types:
+{examples}
+
+EXAMPLES OF FOLLOW-UP QUESTIONS:
+- Initial: "How many orders were completed yesterday?" (order_history)
+  Follow-up: "Who placed those orders?" (still order_history)
+- Initial: "What were our most popular items last month?" (popular_items)
+  Follow-up: "How many of each did we sell?" (still popular_items)
+- Initial: "Show me sales data for February." (trend_analysis)
+  Follow-up: "How does that compare to January?" (still trend_analysis)
+
+Respond with a JSON object containing three fields:
+1. "query_type": The category that best matches the query
+2. "time_period_clause": A SQL WHERE clause for time constraints if present, or null if not applicable
+3. "is_followup": Boolean indicating if this is a follow-up question
+
+Example response format:
+{{
+  "query_type": "order_history",
+  "time_period_clause": "WHERE updated_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 WEEK)",
+  "is_followup": false
+}}
+
+For follow-up questions:
+{{
+  "query_type": "order_history",
+  "time_period_clause": null,
+  "is_followup": true
+}}
+"""
         
         # Format with categories and examples
         categories_str = "\n".join([f"- {cat}" for cat in self.query_categories])
@@ -149,13 +203,8 @@ class ClassificationPromptBuilder:
             current_time=current_time
         )
         
-        # Create user prompt
-        user_prompt = f"Query to classify: \"{query}\""
-        
-        # Add date context if available
-        if cached_dates:
-            dates_str = ", ".join([f"{date}: {count} references" for date, count in cached_dates.items()])
-            user_prompt += f"\n\nContext - Dates mentioned in previous conversations: {dates_str}"
+        # User prompt is just the query itself
+        user_prompt = query
         
         return {
             "system": system_prompt,
@@ -163,26 +212,13 @@ class ClassificationPromptBuilder:
         }
     
     def get_available_query_types(self) -> List[str]:
-        """
-        Get a list of all available query types.
-        
-        Returns:
-            List of query type names
-        """
+        """Get the list of available query categories."""
         return self.query_categories
     
     def is_valid_query_type(self, query_type: str) -> bool:
-        """
-        Check if a query type is valid.
-        
-        Args:
-            query_type: Query type to check
-            
-        Returns:
-            True if the query type is valid, False otherwise
-        """
+        """Check if a query type is valid."""
         return query_type in self.query_categories
 
 
-# Singleton instance
+# Global instance
 classification_prompt_builder = ClassificationPromptBuilder() 

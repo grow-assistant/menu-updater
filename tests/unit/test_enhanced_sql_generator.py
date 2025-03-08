@@ -43,7 +43,7 @@ def mock_rules_service():
             "columns": ["id", "name", "price", "category"]
         },
         "orders": {
-            "columns": ["id", "customer_id", "order_date", "total"]
+            "columns": ["id", "customer_id", "updated_at", "total"]
         }
     }
     

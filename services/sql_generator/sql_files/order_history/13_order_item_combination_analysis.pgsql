@@ -5,7 +5,7 @@ WITH order_items_list AS (
     -- Get all order item pairs
     SELECT
         o.id AS order_id,
-        o.updated_at AS order_date,
+        o.updated_at AS updated_at,
         i1.id AS item1_id,
         i1.name AS item1_name,
         i2.id AS item2_id,

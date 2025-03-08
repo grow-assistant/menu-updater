@@ -10,6 +10,7 @@ import asyncio
 import re
 
 from services.classification.prompt_builder import ClassificationPromptBuilder, classification_prompt_builder
+from services.utils.logging import log_openai_request, log_openai_response
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,9 @@ class ClassificationService:
         return {
             "category": result.get("query_type", "general_question"),
             "confidence": result.get("confidence", 0.0),
-            "skip_database": result.get("skip_database", False)
+            "skip_database": result.get("skip_database", False),
+            "time_period_clause": result.get("time_period_clause", None),  # Add time period clause to response
+            "is_followup": result.get("is_followup", False)  # Add follow-up question indicator
         }
     
     def health_check(self) -> bool:
@@ -78,15 +81,29 @@ class ClassificationService:
     
     def _normalize_query(self, query: str) -> str:
         """Normalize the query for caching purposes."""
-        return query.strip().lower()
+        # Remove extra whitespace, lowercase
+        return re.sub(r'\s+', ' ', query.lower().strip())
     
     def _check_query_cache(self, query: str, use_cache: bool) -> Optional[Dict[str, Any]]:
-        """Check if the query result is in cache."""
+        """Check if query is in cache."""
         if not use_cache:
             return None
-        
+            
         normalized_query = self._normalize_query(query)
         return self._classification_cache.get(normalized_query)
+    
+    def _fallback_classification(self, query: str) -> Dict[str, Any]:
+        """Provide a fallback classification when API calls fail."""
+        return {
+            "query": query,
+            "query_type": "general_question",  # Default fallback
+            "confidence": 0.1,
+            "time_elapsed": 0.0,
+            "from_cache": False,
+            "classification_method": "fallback",
+            "time_period_clause": None,  # Default empty time period clause
+            "is_followup": False
+        }
     
     def classify_query(self, query: str, cached_dates=None, use_cache=True) -> Dict[str, Any]:
         """
@@ -109,15 +126,19 @@ class ClassificationService:
             return cached_result
         
         try:
-            # First try keyword-based classification for efficiency
-            keyword_result = self._classify_by_keywords(query)
-            if keyword_result.get("confidence", 0) > 0.8:
-                # High confidence keyword match
-                keyword_result["classification_method"] = "keyword"
-                return keyword_result
-            
             # Create a prompt for classification
             prompt = self.prompt_builder.build_classification_prompt(query, cached_dates)
+            
+            # Log the OpenAI request
+            log_openai_request(
+                prompt=f"System: {prompt['system']}\nUser: {prompt['user']}",
+                parameters={
+                    "model": self.model,
+                    "temperature": 0.2,
+                    "max_tokens": 300,
+                    "response_format": {"type": "json_object"}
+                }
+            )
             
             # Call OpenAI API
             response = openai.chat.completions.create(
@@ -127,7 +148,14 @@ class ClassificationService:
                     {"role": "user", "content": prompt["user"]}
                 ],
                 temperature=0.2,
-                max_tokens=50
+                max_tokens=300,  # Increased token limit to accommodate time period clause extraction
+                response_format={"type": "json_object"}  # Request JSON format for structured output
+            )
+            
+            # Log the OpenAI response
+            log_openai_response(
+                response=response,
+                processing_time=time.time() - start_time
             )
             
             # Parse the response
@@ -150,76 +178,61 @@ class ClassificationService:
             logger.error(f"Error in classification: {str(e)}")
             return self._fallback_classification(query)
     
-    def _classify_by_keywords(self, query: str) -> Dict[str, Any]:
-        """Classify query using keyword matching."""
-        normalized_query = self._normalize_query(query)
-        
-        # Simple keyword mapping for common query types
-        keyword_maps = {
-            "order_history": ["order history", "past orders", "order list", "transaction history", "purchase history"],
-            "trend_analysis": ["trend", "analysis", "pattern", "over time", "growth", "decline", "seasonal"],
-            "popular_items": ["popular", "bestseller", "most ordered", "top selling", "favorite", "best performing"],
-            "order_ratings": ["rating", "review", "feedback", "satisfaction", "stars", "score"],
-            "menu_inquiry": ["menu", "item", "dish", "food", "category", "price", "availability"]
-        }
-        
-        highest_confidence = 0.0
-        matched_type = "general_question"  # Default
-        
-        for query_type, keywords in keyword_maps.items():
-            for keyword in keywords:
-                if keyword in normalized_query:
-                    confidence = 0.7 + (len(keyword) / len(normalized_query) * 0.3)
-                    if confidence > highest_confidence:
-                        highest_confidence = confidence
-                        matched_type = query_type
-        
-        return {
-            "query": normalized_query,
-            "query_type": matched_type,
-            "confidence": highest_confidence,
-            "time_elapsed": 0.0,
-            "from_cache": False
-        }
-    
     def parse_classification_response(self, response: Dict[str, Any], query: str) -> Dict[str, Any]:
         """Parse the classification response from the API."""
         try:
-            # Extract the category from response
-            category = response.choices[0].message.content.strip().lower()
+            # Extract the content from response
+            content = response.choices[0].message.content.strip()
             
-            # Check if the response contains a valid category
-            if category in self.categories:
-                return {
-                    "query_type": category,
-                    "confidence": 0.9,  # AI classification is generally high confidence
-                }
-            else:
-                # Try to extract a category if response isn't exactly a category name
+            # Try to parse as JSON
+            try:
+                parsed_json = json.loads(content)
+                query_type = parsed_json.get("query_type", "").strip().lower()
+                time_period_clause = parsed_json.get("time_period_clause", None)
+                is_followup = parsed_json.get("is_followup", False)
+                
+                # Validate query type
+                if query_type in self.categories:
+                    return {
+                        "query_type": query_type,
+                        "confidence": 0.9,
+                        "time_period_clause": time_period_clause,
+                        "is_followup": is_followup
+                    }
+            except json.JSONDecodeError:
+                # Fall back to text parsing if JSON parsing fails
+                content_lower = content.lower()
+                
+                # Default to empty time period clause
+                time_period_clause = None
+                is_followup = "follow-up" in content_lower or "followup" in content_lower
+                
+                # Check if the content contains a valid category
                 for valid_category in self.categories:
-                    if valid_category in category:
+                    if valid_category in content_lower:
                         return {
                             "query_type": valid_category,
-                            "confidence": 0.7,  # Lower confidence for partial matches
+                            "confidence": 0.8,
+                            "time_period_clause": time_period_clause,
+                            "is_followup": is_followup
                         }
-                
-                logger.warning(f"Invalid category returned: {category}. Defaulting to 'general_question'.")
-                return {"query_type": "general_question", "confidence": 0.5}
+            
+            # No valid category found
+            return {
+                "query_type": "general_question",
+                "confidence": 0.5,
+                "time_period_clause": None,
+                "is_followup": False
+            }
+        
         except Exception as e:
             logger.error(f"Error parsing classification response: {str(e)}")
-            return self._fallback_classification(query)
-    
-    def _fallback_classification(self, query: str) -> Dict[str, Any]:
-        """Provide a fallback classification when other methods fail."""
-        return {
-            "query": query,
-            "query_type": "general_question",
-            "confidence": 0.3,
-            "time_elapsed": 0.0,
-            "from_cache": False,
-            "classification_method": "fallback",
-            "error": "Classification failed, using fallback"
-        }
+            return {
+                "query_type": "general_question",
+                "confidence": 0.1,
+                "time_period_clause": None,
+                "is_followup": False
+            }
     
     async def classify_query_async(self, query: str, cached_dates=None, use_cache=True) -> Dict[str, Any]:
         """Asynchronous version of classify_query."""

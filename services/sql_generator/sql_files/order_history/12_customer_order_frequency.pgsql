@@ -8,8 +8,8 @@ WITH customer_orders AS (
         u.phone,
         u.email,
         COUNT(o.id) AS total_orders,
-        MIN(o.updated_at) AS first_order_date,
-        MAX(o.updated_at) AS last_order_date,
+        MIN(o.updated_at) AS first_updated_at,
+        MAX(o.updated_at) AS last_updated_at,
         AVG(o.total) AS avg_order_value,
         SUM(o.total) AS total_spent
     FROM
@@ -28,15 +28,15 @@ WITH customer_orders AS (
 frequency_metrics AS (
     SELECT
         co.*,
-        (last_order_date - first_order_date) AS customer_lifespan,
+        (last_updated_at - first_updated_at) AS customer_lifespan,
         CASE 
-            WHEN (last_order_date - first_order_date) > INTERVAL '0 days' 
-            THEN total_orders / EXTRACT(EPOCH FROM (last_order_date - first_order_date)) * 86400 
+            WHEN (last_updated_at - first_updated_at) > INTERVAL '0 days' 
+            THEN total_orders / EXTRACT(EPOCH FROM (last_updated_at - first_updated_at)) * 86400 
             ELSE 0 
         END AS orders_per_day,
         CASE 
-            WHEN (last_order_date - first_order_date) > INTERVAL '0 days' 
-            THEN EXTRACT(EPOCH FROM (last_order_date - first_order_date)) / total_orders / 86400
+            WHEN (last_updated_at - first_updated_at) > INTERVAL '0 days' 
+            THEN EXTRACT(EPOCH FROM (last_updated_at - first_updated_at)) / total_orders / 86400
             ELSE 0 
         END AS avg_days_between_orders
     FROM 
@@ -47,8 +47,8 @@ SELECT
     phone,
     email,
     total_orders,
-    first_order_date,
-    last_order_date,
+    first_updated_at,
+    last_updated_at,
     EXTRACT(DAY FROM customer_lifespan)::integer AS days_as_customer,
     ROUND(avg_order_value::numeric, 2) AS avg_order_value,
     ROUND(total_spent::numeric, 2) AS total_spent,
@@ -60,10 +60,10 @@ SELECT
         ELSE 'Occasional Customer'
     END AS frequency_segment,
     -- Days since last order
-    EXTRACT(DAY FROM (CURRENT_TIMESTAMP - last_order_date))::integer AS days_since_last_order,
+    EXTRACT(DAY FROM (CURRENT_TIMESTAMP - last_updated_at))::integer AS days_since_last_order,
     -- At risk flag (if last order was more than 2x their average interval)
     CASE 
-        WHEN EXTRACT(DAY FROM (CURRENT_TIMESTAMP - last_order_date))::integer > 
+        WHEN EXTRACT(DAY FROM (CURRENT_TIMESTAMP - last_updated_at))::integer > 
              (avg_days_between_orders * 2) 
         THEN 'At Risk'
         ELSE 'Active'

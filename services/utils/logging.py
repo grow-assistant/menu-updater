@@ -86,6 +86,8 @@ def setup_logging(
     log_level: str = "INFO",
     log_format: Optional[str] = None,
     log_file: Optional[str] = None,
+    max_log_size: int = 10 * 1024 * 1024,  # 10 MB
+    backup_count: int = 5,
 ) -> None:
     """
     Set up logging for the application.
@@ -94,6 +96,8 @@ def setup_logging(
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         log_format: Format for log messages
         log_file: Path to log file
+        max_log_size: Maximum size of each log file in bytes (default: 10MB)
+        backup_count: Number of backup logs to keep (default: 5)
     """
     # Create a session ID for this run if log_file is not provided
     if not log_file:
@@ -129,19 +133,39 @@ def setup_logging(
         if log_dir and not os.path.exists(log_dir):
             os.makedirs(log_dir, exist_ok=True)
 
-        # Create file handler
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(numeric_level)
-        file_handler.setFormatter(logging.Formatter(log_format))
-        root_logger.addHandler(file_handler)
+        # Use RotatingFileHandler instead of FileHandler to manage log size
+        try:
+            from logging.handlers import RotatingFileHandler
+            file_handler = RotatingFileHandler(
+                log_file,
+                maxBytes=max_log_size,
+                backupCount=backup_count
+            )
+            file_handler.setLevel(numeric_level)
+            file_handler.setFormatter(logging.Formatter(log_format))
+            root_logger.addHandler(file_handler)
+        except Exception as e:
+            # Fall back to regular file handler if rotating handler fails
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setLevel(numeric_level)
+            file_handler.setFormatter(logging.Formatter(log_format))
+            root_logger.addHandler(file_handler)
+            root_logger.warning(f"Failed to create rotating log handler, using standard handler: {str(e)}")
 
     # Configure application-specific logger
     app_logger = logging.getLogger("swoop_ai")
     app_logger.setLevel(numeric_level)
     
     # Suppress verbose logging from external libraries
-    for module in ["comtypes", "httpcore", "httpx"]:
+    for module in ["comtypes", "httpcore", "httpx", "httplib2", "requests", "urllib3"]:
         logging.getLogger(module).setLevel(logging.WARNING)
+    
+    # Clean up old logs if we have a new session
+    if "session_" in log_file:
+        try:
+            clean_old_logs(max_sessions=10)
+        except Exception as e:
+            app_logger.warning(f"Failed to clean old logs: {str(e)}")
         
     app_logger.info(f"Logging initialized at level {log_level}")
     app_logger.info(f"Log file: {log_file}")
@@ -211,11 +235,26 @@ def log_openai_request(prompt: str, parameters: Dict[str, Any] = None, context: 
     """Log an OpenAI API request"""
     openai_logger = logging.getLogger("openai_categorization")
     openai_logger.info("OpenAI API REQUEST")
-    openai_logger.info(f"PROMPT: {prompt}")
+    
+    # Handle Unicode characters safely for Windows Console output
+    try:
+        openai_logger.info(f"PROMPT: {prompt}")
+    except UnicodeEncodeError:
+        # If encoding fails, just log that we have a Unicode prompt
+        openai_logger.info("PROMPT: [Unicode prompt - contains characters that can't be displayed in current console encoding]")
+    
     if parameters:
-        openai_logger.info(f"PARAMETERS: {json.dumps(parameters, default=str)}")
+        try:
+            openai_logger.info(f"PARAMETERS: {json.dumps(parameters, default=str)}")
+        except UnicodeEncodeError:
+            openai_logger.info("PARAMETERS: [Contains Unicode characters that can't be displayed]")
+    
     if context:
-        openai_logger.info(f"CONTEXT: {context}")
+        try:
+            openai_logger.info(f"CONTEXT: {context}")
+        except UnicodeEncodeError:
+            openai_logger.info("CONTEXT: [Contains Unicode characters that can't be displayed]")
+    
     openai_logger.info("-" * 50)
     # Force flush handlers
     for handler in openai_logger.handlers:
@@ -239,12 +278,25 @@ def log_openai_response(response: Any, processing_time: float = None):
 def log_gemini_request(prompt: str, parameters: Dict[str, Any] = None, context: Optional[str] = None):
     """Log a Google Gemini API request"""
     gemini_logger = logging.getLogger("google_gemini")
-    gemini_logger.info("GEMINI API REQUEST")
-    gemini_logger.info(f"PROMPT: {prompt}")
+    gemini_logger.info("GOOGLE GEMINI API REQUEST")
+    
+    try:
+        gemini_logger.info(f"PROMPT: {prompt}")
+    except UnicodeEncodeError:
+        gemini_logger.info("PROMPT: [Unicode prompt - contains characters that can't be displayed in current console encoding]")
+    
     if parameters:
-        gemini_logger.info(f"PARAMETERS: {json.dumps(parameters, default=str)}")
+        try:
+            gemini_logger.info(f"PARAMETERS: {json.dumps(parameters, default=str)}")
+        except UnicodeEncodeError:
+            gemini_logger.info("PARAMETERS: [Contains Unicode characters that can't be displayed]")
+    
     if context:
-        gemini_logger.info(f"CONTEXT: {context}")
+        try:
+            gemini_logger.info(f"CONTEXT: {context}")
+        except UnicodeEncodeError:
+            gemini_logger.info("CONTEXT: [Contains Unicode characters that can't be displayed]")
+    
     gemini_logger.info("-" * 50)
     # Force flush handlers
     for handler in gemini_logger.handlers:
@@ -253,17 +305,16 @@ def log_gemini_request(prompt: str, parameters: Dict[str, Any] = None, context: 
 def log_gemini_response(response: Any, processing_time: float = None):
     """Log a Google Gemini API response"""
     gemini_logger = logging.getLogger("google_gemini")
-    gemini_logger.info("GEMINI API RESPONSE")
+    gemini_logger.info("GOOGLE GEMINI API RESPONSE")
+    
     try:
-        gemini_logger.info(f"RESPONSE: {json.dumps(response, default=str)}")
-    except:
-        gemini_logger.info(f"RESPONSE: {str(response)}")
-    if processing_time:
-        gemini_logger.info(f"PROCESSING TIME: {processing_time:.2f} seconds")
-    gemini_logger.info("=" * 50)
-    # Force flush handlers
-    for handler in gemini_logger.handlers:
-        handler.flush()
+        gemini_logger.info(f"RESPONSE: {response}")
+    except UnicodeEncodeError:
+        gemini_logger.info("RESPONSE: [Unicode response - contains characters that can't be displayed in current console encoding]")
+    
+    if processing_time is not None:
+        gemini_logger.info(f"PROCESSING TIME: {processing_time:.4f}s")
+    gemini_logger.info("-" * 50)
 
 def get_logger(name: Optional[str] = None) -> logging.Logger:
     """

@@ -6,7 +6,7 @@ import logging
 import re
 import time
 import google.generativeai as genai
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Union
 import uuid
 import os
 from datetime import datetime
@@ -298,14 +298,63 @@ CRITICAL REQUIREMENTS:
                 
             previous_sql_str += """
 IMPORTANT CONTEXT MAINTENANCE INSTRUCTIONS:
-1. If the current question contains terms like "those", "these", or otherwise refers to previous results, it's a follow-up query.
-2. For follow-up queries, ALWAYS maintain the same filtering conditions (WHERE clauses) from the most recent relevant query.
-3. Pay special attention to date filters, status filters, and location filters - these should be preserved exactly.
-4. Example: If previous query filtered "orders on 2/21/2025 with status 7", and current query asks "who placed those orders", 
-   your new query MUST include "WHERE (o.updated_at - INTERVAL '7 hours')::date = '2025-02-21' AND o.status = 7".
-5. Never drop important filters when answering follow-up questions - context continuity is critical.
 """
-        
+
+        # Add follow-up question context
+        followup_context_str = ""
+        if "previous_query" in context:
+            followup_context_str += f"\nFOLLOW-UP QUESTION CONTEXT:\n"
+            followup_context_str += f"Previous Query: {context.get('previous_query', '')}\n"
+            
+            # Add previous complete SQL if available (direct reference)
+            if "previous_complete_sql" in context:
+                followup_context_str += f"Previous Full SQL: {context.get('previous_complete_sql', '')}\n"
+            
+            # Add time period filter if available
+            if "previous_time_period" in context:
+                followup_context_str += f"Time Period Filter: {context.get('previous_time_period', '')}\n"
+            
+            # Add required SQL conditions - these must be included
+            if "required_conditions" in context and context["required_conditions"]:
+                followup_context_str += "\nREQUIRED SQL CONDITIONS - YOU MUST INCLUDE THESE EXACT CONDITIONS IN YOUR WHERE CLAUSE:\n"
+                for condition in context["required_conditions"]:
+                    followup_context_str += f"- {condition}\n"
+            
+            # Add other filters from previous query
+            explicit_sql_filters = []
+            if "previous_filters" in context and context["previous_filters"]:
+                followup_context_str += "Previous Query Filters:\n"
+                for filter_name, filter_value in context["previous_filters"].items():
+                    followup_context_str += f"- {filter_name}: {filter_value}\n"
+                    
+                    # Generate explicit SQL WHERE clauses for common filters
+                    if filter_name == "status":
+                        if filter_value.lower() == "completed":
+                            explicit_sql_filters.append("o.status = 7")
+                        elif filter_value.lower() == "pending":
+                            explicit_sql_filters.append("o.status = 3")
+                        elif filter_value.lower() == "cancelled" or filter_value.lower() == "canceled":
+                            explicit_sql_filters.append("o.status = 6")
+                
+            # Add explicit SQL filter instructions if any were generated
+            if explicit_sql_filters:
+                followup_context_str += "\nREQUIRED SQL FILTERS - YOU MUST INCLUDE THESE IN YOUR QUERY:\n"
+                for sql_filter in explicit_sql_filters:
+                    followup_context_str += f"- {sql_filter}\n"
+                
+            followup_context_str += """
+IMPORTANT: This is a follow-up question related to the previous query.
+You MUST maintain all relevant filters and constraints from the previous query.
+
+CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
+1. If the previous query filtered for completed orders (status=7), you MUST include "o.status = 7" in your WHERE clause
+2. If the previous query had a time period constraint, you MUST maintain the exact same time constraint
+3. You MUST use the same table joins and core filtering logic from the previous query
+4. Location_id filtering (o.location_id = 123) MUST be preserved in all cases
+5. NEVER drop a constraint that was in the previous query - follow-up questions refer to the same data subset
+"""
+
+        # Format final prompt with all components
         # Replace the placeholders
         prompt = prompt.replace("{schema}", schema_str)
         prompt = prompt.replace("{rules}", rules_str)
@@ -313,9 +362,13 @@ IMPORTANT CONTEXT MAINTENANCE INSTRUCTIONS:
         prompt = prompt.replace("{examples}", examples_str)
         prompt = prompt.replace("{query}", query)
         
-        # Add previous SQL context to the end of the prompt
-        if previous_sql_str:
-            prompt += "\n" + previous_sql_str
+        # Add context to the appropriate section of the prompt
+        context_str = previous_sql_str + followup_context_str
+        if "{context}" in prompt:
+            prompt = prompt.replace("{context}", context_str)
+        else:
+            # Add context at the end if there's no placeholder
+            prompt += "\n" + context_str
         
         return prompt
     
@@ -494,8 +547,13 @@ IMPORTANT CONTEXT MAINTENANCE INSTRUCTIONS:
             text: Raw model response
             
         Returns:
-            Extracted SQL query
+            Extracted SQL query or empty string if not found
         """
+        # Handle None input
+        if not text:
+            logger.warning("Received empty text for SQL extraction")
+            return ""
+            
         # Extract SQL from response using regex pattern
         sql_pattern = r"```sql\s+(.*?)\s+```"
         match = re.search(sql_pattern, text, re.DOTALL)
@@ -581,38 +639,121 @@ IMPORTANT CONTEXT MAINTENANCE INSTRUCTIONS:
             logger.error(f"Health check failed: {e}")
             return False
 
-    def generate(self, query: str, category: str, rules_and_examples: Dict[str, Any], 
+    def generate(self, query: str, category: str, rules_and_examples: Union[Dict[str, Any], List], 
                 additional_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Generate SQL for a given query (interface method for OrchestratorService).
-        This method adapts the parameters from the orchestrator to the format expected by generate_sql.
+        Generate SQL based on a query using customized rules and examples.
         
         Args:
-            query: The user's natural language query
-            category: The query category as determined by the classifier
-            rules_and_examples: Dictionary containing rules and examples for this query type
-            additional_context: Optional additional context like previous SQL queries
+            query: Natural language query
+            category: Query category
+            rules_and_examples: Dictionary containing rules and examples or just a list of examples
+            additional_context: Additional context for generation
             
         Returns:
             Dictionary with generated SQL and metadata
         """
-        logger.debug(f"Generate called with query: '{query}', category: '{category}'")
+        start_time = time.time()
         
-        # Extract examples from rules_and_examples
-        examples = rules_and_examples.get("examples", [])
+        # Extract examples and rules
+        if isinstance(rules_and_examples, dict):
+            examples = rules_and_examples.get("examples", [])
+            rules = rules_and_examples.get("rules", {})
+            query_patterns = rules_and_examples.get("query_patterns", {})
+        else:
+            # If rules_and_examples is a list, assume it's just examples
+            examples = rules_and_examples
+            rules = {}
+            query_patterns = {}
         
-        # Create context dictionary from category and rules
+        # Prepare context
         context = {
-            "query_type": category,
-            "rules": rules_and_examples.get("query_rules", {})
+            "rules": rules,
+            "query_patterns": query_patterns
         }
         
-        # Add additional context if provided (like previous SQL)
+        # Add special handling for follow-up questions with required conditions
+        is_followup = False
+        required_conditions = []
         if additional_context:
+            # Copy all additional context
             context.update(additional_context)
+            # Check if this is a follow-up query with required conditions
+            if "required_conditions" in additional_context:
+                is_followup = True
+                required_conditions = additional_context["required_conditions"]
+                
+        # Log what we're doing
+        logger.info(f"Built SQL generation prompt with {len(examples)} examples and context for {category}")
         
-        # Call the actual implementation method
-        return self.generate_sql(query, examples, context)
+        # Special prefix for follow-up questions with required conditions
+        query_prefix = ""
+        if is_followup and required_conditions:
+            query_prefix = "THIS IS A FOLLOW-UP QUESTION. Include these exact WHERE conditions: "
+            query_prefix += " AND ".join(required_conditions)
+            query_prefix += ". "
+            
+        # Build the prompt
+        prompt = self._build_prompt(query_prefix + query, examples, context)
+        
+        # Additional metrics
+        attempt = 1
+        max_attempts = 3
+        backoff_time = 1  # Start with 1 second
+        
+        while attempt <= max_attempts:
+            try:
+                logger.info(f"Generating SQL with model: {self.model}, attempt: {attempt}/{max_attempts}")
+                
+                # Create Gemini client configurations
+                generation_config = {
+                    "temperature": self.temperature,
+                    "max_output_tokens": self.max_tokens,
+                    "top_p": 0.95,
+                    "top_k": 64
+                }
+                
+                # Call Gemini API
+                model = genai.GenerativeModel(self.model)
+                response = model.generate_content(prompt, generation_config=generation_config)
+                
+                # Parse and validate the result
+                result_text = response.text
+                sql_query = self._extract_sql(result_text)
+                
+                # Update metrics
+                self.api_call_count += 1
+                
+                # Return success result
+                return {
+                    "query": query,
+                    "sql": sql_query,  # Make sure the sql field is included
+                    "raw_response": result_text,
+                    "category": category,
+                    "success": True,
+                    "execution_time": time.time() - start_time,
+                    "attempt": attempt
+                }
+                
+            except Exception as e:
+                logger.error(f"Error in SQL generation (attempt {attempt}/{max_attempts}): {str(e)}")
+                attempt += 1
+                self.retry_count += 1
+                
+                if attempt <= max_attempts:
+                    time.sleep(backoff_time)
+                    backoff_time *= 2  # Exponential backoff
+                else:
+                    # Return error result on final failure
+                    return {
+                        "query": None,  # Use None instead of empty string
+                        "sql": None,    # Add sql field for consistency
+                        "raw_response": str(e),
+                        "category": category,
+                        "success": False,
+                        "error": str(e),
+                        "execution_time": time.time() - start_time
+                    }
 
     def get_performance_metrics(self):
         return {
@@ -620,4 +761,42 @@ IMPORTANT CONTEXT MAINTENANCE INSTRUCTIONS:
             'total_tokens_used': self.total_tokens,
             'average_latency': self.total_latency / max(1, self.api_call_count),
             'retry_count': self.retry_count
-        } 
+        }
+
+    def generate_sql(self, query, classification, time_period=None, constraints=None, context=None):
+        """Generate SQL based on the provided query and classification."""
+        try:
+            # Get SQL examples for this classification
+            sql_examples = self._get_sql_examples(classification)
+            
+            # Build the prompt with the query, classification, and examples
+            prompt = self._build_prompt(query, sql_examples, context)
+            
+            # Log the number of examples included
+            self.logger.info(f"Built SQL generation prompt with {len(sql_examples.get('examples', []))} examples and context for {classification}")
+            
+            # Generate the SQL
+            return self._generate_with_retry(prompt)
+        except Exception as e:
+            self.logger.error(f"Error in SQL generation: {e}")
+            raise
+
+    def _get_sql_examples(self, classification):
+        """Get SQL examples for the given classification from the rules service."""
+        try:
+            # Get the rules service from the service registry
+            rules_service = ServiceRegistry.get_service('rules')
+            if not rules_service:
+                self.logger.warning("Rules service not available, proceeding without examples")
+                return {"examples": []}
+            
+            # Get SQL examples from the rules service
+            examples = rules_service.get_sql_examples(classification)
+            if not examples:
+                self.logger.warning(f"No SQL examples found for classification: {classification}")
+                return {"examples": []}
+            
+            return {"examples": examples}
+        except Exception as e:
+            self.logger.error(f"Error getting SQL examples: {e}")
+            return {"examples": []} 

@@ -100,7 +100,29 @@ def run_app():
             result = st.session_state.orchestrator.process_query(query, context)
             
             # Display the response
-            message_placeholder.markdown(result["response"])
+            if "response" in result:
+                message_placeholder.markdown(result["response"])
+            elif "errors" in result and result["errors"]:
+                error_message = "\n".join(result["errors"])
+                message_placeholder.markdown(f"❌ **Error:** {error_message}")
+            else:
+                message_placeholder.markdown("❌ **Error:** Something went wrong. Please try again.")
+            
+            # Add debug info in collapsible section
+            with st.expander("Query Details", expanded=False):
+                st.markdown("### Execution Metrics")
+                if "execution_time" in result:
+                    st.write(f"Total execution time: {result['execution_time']:.2f} seconds")
+                
+                st.markdown("### Query Results")
+                if "query_results" in result and result["query_results"]:
+                    st.json(result["query_results"])
+                else:
+                    st.write("No query results available")
+                
+                st.markdown("### Query Classification")
+                if "category" in result:
+                    st.write(f"Query category: {result['category']}")
             
             # Play verbal response if available
             if result.get("verbal_audio"):
@@ -113,7 +135,9 @@ def run_app():
                     </audio>
                 """
                 st.markdown(audio_html, unsafe_allow_html=True)
-                logger.info(f"Playing verbal response audio: {len(result['verbal_audio'])} bytes")
+                st.info("🔊 Verbal response is playing...")
+            elif "has_verbal" in result and result["has_verbal"]:
+                st.info("🔊 Verbal response was generated but couldn't be played in the browser.")
             
             # Optionally show SQL and results in an expandable section
             if result.get("sql_query"):

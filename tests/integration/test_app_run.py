@@ -56,7 +56,7 @@ def test_process_order_history_query(mock_config):
         with patch("services.sql_generator.gemini_sql_generator.GeminiSQLGenerator.generate") as mock_generate:
             mock_generate.return_value = {
                 "success": True,
-                "query": "SELECT COUNT(*) FROM orders WHERE order_date = '2025-02-21'",
+                "query": "SELECT COUNT(*) FROM orders WHERE updated_at = '2025-02-21'",
                 "query_type": "SELECT"
             }
             

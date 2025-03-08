@@ -104,7 +104,7 @@ class TestExecutionService:
         with patch.object(mock_execution_service, "analyze_query_for_date_handling") as mock_analyze:
             mock_analyze.return_value = True
             needs_date_handling = mock_execution_service.analyze_query_for_date_handling(
-                "SELECT * FROM orders WHERE order_date > '2023-01-01'"
+                "SELECT * FROM orders WHERE updated_at > '2023-01-01'"
             )
             assert needs_date_handling is True
 

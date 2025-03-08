@@ -8,7 +8,7 @@ SELECT
     u.id AS user_id,
     u.phone AS user_phone,
     u.email AS user_email,
-    o.updated_at - INTERVAL '7 hours' AS order_date,
+    o.updated_at - INTERVAL '7 hours' AS updated_at,
     o.tip as tip,
     u.first_name || ' ' || u.last_name AS customer,
     d.amount as discount_amount

@@ -3,7 +3,7 @@ Orchestrator service that coordinates the workflow between services.
 """
 import logging
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import uuid
 from datetime import datetime
 import re  # Add this import
@@ -12,6 +12,7 @@ import psutil
 import threading
 import os
 
+from resources.ui.personas import get_voice_settings
 from services.utils.service_registry import ServiceRegistry
 from services.classification.classifier import ClassificationService
 from services.rules.rules_service import RulesService
@@ -23,7 +24,15 @@ logger = logging.getLogger(__name__)
 
 class OrchestratorService:
     def __init__(self, config: Dict[str, Any]):
-        """Initialize the orchestrator with service registry."""
+        """
+        Initialize the orchestrator service with the provided configuration.
+        
+        Args:
+            config: Configuration dictionary
+        """
+        self.config = config
+        self.logger = logging.getLogger(__name__)
+        
         # Initialize logger
         self.logger = logger
         
@@ -48,6 +57,19 @@ class OrchestratorService:
         ServiceRegistry.register("execution", lambda cfg: SQLExecutor(cfg))
         ServiceRegistry.register("response", lambda cfg: ResponseGenerator(cfg))
         
+        # Initialize query context storage
+        self.query_context = {
+            "time_period_clause": None,
+            "previous_query": None,
+            "previous_category": None,
+            "previous_sql": None,
+            "previous_filters": {},
+            "previous_constraints": []
+        }
+        
+        # Initialize time period context for storing time periods from queries
+        self.time_period_context = None
+        
         # Get service instances
         self.classifier = ServiceRegistry.get_service("classification")
         self.rules = ServiceRegistry.get_service("rules")
@@ -60,6 +82,72 @@ class OrchestratorService:
         
         self.error_context = {}
         self.retry_counter = 0  # Add retry counter
+        
+        # Initialize ElevenLabs for TTS at startup
+        self.elevenlabs_initialized = False
+        self.initialize_elevenlabs_tts()
+    
+    def initialize_elevenlabs_tts(self) -> bool:
+        """
+        Initialize the ElevenLabs TTS client.
+        
+        Returns:
+            True if initialization was successful, False otherwise
+        """
+        self.logger.info("Initializing ElevenLabs for TTS during startup")
+        
+        # Get the API key from config
+        api_key = self.config.get("api", {}).get("elevenlabs", {}).get("api_key")
+        
+        if not api_key:
+            self.logger.error("No ElevenLabs API key provided in config")
+            self.elevenlabs_initialized = False
+            return False
+            
+        try:
+            # Set the API key length for logging without revealing the actual key
+            self.logger.info(f"Setting ElevenLabs API key (length: {len(api_key)})")
+            
+            # Import and set up ElevenLabs
+            import elevenlabs
+            elevenlabs.set_api_key(api_key)
+            
+            # Validate by checking available voices
+            voices = elevenlabs.voices()
+            
+            if voices:
+                self.logger.info(f"ElevenLabs API key validated successfully, found {len(voices)} voices")
+                # Store available voices for later use
+                self.elevenlabs_voices = voices
+                self.logger.info("ElevenLabs initialized successfully for TTS")
+                
+                # Ensure the response generator also has ElevenLabs properly initialized
+                if hasattr(self, 'response_generator') and self.response_generator:
+                    if hasattr(self.response_generator, 'elevenlabs_client') and not self.response_generator.elevenlabs_client:
+                        self.logger.info("Reinitializing ElevenLabs in response generator")
+                        self.response_generator.elevenlabs_api_key = api_key
+                        try:
+                            elevenlabs.set_api_key(api_key)
+                            self.response_generator.elevenlabs_client = True
+                            self.logger.info("ElevenLabs reinitialized in response generator")
+                        except Exception as e:
+                            self.logger.error(f"Failed to reinitialize ElevenLabs in response generator: {str(e)}")
+                
+                self.elevenlabs_initialized = True
+                return True
+            else:
+                self.logger.error("ElevenLabs returned no voices")
+                self.elevenlabs_initialized = False
+                return False
+                
+        except ImportError:
+            self.logger.error("ElevenLabs module not installed. Please install it with 'pip install elevenlabs'")
+            self.elevenlabs_initialized = False
+            return False
+        except Exception as e:
+            self.logger.error(f"Error initializing ElevenLabs: {str(e)}")
+            self.elevenlabs_initialized = False
+            return False
     
     def health_check(self) -> Dict[str, bool]:
         """Check the health of all services."""
@@ -79,6 +167,11 @@ class OrchestratorService:
         """
         self.current_query = query  # Track current query
         self.retry_counter = 0  # Reset retry counter
+        
+        # Log all input parameters
+        self.logger.info(f"PROCESS_QUERY INPUT - query: '{query}'")
+        self.logger.info(f"PROCESS_QUERY INPUT - context: {context}")
+        self.logger.info(f"PROCESS_QUERY INPUT - fast_mode: {fast_mode}")
         
         # Add detailed timing instrumentation
         timers = {
@@ -101,16 +194,33 @@ class OrchestratorService:
             if context is None:
                 context = {}
             
-            # Only enable fast_mode if voice is not enabled
-            if context.get("enable_verbal", False):
-                fast_mode = False
+            # Check if verbal response is requested
+            if context and context.get("enable_verbal", False):
                 self.logger.info(f"Verbal response requested, disabling fast_mode (original fast_mode={fast_mode})")
-                # Initialize ElevenLabs if needed
-                self._ensure_elevenlabs_initialized()
-                self.logger.debug(f"ElevenLabs initialization status: client={hasattr(self.response_generator, 'elevenlabs_client')}, key={bool(self.response_generator.elevenlabs_api_key) if hasattr(self.response_generator, 'elevenlabs_api_key') else False}")
-            else:
-                self.logger.info(f"Verbal response not requested in context (fast_mode={fast_mode})")
+                fast_mode = False
                 
+                # Check if ElevenLabs is initialized, and try to initialize it if not
+                if not self.elevenlabs_initialized:
+                    self.logger.warning("Verbal response requested but ElevenLabs not initialized, attempting to initialize")
+                    self.elevenlabs_initialized = self.initialize_elevenlabs_tts()
+                    if not self.elevenlabs_initialized:
+                        self.logger.warning("Failed to initialize ElevenLabs, switching back to fast_mode (text-only response)")
+                        # If ElevenLabs couldn't be initialized, go back to text-only mode
+                        fast_mode = True
+                        context["enable_verbal"] = False
+                
+                # Perform a health check on the response generator
+                self.logger.info("Performing health check on response generator")
+                response_generator_health = False
+                try:
+                    if self.response_generator:
+                        response_generator_health = self.response_generator.health_check()
+                        self.logger.info(f"Response generator health check result: {response_generator_health}")
+                    else:
+                        self.logger.error("Response generator not available")
+                except Exception as e:
+                    self.logger.error(f"Error during response generator health check: {str(e)}")
+            
             context["fast_mode"] = fast_mode
             
             # Step 1: Classify the query
@@ -118,226 +228,227 @@ class OrchestratorService:
             t1 = time.perf_counter()
             classification = self.classifier.classify(query)
             category = classification.get("category")
+            time_period_clause = classification.get("time_period_clause")  # Extract time period clause
+            is_followup = classification.get("is_followup", False)  # Extract follow-up indicator
             timers['classification'] = time.perf_counter() - t1
             
             self.logger.info(f"Query classified as: {category}")
             
-            # Step 2: Get rules and examples for this category
-            self.logger.debug(f"Loading rules for category: {category}")
-            t2 = time.perf_counter()
-            rules_and_examples = self.rules.get_rules_and_examples(category)
-            timers['rule_processing'] = time.perf_counter() - t2
+            # Handle time period context
+            if time_period_clause:
+                self.logger.info(f"Time period identified: {time_period_clause}")
+                # Update query context with time period
+                self.query_context["time_period_clause"] = time_period_clause
+                
+            # Extract constraints from the query text itself
+            query_constraints = self._extract_constraints_from_query(query)
+            if query_constraints:
+                constraint_str = ", ".join([f"{k}: {v}" for k, v in query_constraints.items()])
+                self.logger.info(f"Constraints extracted from query: {constraint_str}")
+                self.query_context["previous_filters"].update(query_constraints)
+                
+            elif is_followup:
+                # This is a follow-up question - use full context from previous query
+                if self.query_context["time_period_clause"]:
+                    self.logger.info(f"Follow-up question detected. Using cached time period: {self.query_context['time_period_clause']}")
+                if self.query_context["previous_category"]:
+                    self.logger.info(f"Follow-up relates to previous category: {self.query_context['previous_category']}")
+                if self.query_context["previous_filters"]:
+                    filter_str = ", ".join([f"{k}: {v}" for k, v in self.query_context["previous_filters"].items()])
+                    self.logger.info(f"Using filters from previous query: {filter_str}")
             
-            # Skip database operations for certain categories
-            skip_db = classification.get("skip_database", False)
+            # Update query context
+            self.query_context["previous_query"] = query
+            self.query_context["previous_category"] = category
             
-            # Initialize query_results to None
+            # Step 2: Get rules for the query category
+            t1 = time.perf_counter()
+            response_rules = self.rules.get_rules(category, query)
+            timers['rule_processing'] = time.perf_counter() - t1
+            
+            # Step 3: Generate SQL
+            t1 = time.perf_counter()
+            generation_result = self.sql_generator.generate(
+                query, 
+                category,
+                response_rules,
+                self.query_context
+            )
+            sql = generation_result.get("sql")
+            timers['sql_generation'] = time.perf_counter() - t1
+            
+            # Track the generated SQL for context
+            self.query_context["previous_sql"] = sql
+            
+            # Make sure we have valid SQL before continuing
+            if not sql:
+                self.logger.error(f"Failed to generate SQL for query: {query}")
+                return {
+                    "success": False,
+                    "errors": ["Failed to generate SQL. Please try rephrasing your query."],
+                    "response": "I couldn't understand how to answer that question. Could you please rephrase it?",
+                    "execution_time": time.time() - start_time,
+                    "query": query,
+                    "category": category,
+                    "timers": timers
+                }
+            
+            self.error_context["generated_sql"] = sql
+            self.sql_history.append({"sql": sql, "timestamp": datetime.now().isoformat(), "category": category})
+            
+            # Extract filters from SQL for future reference
+            extracted_filters = self._extract_filters_from_sql(sql)
+            if extracted_filters:
+                self.query_context["previous_filters"].update(extracted_filters)
+            
+            # Step 4: Execute SQL
+            t1 = time.perf_counter()
+            execution_result = self.sql_executor.execute(sql)
+            timers['sql_execution'] = time.perf_counter() - t1
+            self.error_context["execution_result"] = execution_result
+            
             query_results = None
-            current_sql = None
+            if execution_result and execution_result.get("success", False):
+                query_results = execution_result.get("results")
             
-            # Use a thread pool for parallelizing tasks
-            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                sql_future = None
+            # Step 5: Generate response - THIS IS THE CRITICAL SECTION THAT NEEDS FIXING
+            response_data = None
+            verbal_audio = None
+            
+            # Add a check to make sure query_results is not None before generating a response
+            if query_results is not None:
+                t1 = time.perf_counter()
                 
-                if not skip_db:
-                    # Create a context dictionary for SQL generation that includes previous SQL for context
-                    sql_context = {
-                        "previous_sql": self.sql_history[-3:] if self.sql_history else []  # Last 3 SQL statements
-                    }
-                    
-                    # Step 3: Generate SQL query with previous SQL context (in parallel)
-                    self.logger.debug("Generating SQL query with context")
-                    t3 = time.perf_counter()
-                    
-                    # Submit SQL generation to thread pool
-                    sql_future = executor.submit(
-                        self.sql_generator.generate,
-                        query,
-                        category,
-                        rules_and_examples,
-                        sql_context
+                # Check if we need a verbal response
+                if not fast_mode:
+                    self.logger.info(f"Generating text and verbal response for query: '{query}'")
+                    response_data = self.response_generator.generate_with_verbal(
+                        query, 
+                        category, 
+                        response_rules, 
+                        query_results, 
+                        context
                     )
                     
-                    # Continue with other tasks while SQL is being generated
-                    # ... other tasks can be done here ...
-                    
-                    # Get SQL generation result with proper error handling
-                    try:
-                        sql_result = sql_future.result(timeout=30)  # 30 second timeout
-                        timers['sql_generation'] = time.perf_counter() - t3
-                        
-                        current_sql = sql_result.get("query")
-                        self.logger.debug(f"SQL query generated: {current_sql[:100] if current_sql else 'None'}...")
-                        
-                        # Add to SQL history
-                        if current_sql:
-                            self.sql_history.append(current_sql)
-                    except concurrent.futures.TimeoutError:
-                        self.logger.error("SQL generation timed out after 30 seconds")
-                        timers['sql_generation'] = time.perf_counter() - t3
-                        current_sql = None
-                    except Exception as e:
-                        self.logger.error(f"Error in SQL generation: {str(e)}")
-                        timers['sql_generation'] = time.perf_counter() - t3
-                        current_sql = None
-                
-                # Prepare SQL execution (in parallel with response generation)
-                if current_sql:
-                    t4 = time.perf_counter()
-                    # Submit SQL execution to thread pool
-                    execution_future = executor.submit(
-                        self.sql_executor.execute,
-                        current_sql
-                    )
+                    # Get verbal audio data from response
+                    if response_data and "verbal_audio" in response_data:
+                        verbal_audio = response_data["verbal_audio"]
+                        self.logger.info("Verbal audio received from response generator")
+                    elif response_data and "verbal_data" in response_data:  # For backward compatibility
+                        verbal_audio = response_data["verbal_data"]
+                        self.logger.info("Verbal audio received as 'verbal_data'")
                 else:
-                    execution_future = None
-            
-            # Prepare response generation (can be done in parallel)
-            response_context = {
-                "query": query,
-                "category": category,
-                "classification": classification,
-                "rules": rules_and_examples.get("response_rules", {}),
-                "sql": current_sql
-            }
-            
-            # Wait for SQL execution if it was submitted
-            if not skip_db and current_sql and execution_future:
-                try:
-                    query_results = execution_future.result(timeout=15)  # 15 second timeout
-                    timers['sql_execution'] = time.perf_counter() - t4
-                    response_context["results"] = query_results
-                except concurrent.futures.TimeoutError:
-                    self.logger.error("SQL execution timed out after 15 seconds")
-                    timers['sql_execution'] = time.perf_counter() - t4
-                    query_results = {"success": False, "error": "SQL execution timed out"}
-                except Exception as e:
-                    self.logger.error(f"Error in SQL execution: {str(e)}")
-                    timers['sql_execution'] = time.perf_counter() - t4
-                    query_results = {"success": False, "error": f"SQL execution error: {str(e)}"}
-            
-            # Step 5: Generate natural language response
-            self.logger.debug("Generating response")
-            
-            # Check if verbal response is requested
-            enable_verbal = context.get("enable_verbal", False)
-            
-            if enable_verbal:
-                # Generate both text and verbal responses
-                resp_gen_start = time.perf_counter()
-                response = self.response_generator.generate_with_verbal(
-                    query, 
-                    category, 
-                    rules_and_examples.get("response_rules", {}),
-                    query_results.get("results") if query_results and query_results.get("success", False) else None,
-                    context
-                )
-                timers['response_generation'] = time.perf_counter() - resp_gen_start
+                    self.logger.info(f"Generating text-only response for query: '{query}'")
+                    response_data = self.response_generator.generate(
+                        query, 
+                        category, 
+                        response_rules, 
+                        query_results, 
+                        context
+                    )
+                    
+                timers['response_generation'] = time.perf_counter() - t1
                 
-                tts_start = time.perf_counter()
-                verbal_response = self.response_generator.generate_verbal_response(
-                    query, 
-                    category, 
-                    rules_and_examples.get("response_rules", {}),
-                    query_results.get("results") if query_results and query_results.get("success", False) else None,
-                    context
-                )
-                timers['tts_generation'] = time.perf_counter() - tts_start
+                # Store response in conversation history
+                if response_data and response_data.get("response"):
+                    self.conversation_history.append({
+                        "query": query,
+                        "response": response_data.get("response"),
+                        "timestamp": datetime.now().isoformat(),
+                        "category": category
+                    })
+                    
+                    # Trim history to maximum size
+                    if len(self.conversation_history) > self.max_history_items:
+                        self.conversation_history = self.conversation_history[-self.max_history_items:]
             else:
-                # Generate only text response
-                resp_gen_start = time.perf_counter()
-                response = self.response_generator.generate(
-                    query, 
-                    category, 
-                    rules_and_examples.get("response_rules", {}),
-                    query_results.get("results") if query_results and query_results.get("success", False) else None,
-                    context
-                )
-                timers['response_generation'] = time.perf_counter() - resp_gen_start
+                self.logger.warning("Query results were None or empty, cannot generate response")
+
+            # Step 6: Handle TTS if verbal response requested
+            verbal_text = None
             
-            # Build final response
+            # Check for verbal response in response_data
+            if response_data and response_data.get("verbal_text"):
+                verbal_text = response_data.get("verbal_text")
+            # If verbal response wasn't generated but is requested, try fallback
+            elif not fast_mode and response_data and response_data.get("response") and self.elevenlabs_initialized:
+                self.logger.info("Attempting fallback TTS generation")
+                t1 = time.perf_counter()
+                
+                response_text = response_data.get("response")
+                if response_text:
+                    # Extract first few sentences for verbal response
+                    sentences = response_text.split('. ')
+                    verbal_text = '. '.join(sentences[:3]) + ('.' if not sentences[0].endswith('.') else '')
+                    
+                    try:
+                        # Only try to generate TTS if ElevenLabs is initialized
+                        if self.elevenlabs_initialized:
+                            tts_result = self.get_tts_response(verbal_text)
+                            if tts_result and tts_result.get("success"):
+                                verbal_audio = tts_result.get("audio")
+                                self.logger.info("Fallback TTS generated audio")
+                            else:
+                                self.logger.error(f"Fallback TTS failed: {tts_result.get('error') if tts_result else 'Unknown error'}")
+                        else:
+                            self.logger.warning("Skipping fallback TTS generation because ElevenLabs is not initialized")
+                    except Exception as e:
+                        self.logger.error(f"Error in fallback TTS: {str(e)}")
+                else:
+                    self.logger.error("Cannot generate TTS: text is None or empty")
+                    
+                timers['tts_generation'] = time.perf_counter() - t1
+            
+            # Prepare response
             result = {
                 "query_id": query_id,
                 "query": query,
                 "category": category,
-                "response": response.get("text"),
-                "response_model": response.get("model"),
+                "response": response_data.get("response") if response_data else None,
+                "response_model": response_data.get("model") if response_data else None,
                 "execution_time": time.time() - start_time,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "has_verbal": verbal_audio is not None,
+                "query_results": query_results
             }
             
-            # Add verbal response if available
-            if enable_verbal and response.get("has_verbal", False):
-                result["verbal_audio"] = response.get("verbal_audio")
-                result["verbal_text"] = response.get("verbal_text")
-                result["has_verbal"] = True
-                
-                # Log verbal response generation
-                verbal_text_length = len(response.get("verbal_text", ""))
-                self.logger.info(f"Verbal response generated: {verbal_text_length} chars, {len(response.get('verbal_audio', b''))} bytes")
-            elif enable_verbal:
-                # Force TTS generation if verbal was requested but not generated
-                try:
-                    # Generate TTS directly with longer content (up to 3 sentences)
-                    self.logger.info("Forcing TTS generation since verbal was requested but not generated")
-                    tts_response = self.get_tts_response(
-                        result["response"], 
-                        model="eleven_multilingual_v2", 
-                        max_sentences=3
-                    )
+            # Add verbal audio to result if available
+            if verbal_audio:
+                result["verbal_audio"] = verbal_audio
+                result["verbal_text"] = verbal_text
+                self.logger.info("Added verbal audio to response")
+            
+            # Add a default response if none was generated but we have query results
+            if result["response"] is None and query_results:
+                # Create a simple default response based on the query results
+                if category == "order_history" and len(query_results) > 0:
+                    count = query_results[0].get("order_count", 0)
                     
-                    if tts_response and tts_response.get("audio"):
-                        result["verbal_audio"] = tts_response.get("audio")
-                        result["verbal_text"] = tts_response.get("text")
-                        result["has_verbal"] = True
-                        audio_size = len(tts_response.get("audio", b""))
-                        text_length = len(tts_response.get("text", ""))
-                        self.logger.info(f"Forced verbal response generation: {text_length} chars, {audio_size} bytes")
-                        
-                        # Save the audio file for debugging if needed
-                        if self.config.get("debug", {}).get("save_audio_files", False):
-                            try:
-                                audio_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "debug", "audio")
-                                os.makedirs(audio_dir, exist_ok=True)
-                                audio_file = os.path.join(audio_dir, f"audio_{result['query_id']}.mp3")
-                                with open(audio_file, "wb") as f:
-                                    f.write(tts_response.get("audio"))
-                                self.logger.info(f"Saved audio file for debugging: {audio_file}")
-                            except Exception as e:
-                                self.logger.error(f"Error saving debug audio file: {str(e)}")
-                    else:
-                        result["has_verbal"] = False
-                        error_msg = tts_response.get("error", "Unknown error")
-                        self.logger.error(f"Forced verbal response failed to generate audio: {error_msg}")
-                except Exception as e:
-                    self.logger.error(f"Error generating forced verbal response: {str(e)}")
-                    result["has_verbal"] = False
-                    self.logger.info("No verbal response could be generated")
-            else:
-                result["has_verbal"] = False
-                self.logger.info("No verbal response was generated")
-                # Add detailed debugging information about why no verbal response was generated
-                if fast_mode:
-                    self.logger.info("Verbal response skipped because fast_mode is enabled")
-                elif not hasattr(self.response_generator, 'elevenlabs_client') or not self.response_generator.elevenlabs_client:
-                    self.logger.info("Verbal response skipped because ElevenLabs client is not initialized")
-                elif not hasattr(self.response_generator, 'elevenlabs_api_key') or not self.response_generator.elevenlabs_api_key:
-                    self.logger.info("Verbal response skipped because ElevenLabs API key is not configured")
-                elif not self.config.get("features", {}).get("enable_tts", False):
-                    self.logger.info("Verbal response skipped because TTS feature is not enabled in config")
+                    # Try to extract date from the query context
+                    date_str = "the specified date"
+                    if "time_period_clause" in self.query_context:
+                        # Extract date from time period clause if available
+                        date_match = re.search(r"updated_at\s*=\s*'([^']+)'", self.query_context["time_period_clause"])
+                        if date_match:
+                            date_str = date_match.group(1)
+                    
+                    result["response"] = f"I found {count} completed order(s) on {date_str}."
+                elif category == "popular_items" and len(query_results) > 0:
+                    # Create a response for popular items queries
+                    result["response"] = "Here are the popular items based on your query:\n\n"
+                    for idx, item in enumerate(query_results[:5], 1):  # Show top 5 items
+                        item_name = item.get("item_name", f"Item {idx}")
+                        count = item.get("order_count", 0)
+                        result["response"] += f"{idx}. **{item_name}** - Ordered {count} times\n"
+                elif category == "trend_analysis" and len(query_results) > 0:
+                    # Create a response for trend analysis queries
+                    result["response"] = "Here's the trend analysis for your query:\n\n"
+                    result["response"] += "The data shows " + ("an upward trend" if len(query_results) > 1 else "the following pattern") + " for the requested period.\n\n"
+                    result["response"] += "You can see more details in the Query Details section below."
                 else:
-                    self.logger.info("Verbal response skipped for unknown reason")
-            
-            # Include query results in the response if available and successful
-            if query_results and query_results.get("success", False):
-                result["query_results"] = query_results.get("results")
-                # Include performance metrics if available
-                if "performance_metrics" in query_results:
-                    result["performance_metrics"] = query_results.get("performance_metrics")
-            elif query_results and not query_results.get("success", False):
-                # Include error information if execution failed
-                result["error"] = query_results.get("error")
-            
+                    # Generic response for other categories
+                    result["response"] = f"I found {len(query_results)} results for your query. You can see the details in the Query Details section below."
+
             # Log query completion
             self.logger.info(f"Query processing completed in {result['execution_time']:.2f}s")
             
@@ -354,18 +465,6 @@ class OrchestratorService:
             self.conversation_history.append(conversation_entry)
             if len(self.conversation_history) > self.max_history_items:
                 self.conversation_history = self.conversation_history[-self.max_history_items:]
-            
-            # Store SQL in history if it was generated
-            if current_sql:
-                sql_entry = {
-                    "timestamp": result["timestamp"],
-                    "query": query,
-                    "sql": current_sql,
-                    "category": category
-                }
-                self.sql_history.append(sql_entry)
-                if len(self.sql_history) > self.max_history_items:
-                    self.sql_history = self.sql_history[-self.max_history_items:]
             
             # Generate perf breakdown
             # Final timing summary
@@ -396,6 +495,9 @@ class OrchestratorService:
                 - Total Time: {timers['total_duration']:.2f}s
             """)
 
+            # Log the complete result before returning
+            log_result = {k: v for k, v in result.items() if k != 'verbal_audio'}
+            self.logger.info(f"PROCESS_QUERY OUTPUT - result: {log_result}")
             return result
         except Exception as e:
             self.retry_counter += 1  # Increment on retry
@@ -413,6 +515,8 @@ class OrchestratorService:
         Returns:
             Processed SQL with placeholders replaced
         """
+        self.logger.info(f"PREPROCESS_SQL INPUT - sql_query: '{sql_query}'")
+        
         if not sql_query:
             return sql_query
             
@@ -470,6 +574,8 @@ class OrchestratorService:
             location_id = self.config.get("location", {}).get("default_id", 1)
             
         self.logger.info(f"Using location_id: {location_id}")
+        
+        self.logger.info(f"PREPROCESS_SQL OUTPUT - processed_sql: '{processed_sql}'")
         return processed_sql
 
     def set_persona(self, persona_name: str) -> None:
@@ -479,6 +585,8 @@ class OrchestratorService:
         Args:
             persona_name: Name of the persona to use
         """
+        self.logger.info(f"SET_PERSONA INPUT - persona_name: '{persona_name}'")
+        
         self.persona = persona_name
         
         # Get the persona configuration from the config
@@ -499,98 +607,84 @@ class OrchestratorService:
         else:
             self.logger.info(f"Set persona to: {persona_name}")
             self.response_generator.set_persona(persona_name)
+        
+        self.logger.info(f"SET_PERSONA COMPLETE - persona set to: '{persona_name}'")
     
     def get_tts_response(self, text: str, model: str = "eleven_multilingual_v2", max_sentences: int = 1) -> Dict[str, Any]:
         """
-        Get a text-to-speech response using the configured TTS service.
+        Generate a TTS response for the given text.
         
         Args:
-            text: The text to convert to speech
-            model: The TTS model to use
-            max_sentences: Maximum number of sentences to include
+            text: Text to convert to speech
+            model: ElevenLabs model to use
+            max_sentences: Maximum number of sentences to include (0 for all)
             
         Returns:
-            Dictionary with audio data and metadata
+            Dictionary with TTS results
         """
+        # Check if text is None or empty
+        if text is None or not text.strip():
+            self.logger.error("Cannot generate TTS: text is None or empty")
+            return {"success": False, "error": "Text is None or empty", "text": ""}
+            
+        # Don't log the full text to avoid huge log files
+        log_text = text[:100] + "..." if len(text) > 100 else text
+        self.logger.info(f"GET_TTS_RESPONSE INPUT - text: '{log_text}' (length: {len(text)})")
+        self.logger.info(f"GET_TTS_RESPONSE INPUT - model: '{model}', max_sentences: {max_sentences}")
+        
         try:
-            # Extract the first few sentences if needed
+            # Ensure we have ElevenLabs client
+            if not self.elevenlabs_initialized:
+                self.logger.warning("ElevenLabs not initialized, initializing now")
+                self.elevenlabs_initialized = self.initialize_elevenlabs_tts()
+                
+            if not self.elevenlabs_initialized:
+                self.logger.error("Failed to initialize ElevenLabs")
+                return {"success": False, "error": "ElevenLabs not initialized", "text": text}
+                
+            # Limit the text to the specified number of sentences
             if max_sentences > 0:
                 sentences = re.split(r'(?<=[.!?])\s+', text)
-                limited_text = ' '.join(sentences[:max_sentences])
+                if len(sentences) > max_sentences:
+                    text = ' '.join(sentences[:max_sentences])
+                    self.logger.info(f"Limited text to {max_sentences} sentences: '{text[:100]}...' (original length: {len(text)})")
+            
+            # Get voice settings based on current persona
+            voice_settings = get_voice_settings(self.persona)
+            voice_id = voice_settings.get('voice_id')
+            
+            if not voice_id:
+                self.logger.warning(f"No voice ID configured for persona {self.persona}, using default voice")
+                voice_id = "EXAVITQu4vr4xnSDxMaL"  # Default voice ID
+            
+            # Convert text to speech
+            self.logger.info(f"Using ElevenLabs voice ID: {voice_id}")
+            self.logger.info(f"Using ElevenLabs model: {model}")
+            
+            import elevenlabs
+            audio_data = elevenlabs.generate(
+                text=text, 
+                voice=voice_id,
+                model=model
+            )
+            
+            # Log success but don't include the audio data in the logs
+            if audio_data:
+                self.logger.info("TTS generated successfully")
+                return {
+                    "success": True,
+                    "audio": audio_data,
+                    "text": text,
+                    "voice_id": voice_id,
+                    "model": model
+                }
             else:
-                limited_text = text
-            
-            self.logger.info(f"Generating TTS for text: '{limited_text[:100]}...' (length: {len(limited_text)})")
+                self.logger.error("ElevenLabs returned empty audio data")
+                return {"success": False, "error": "Empty audio data returned", "text": text}
                 
-            # Use elevenlabs if available
-            if hasattr(self.response_generator, 'elevenlabs_client') and self.response_generator.elevenlabs_client:
-                try:
-                    # Ensure elevenlabs is imported and API key is set
-                    import elevenlabs
-                    elevenlabs.set_api_key(self.response_generator.elevenlabs_api_key)
-                    
-                    # Get voice ID from configuration - use a known working voice ID as fallback
-                    voice_id = self.config.get("api", {}).get("elevenlabs", {}).get("voice_id", "EXAVITQu4vr4xnSDxMaL")
-                    self.logger.info(f"Using ElevenLabs voice ID: {voice_id}")
-                    
-                    # Generate audio with specified model (using approach from test_elevenlabs.py)
-                    start_time = time.time()
-                    audio_data = elevenlabs.generate(
-                        text=limited_text,
-                        voice=voice_id,
-                        model=model
-                    )
-                    gen_time = time.time() - start_time
-                    
-                    if audio_data:
-                        self.logger.info(f"Successfully generated {len(audio_data)} bytes of audio data in {gen_time:.2f}s")
-                        return {
-                            "audio": audio_data,
-                            "text": limited_text,
-                            "success": True
-                        }
-                    else:
-                        self.logger.error("ElevenLabs returned empty audio data")
-                        return {
-                            "audio": None,
-                            "text": limited_text,
-                            "success": False,
-                            "error": "Empty audio data returned"
-                        }
-                        
-                except Exception as e:
-                    self.logger.error(f"Error generating TTS with ElevenLabs: {str(e)}")
-                    # Provide more detailed error information
-                    error_details = str(e)
-                    if "401" in error_details:
-                        self.logger.error("Authentication error with ElevenLabs API. Check your API key.")
-                    elif "voice not found" in error_details.lower():
-                        self.logger.error(f"Voice ID '{voice_id}' not found in your ElevenLabs account.")
-                    elif "model not found" in error_details.lower():
-                        self.logger.error(f"Model '{model}' not found. Try using eleven_multilingual_v2 instead.")
-                    
-                    return {
-                        "audio": None,
-                        "text": limited_text,
-                        "success": False,
-                        "error": f"ElevenLabs error: {str(e)}"
-                    }
-            
-            # Fallback to a different TTS service or return nothing
-            return {
-                "audio": None,
-                "text": limited_text,
-                "success": False,
-                "error": "No TTS service available"
-            }
         except Exception as e:
-            self.logger.error(f"Error in TTS processing: {str(e)}")
-            return {
-                "audio": None,
-                "text": text,
-                "success": False,
-                "error": f"TTS processing error: {str(e)}"
-            }
+            self.logger.error(f"Error generating TTS response: {str(e)}")
+            return {"success": False, "error": str(e), "text": text}
 
     def _get_error_context(self):
         """Collect critical debugging context for error analysis"""
@@ -631,6 +725,9 @@ class OrchestratorService:
         Returns:
             Dictionary with test results
         """
+        self.logger.info(f"TEST_TTS INPUT - text: '{text[:100] if text else 'None'}...'")
+        self.logger.info(f"TEST_TTS INPUT - save_to_file: {save_to_file}")
+        
         if text is None:
             text = "This is a test of the ElevenLabs text-to-speech system. If you can hear this message, audio playback is working correctly."
             
@@ -644,8 +741,7 @@ class OrchestratorService:
             
             if tts_response and tts_response.get("audio"):
                 audio_data = tts_response.get("audio")
-                audio_size = len(audio_data)
-                self.logger.info(f"TTS test successful: Generated {audio_size} bytes in {generation_time:.2f}s")
+                self.logger.info(f"TTS test successful: Generated audio in {generation_time:.2f}s")
                 
                 # Save audio to file if requested
                 if save_to_file:
@@ -659,8 +755,6 @@ class OrchestratorService:
                     
                 return {
                     "success": True,
-                    "audio_size": audio_size,
-                    "generation_time": generation_time,
                     "audio_file": audio_file if save_to_file else None,
                     "text": tts_response.get("text")
                 }
@@ -679,54 +773,121 @@ class OrchestratorService:
                 "error": str(e)
             }
 
-    def _ensure_elevenlabs_initialized(self):
-        """Ensure ElevenLabs is properly initialized for TTS"""
-        # Add initialization debugging
-        self.logger.info("Attempting to initialize ElevenLabs for TTS")
+    def _extract_filters_from_sql(self, sql: str) -> Dict[str, str]:
+        """Extract filters from SQL query for context tracking."""
+        filters = {}
         
-        # Check if TTS is enabled in configuration
-        if not self.config.get("features", {}).get("enable_tts", False):
-            self.logger.warning("TTS feature is disabled in configuration, skipping ElevenLabs initialization")
-            return False
-            
-        # Check if response generator exists
-        if not hasattr(self, 'response_generator') or self.response_generator is None:
-            self.logger.error("Response generator is not initialized, cannot setup ElevenLabs")
-            return False
-            
-        # Check if API key is configured
-        elevenlabs_api_key = getattr(self.response_generator, 'elevenlabs_api_key', None)
-        if not elevenlabs_api_key:
-            self.logger.error("ElevenLabs API key is not configured in response generator")
-            return False
+        # Safety check for None or empty SQL
+        if not sql:
+            self.logger.warning("Cannot extract filters from empty SQL")
+            return filters
         
-        # Check if response generator has elevenlabs client
-        if hasattr(self.response_generator, 'elevenlabs_client') and self.response_generator.elevenlabs_client:
-            try:
-                # Ensure elevenlabs is imported and API key is set
-                import elevenlabs
-                
-                # Log the API key length for debugging (don't log the actual key)
-                self.logger.info(f"Setting ElevenLabs API key (length: {len(elevenlabs_api_key)})")
-                elevenlabs.set_api_key(elevenlabs_api_key)
-                
-                # Try to validate the API key by making a small request
+        # Look for status as a numeric value (most common case)
+        status_numeric_match = re.search(r"(?:o\.)?status\s*=\s*(\d+)", sql, re.IGNORECASE)
+        if status_numeric_match:
+            status_code = status_numeric_match.group(1)
+            # Map status codes to human-readable values
+            status_map = {
+                "7": "completed",
+                "6": "canceled",
+                "3": "pending",
+                "4": "in_progress",
+                "5": "ready"
+            }
+            filters["status"] = status_map.get(status_code, f"status_{status_code}")
+            
+        # Look for string status (less common)
+        status_string_match = re.search(r"status\s*=\s*['\"]([\w]+)['\"]", sql, re.IGNORECASE)
+        if status_string_match and "status" not in filters:
+            filters["status"] = status_string_match.group(1)
+            
+        # Look for completed orders specifically
+        if "status" not in filters:
+            if "status = 7" in sql.lower() or "status=7" in sql.lower():
+                filters["status"] = "completed"
+            elif "completed" in sql.lower():
+                if "status" in sql.lower() or "where" in sql.lower():
+                    filters["status"] = "completed"
+                    
+        # Extract date/time filters
+        date_match = re.search(r"(?:updated_at|date)\s*=\s*['\"]?(\d{4}-\d{2}-\d{2})['\"]?", sql, re.IGNORECASE)
+        if date_match:
+            filters["date"] = date_match.group(1)
+            
+        # Add more filter extractions as needed
+        return filters
+
+    def get_time_period_context(self) -> str:
+        """
+        Get the cached time period context from the previous query.
+        
+        Returns:
+            The cached time period WHERE clause or None if not available
+        """
+        return self.query_context.get("time_period_clause")
+        
+    def get_query_context(self) -> Dict[str, Any]:
+        """
+        Get the complete query context for follow-up questions.
+        
+        Returns:
+            Dictionary with all context information from previous queries
+        """
+        return self.query_context
+
+    def _extract_constraints_from_query(self, query: str) -> Dict[str, str]:
+        """Extract constraints from natural language query."""
+        constraints = {}
+        
+        # Check for completed orders
+        if "completed" in query.lower() or "complete" in query.lower():
+            constraints["status"] = "completed"
+            
+        # Check for pending orders
+        if "pending" in query.lower():
+            constraints["status"] = "pending"
+            
+        # Check for canceled orders
+        if "canceled" in query.lower() or "cancelled" in query.lower():
+            constraints["status"] = "canceled"
+            
+        # Check for order type based on keywords
+        if "delivery" in query.lower() and "pickup" not in query.lower():
+            constraints["order_type"] = "delivery"
+        elif "pickup" in query.lower() and "delivery" not in query.lower():
+            constraints["order_type"] = "pickup"
+            
+        return constraints
+
+    def _generate_sql_conditions_from_filters(self, filters: Dict[str, str]) -> List[str]:
+        """Generate explicit SQL WHERE conditions from filters."""
+        conditions = []
+        
+        # Generate status conditions
+        if "status" in filters:
+            status = filters["status"].lower()
+            if status == "completed":
+                conditions.append("o.status = 7")
+            elif status == "pending":
+                conditions.append("o.status = 3")
+            elif status in ("canceled", "cancelled"):
+                conditions.append("o.status = 6")
+            elif status == "in_progress":
+                conditions.append("o.status IN (4, 5)")
+            elif status.startswith("status_"):  # Numeric status we don't have a name for
                 try:
-                    voices = elevenlabs.voices()
-                    voice_count = len(voices) if hasattr(voices, '__len__') else 0
-                    self.logger.info(f"ElevenLabs API key validated successfully, found {voice_count} voices")
-                except Exception as e:
-                    self.logger.error(f"ElevenLabs API key validation failed: {str(e)}")
-                    return False
+                    status_code = int(status.split("_")[1])
+                    conditions.append(f"o.status = {status_code}")
+                except (IndexError, ValueError):
+                    pass
+                    
+        # Add date conditions
+        if "date" in filters:
+            date_value = filters["date"]
+            if re.match(r"\d{4}-\d{2}-\d{2}", date_value):  # YYYY-MM-DD format
+                conditions.append(f"(o.updated_at - INTERVAL '7 hours')::date = '{date_value}'")
                 
-                self.logger.info("ElevenLabs initialized successfully for TTS")
-                return True
-            except Exception as e:
-                self.logger.error(f"Error initializing ElevenLabs: {str(e)}")
-                return False
-        else:
-            self.logger.warning("ElevenLabs client not available in response generator")
-            return False
+        return conditions
 
 # Alias OrchestratorService as Orchestrator for compatibility with frontend code
 Orchestrator = OrchestratorService

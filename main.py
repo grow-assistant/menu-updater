@@ -15,7 +15,7 @@ PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from frontend import run_app
-from services.utils.logging import setup_logging
+from services.utils.logging import setup_logging, setup_ai_api_logging
 
 # Environment variables will be loaded from .env file via load_dotenv()
 # No need to set them programmatically here
@@ -30,6 +30,9 @@ def main():
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, "app.log")
     setup_logging(log_file=log_file)
+    
+    # Setup AI API logging to capture OpenAI interactions
+    setup_ai_api_logging()
     
     # Ensure environment variables are loaded
     required_env_vars = [

@@ -1,7 +1,7 @@
 -- Yesterday's order details
 SELECT
     o.id AS order_id,
-    to_char(o.updated_at - INTERVAL '7 hours', 'YYYY-MM-DD HH24:MI') AS order_date,
+    to_char(o.updated_at - INTERVAL '7 hours', 'YYYY-MM-DD HH24:MI') AS updated_at,
     u.first_name || ' ' || u.last_name AS customer,
     regexp_replace(u.phone, '(\d{3})(\d{3})(\d{4})', '(\1) \2-\3') AS user_phone,
     u.email AS user_email,

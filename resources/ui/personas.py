@@ -15,9 +15,9 @@ PERSONAS = {
             "similarity_boost": 0.5
         },
         "prompt_instructions": """
-            Respond in a friendly, casual tone. Use simple language and occasional humor.
-            Address the user as if you're a helpful colleague. Be conversational but professional.
-            For a country club restaurant setting, be welcoming but not overly formal.
+            For the VERBAL_ANSWER, adopt a warm, friendly, and supportive tone. Provide insights in a conversational manner, 
+            making complex data feel approachable. Use an encouraging voice that builds rapport while still delivering 
+            valuable information in an accessible way.
         """
     },
     

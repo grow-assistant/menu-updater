@@ -5,7 +5,7 @@ SELECT DISTINCT ON (f.id)
     o.id AS order_id,
     o.status AS order_status,
     u.id AS user_id,
-    o.updated_at - INTERVAL '7 hours' AS order_date,
+    o.updated_at - INTERVAL '7 hours' AS updated_at,
     u.first_name || ' ' || u.last_name AS customer,
     r.id AS rating_id,
     r.created_at AS rating_created_at,

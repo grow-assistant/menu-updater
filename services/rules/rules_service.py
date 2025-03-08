@@ -542,4 +542,52 @@ class RulesService:
             return True
         except Exception as e:
             logger.error(f"Health check failed: {str(e)}")
-            return False 
+            return False
+    
+    def get_sql_examples(self, classification):
+        """Get SQL examples for the given classification."""
+        try:
+            # Get SQL patterns from the rules directory
+            patterns = self.get_sql_patterns(classification)
+            
+            # Get additional examples from the rules module
+            module_name = f"{classification}_rules"
+            if module_name in self.query_rules_modules:
+                module = self.query_rules_modules[module_name]
+                if hasattr(module, 'get_sql_examples'):
+                    additional_examples = module.get_sql_examples()
+                    if additional_examples:
+                        patterns.extend(additional_examples)
+            
+            return patterns
+        except Exception as e:
+            self.logger.error(f"Error getting SQL examples for {classification}: {e}")
+            return []
+    
+    def get_rules(self, category: str, query: str = None) -> Dict[str, Any]:
+        """
+        Get rules for a specific category (compatibility method for orchestrator).
+        
+        Args:
+            category: The query category
+            query: Optional query text for context-specific rules
+            
+        Returns:
+            Dict containing rules for the category
+        """
+        # Get the rules and examples using the existing method
+        rules_and_examples = self.get_rules_and_examples(category)
+        
+        # If we have query rules modules, try to use those first
+        if category in self.query_rules_mapping:
+            module_name = self.query_rules_mapping[category]
+            if module_name in self.query_rules_modules:
+                try:
+                    # Call the module's get_rules function with self as the rules_service parameter
+                    module_rules = self.query_rules_modules[module_name].get_rules(self)
+                    if module_rules:
+                        return module_rules
+                except Exception as e:
+                    self.logger.error(f"Error getting rules from module {module_name}: {str(e)}")
+        
+        return rules_and_examples 
