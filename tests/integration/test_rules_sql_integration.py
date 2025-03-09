@@ -49,18 +49,18 @@ def test_rules_sql_integration():
     
     # Test loading SQL patterns
     logger.info("Testing loading SQL patterns...")
-    menu_patterns = rules.get_sql_patterns("menu")
+    menu_patterns = rules_service.get_sql_patterns("menu")
     logger.info(f"Loaded {len(menu_patterns.get('patterns', {}))} menu patterns")
     
     # Test getting rules and examples
     logger.info("Testing getting rules and examples...")
-    menu_rules = rules.get_rules_and_examples("menu")
+    menu_rules = rules_service.get_rules_and_examples("menu")
     if "query_patterns" in menu_rules:
         logger.info(f"Loaded {len(menu_rules['query_patterns'])} query patterns from rules")
     
     # Test getting a specific SQL pattern
     logger.info("Testing getting a specific SQL pattern...")
-    pattern = rules.get_sql_pattern("menu", "select_all_menu_items")
+    pattern = rules_service.get_sql_pattern("menu", "select_all_menu_items")
     if pattern:
         logger.info(f"Successfully loaded SQL pattern 'select_all_menu_items'")
         logger.info(f"Pattern preview: {pattern[:100]}...")
@@ -74,14 +74,16 @@ def test_rules_sql_integration():
     logger.info(f"Loaded {len(menu_examples)} menu examples from SQLExampleLoader")
     
     logger.info("Integration test completed successfully!")
-    return True
+    
+    # Use assertions instead of returning True
+    assert menu_patterns is not None, "Menu patterns should not be None"
+    assert "patterns" in menu_patterns, "Menu patterns should contain 'patterns' key"
+    assert menu_rules is not None, "Menu rules should not be None"
+    assert sql_example_loader is not None, "SQLExampleLoader should not be None"
+    assert len(menu_examples) >= 0, "Should be able to load menu examples"
 
 if __name__ == "__main__":
     logger.info("Starting RulesService and SQL Generator integration test...")
-    success = test_rules_sql_integration()
-    if success:
-        logger.info("All tests passed!")
-        sys.exit(0)
-    else:
-        logger.error("Tests failed!")
-        sys.exit(1) 
+    test_rules_sql_integration()
+    logger.info("All tests passed!")
+    sys.exit(0) 

@@ -9,7 +9,7 @@ import os
 from typing import Dict, Any, List, Optional
 import yaml
 
-from services.utils.prompt_loader import PromptLoader
+from services.utils.prompt_loader import PromptLoader, get_prompt_loader
 from services.rules.yaml_loader import YamlLoader
 from services.utils.logging import get_logger
 
@@ -111,7 +111,7 @@ class SQLPromptBuilder:
         domain = self._get_domain_for_query_type(query_type)
         
         # Load the system prompt template
-        system_prompt = self.prompt_loader.load("sql_system")
+        system_prompt = self.prompt_loader.load_template("sql_system")
         
         # Add domain-specific patterns if available
         domain_patterns = self.patterns.get(domain, {})

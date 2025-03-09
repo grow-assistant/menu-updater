@@ -21,6 +21,10 @@ class SessionStateMock:
     
     def __contains__(self, key):
         return key in self.__dict__
+    
+    def get(self, key, default=None):
+        """Implement get method to mimic dict functionality"""
+        return self.__dict__.get(key, default)
 
 class TestSessionManager:
     """Test class for the SessionManager."""

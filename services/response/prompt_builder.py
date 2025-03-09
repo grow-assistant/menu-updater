@@ -8,7 +8,7 @@ using templates and context information.
 import os
 from typing import Dict, Any, List, Optional
 
-from services.utils.prompt_loader import PromptLoader
+from services.utils.prompt_loader import PromptLoader, get_prompt_loader
 from services.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -53,7 +53,7 @@ class ResponsePromptBuilder:
         additional_context = additional_context or {}
         
         # Get the appropriate system prompt for the query type
-        system_prompt = self.prompt_loader.load("response_system")
+        system_prompt = self.prompt_loader.load_template("response_system")
         
         # Add formatting instructions based on query type
         result_format = self._get_result_format(query_type)

@@ -7,11 +7,7 @@ by asking the question "How many orders were completed on 2/21/2025?"
 
 import os
 import sys
-import time
 import pytest
-import subprocess
-import threading
-import requests
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -20,7 +16,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from services.classification.classifier import ClassificationService
-from services.orchestrator.orchestrator import Orchestrator as OrchestratorService
+from services.orchestrator.orchestrator import OrchestratorService
 
 
 class TestAppQueryExecution:
@@ -57,7 +53,9 @@ class TestAppQueryExecution:
                 orchestrator = OrchestratorService({"dummy_config": True})
                 
                 # The process_query method should now call classifier.classify without error
+                # Instead of just assigning result, let's verify it's not None
                 result = orchestrator.process_query("How many orders were completed on 2/21/2025?")
+                assert result is not None
                 
                 # Verify our mock was called
                 mock_method.assert_called_once()
@@ -71,11 +69,29 @@ class TestAppQueryExecution:
     def test_query_execution_with_patched_classifier(self):
         """Test order history query execution with a patched classifier."""
         # Patch the ClassificationService.classify_query method
-        with patch.object(ClassificationService, 'classify_query') as mock_classify_query:
+        with patch.object(ClassificationService, 'classify_query') as mock_classify_query, \
+             patch('services.execution.sql_executor.SQLExecutor.validate_connection') as mock_validate, \
+             patch('services.execution.sql_executor.SQLExecutor.execute') as mock_execute, \
+             patch('services.response.response_generator.ResponseGenerator.generate') as mock_response:
+            # Make validate_connection do nothing
+            mock_validate.return_value = None
+            
+            # Configure mocks with expected behavior
             mock_classify_query.return_value = {
                 "query_type": "order_history",
                 "confidence": 0.95,
                 "classification_method": "test"
+            }
+            
+            mock_execute.return_value = {
+                "success": True,
+                "data": [{"count": 15}],
+                "performance_metrics": {"query_time": 0.05}
+            }
+            
+            mock_response.return_value = {
+                "response": "There were 15 orders completed on February 21, 2025.",
+                "model": "test-model"
             }
             
             # Also patch ClassificationService.classify if it doesn't exist
@@ -94,6 +110,20 @@ class TestAppQueryExecution:
                         },
                         "database": {
                             "connection_string": "postgresql://user:pass@localhost/db"
+                        },
+                        "services": {
+                            "rules": {
+                                "rules_path": "tests/test_data/rules",
+                                "resources_dir": "tests/test_data",
+                                "sql_files_path": "tests/test_data/sql_patterns",
+                                "cache_ttl": 60
+                            },
+                            "sql_generator": {
+                                "template_path": "tests/test_data/templates"
+                            },
+                            "classification": {
+                                "confidence_threshold": 0.7
+                            }
                         }
                     }
                     
@@ -106,6 +136,7 @@ class TestAppQueryExecution:
                     
                     # This should now execute without errors
                     result = orchestrator.process_query(query, context)
+                    assert result is not None
                     
                     # Verify the mock was called
                     mock_classify.assert_called_once_with(query)
@@ -118,6 +149,20 @@ class TestAppQueryExecution:
                     },
                     "database": {
                         "connection_string": "postgresql://user:pass@localhost/db"
+                    },
+                    "services": {
+                        "rules": {
+                            "rules_path": "tests/test_data/rules",
+                            "resources_dir": "tests/test_data",
+                            "sql_files_path": "tests/test_data/sql_patterns",
+                            "cache_ttl": 60
+                        },
+                        "sql_generator": {
+                            "template_path": "tests/test_data/templates"
+                        },
+                        "classification": {
+                            "confidence_threshold": 0.7
+                        }
                     }
                 }
                 
@@ -130,3 +175,4 @@ class TestAppQueryExecution:
                 
                 # This should now execute without errors
                 result = orchestrator.process_query(query, context)
+                assert result is not None

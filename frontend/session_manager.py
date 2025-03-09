@@ -80,4 +80,30 @@ class SessionManager:
         st.session_state["context"]["recent_queries"] = recent[-10:] 
         
         logger.debug(f"Updated session history: {st.session_state['history']}")
-        logger.debug(f"Updated recent queries: {st.session_state['context']['recent_queries']}") 
+        logger.debug(f"Updated recent queries: {st.session_state['context']['recent_queries']}")
+
+    # Helper methods for testing
+    @staticmethod
+    def _set_session_history(history: List[Dict[str, Any]]):
+        """Set the session history directly - for testing purposes."""
+        if "history" not in st.session_state:
+            st.session_state["history"] = []
+        st.session_state["history"] = history
+    
+    @staticmethod
+    def _set_user_preferences(preferences: Dict[str, Any]):
+        """Set user preferences directly - for testing purposes."""
+        if "context" not in st.session_state:
+            st.session_state["context"] = {}
+        if "user_preferences" not in st.session_state["context"]:
+            st.session_state["context"]["user_preferences"] = {}
+        st.session_state["context"]["user_preferences"] = preferences
+    
+    @staticmethod
+    def _set_recent_queries(queries: List[str]):
+        """Set recent queries directly - for testing purposes."""
+        if "context" not in st.session_state:
+            st.session_state["context"] = {}
+        if "recent_queries" not in st.session_state["context"]:
+            st.session_state["context"]["recent_queries"] = []
+        st.session_state["context"]["recent_queries"] = queries 

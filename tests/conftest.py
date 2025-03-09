@@ -10,6 +10,8 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch
 from typing import Dict, Any, List
+import yaml
+from pathlib import Path
 
 from config.settings import Config
 from services.rules.rules_manager import RulesManager
@@ -21,19 +23,49 @@ from services.orchestrator.orchestrator import Orchestrator
 
 
 @pytest.fixture
+def connection_string():
+    """Fixture that provides a test database connection string for tests."""
+    # Use a test connection string - ideally an in-memory database for tests
+    return "sqlite:///:memory:"
+
+
+@pytest.fixture
+def text():
+    """Fixture that provides test text for voice generation tests."""
+    return "This is a test text for voice generation."
+
+
+@pytest.fixture
 def test_config() -> Dict[str, Any]:
-    """Fixture providing test configuration values."""
+    """Fixture that provides a test configuration with all required sections."""
     return {
-        "default_location_id": 62,
-        "default_location_name": "Test Restaurant",
-        "max_tokens": 100,
-        "temperature": 0.7,
-        "response_temperature": 0.5,
-        "response_max_tokens": 300,
-        "max_history_length": 5,
-        "max_tts_length": 200,
-        "log_level": "INFO",
-        "log_file": "test_logs.log"
+        "api": {
+            "openai": {"api_key": "test-key", "model": "gpt-4"},
+            "gemini": {"api_key": "test-key", "model": "gemini-pro"},
+            "elevenlabs": {"api_key": "test-key"}
+        },
+        "database": {
+            "connection_string": "sqlite:///:memory:",
+            "max_rows": 1000,
+            "timeout": 30
+        },
+        "services": {
+            "classification": {
+                "confidence_threshold": 0.7
+            },
+            "rules": {
+                "rules_path": "tests/test_data/rules",
+                "resources_dir": "tests/test_data",
+                "sql_files_path": "tests/test_data/sql_patterns",
+                "cache_ttl": 60
+            },
+            "sql_generator": {
+                "template_path": "tests/test_data/templates"
+            }
+        },
+        "logging": {
+            "level": "INFO"
+        }
     }
 
 
@@ -41,8 +73,30 @@ def test_config() -> Dict[str, Any]:
 def mock_settings(test_config) -> Config:
     """Fixture providing a mocked Settings instance."""
     mock_settings = MagicMock(spec=Config)
+    
+    # Set up the get_config method
     mock_settings.get_config.return_value = test_config
+    
+    # Set up the get method to handle both direct config access and get_config calls
+    def mock_get(key, default=None):
+        # Check if key is in the test_config
+        if key in test_config:
+            return test_config[key]
+        # Check if key has dots (e.g., "api.openai.api_key")
+        elif "." in key:
+            parts = key.split(".")
+            current = test_config
+            for part in parts:
+                if part in current:
+                    current = current[part]
+                else:
+                    return default
+            return current
+        return default
+    
+    mock_settings.get = mock_get
     mock_settings.get_api_key.return_value = "test_api_key"
+    
     return mock_settings
 
 

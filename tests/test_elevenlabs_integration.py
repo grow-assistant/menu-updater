@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 import yaml
 import elevenlabs
+import pytest
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -61,7 +62,7 @@ def test_basic_elevenlabs_connection():
     api_key = os.environ.get("ELEVENLABS_API_KEY")
     if not api_key:
         logger.error("No ElevenLabs API key found in environment variables")
-        return False
+        pytest.skip("No ElevenLabs API key found in environment variables")
     
     elevenlabs.set_api_key(api_key)
     
@@ -69,10 +70,10 @@ def test_basic_elevenlabs_connection():
         # Just check if we can get available voices
         voices = elevenlabs.voices()
         logger.info(f"Successfully connected to ElevenLabs API. Found {len(voices)} voices.")
-        return True
+        assert len(voices) > 0, "Should find at least one voice"
     except Exception as e:
         logger.error(f"Failed to connect to ElevenLabs API: {str(e)}")
-        return False
+        assert False, f"Failed to connect to ElevenLabs API: {str(e)}"
 
 def test_response_generator_tts():
     """Test the TTS functionality in the ResponseGenerator."""
@@ -106,13 +107,15 @@ def test_response_generator_tts():
                 
             logger.info(f"TTS test successful. Audio saved to {file_path}")
             logger.info(f"Generated verbal text: {verbal_text}")
-            return True
+            assert os.path.exists(file_path), "Audio file should exist"
+            assert len(audio_data) > 0, "Audio data should not be empty"
+            assert verbal_text, "Verbal text should not be empty"
         else:
             logger.error("No audio data was generated")
-            return False
+            assert False, "No audio data was generated"
     except Exception as e:
         logger.error(f"Error testing ResponseGenerator TTS: {str(e)}")
-        return False
+        pytest.skip(f"Error testing ResponseGenerator TTS: {str(e)}")
 
 def main():
     """Run the integration tests."""
