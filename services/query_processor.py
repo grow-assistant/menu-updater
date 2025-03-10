@@ -14,6 +14,11 @@ from datetime import datetime
 from services.data import get_data_access
 from services.response_service import ResponseService
 from services.context_manager import ContextManager, ConversationContext
+from services.utils.error_handler import (
+    ErrorTypes, 
+    error_handler, 
+    error_handling_decorator
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,45 +37,19 @@ class QueryProcessor:
     
     # Error type mapping
     ERROR_TYPES = {
-        # Database errors
-        'connection_error': {
-            'message': 'Unable to connect to the database',
-            'recovery': 'database_error'
-        },
-        'timeout_error': {
-            'message': 'The query took too long to execute',
-            'recovery': 'database_error'
-        },
-        'query_error': {
-            'message': 'There was an error in the database query',
-            'recovery': 'database_error'
-        },
-        
-        # Data access errors
-        'invalid_query': {
-            'message': 'The query is invalid or malformed',
-            'recovery': 'default'
-        },
-        'permission_error': {
-            'message': 'You do not have permission to access this data',
-            'recovery': 'no_permission'
-        },
-        
-        # Context errors
-        'missing_entity': {
-            'message': 'Could not determine which entity you are referring to',
-            'recovery': 'missing_entity'
-        },
-        'invalid_date': {
-            'message': 'Could not understand the date or time period',
-            'recovery': 'invalid_date'
-        },
-        
-        # Generic errors
-        'internal_error': {
-            'message': 'An internal error occurred',
-            'recovery': 'default'
-        }
+        "database_connection": ErrorTypes.DATABASE_ERROR,
+        "database_query": ErrorTypes.SQL_EXECUTION_ERROR,
+        "sql_generation": ErrorTypes.SQL_GENERATION_ERROR,
+        "missing_parameter": ErrorTypes.VALIDATION_ERROR,
+        "invalid_format": ErrorTypes.VALIDATION_ERROR,
+        "permission_denied": ErrorTypes.AUTHORIZATION_ERROR,
+        "entity_not_found": ErrorTypes.NOT_FOUND_ERROR,
+        "timeout": ErrorTypes.TIMEOUT_ERROR,
+        "internal_error": ErrorTypes.INTERNAL_ERROR,
+        "classification_error": ErrorTypes.CLASSIFICATION_ERROR,
+        "context_error": ErrorTypes.CONTEXT_ERROR,
+        "action_error": ErrorTypes.ACTION_ERROR,
+        "response_error": ErrorTypes.RESPONSE_GENERATION_ERROR
     }
     
     def __init__(self, config: Dict[str, Any]):
@@ -78,136 +57,127 @@ class QueryProcessor:
         Initialize the query processor.
         
         Args:
-            config: Configuration dictionary including database settings
+            config: Configuration dictionary for services
         """
         self.config = config
         
-        # Initialize data access layer
-        self.data_access = get_data_access(config)
+        # Initialize data access service
+        self.data_access = get_data_access(config.get("database", {}))
         
         # Initialize response service
         self.response_service = ResponseService()
         
-        # Initialize context manager if provided in config
-        context_manager_config = config.get('context_manager', {})
+        # Initialize context manager
         self.context_manager = ContextManager(
-            expiry_minutes=context_manager_config.get('expiry_minutes', 30)
+            config.get("context_manager", {}).get("expiry_minutes", 30)
         )
         
         # Performance metrics
         self.metrics = {
-            'total_queries': 0,
-            'successful_queries': 0,
-            'failed_queries': 0,
-            'avg_processing_time': 0,
-            'total_processing_time': 0
+            "total_queries": 0,
+            "successful_queries": 0,
+            "failed_queries": 0,
+            "total_processing_time": 0,
+            "average_processing_time": 0,
+            "error_counts": {},
+            "query_types": {}
         }
-        
-        logger.info("QueryProcessor initialized")
     
+    @error_handling_decorator(ErrorTypes.INTERNAL_ERROR)
     def process_query(self, 
                      query_text: str, 
                      session_id: str,
                      classification_result: Dict[str, Any],
                      additional_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Process a user query and generate a response.
+        Process a user query based on its classification.
         
         Args:
-            query_text: The user's query text
+            query_text: The original query text
             session_id: Session identifier for context tracking
-            classification_result: Results from query classification
-            additional_context: Any additional context information
+            classification_result: Output from the query classifier
+            additional_context: Any additional context to use
             
         Returns:
-            Dict with response information
+            Formatted response dictionary
         """
         start_time = time.time()
-        self.metrics['total_queries'] += 1
-        
-        # Track query info for metrics and logging
-        query_info = {
-            'query_id': f"q-{int(start_time)}-{self.metrics['total_queries']}",
-            'session_id': session_id,
-            'query_text': query_text,
-            'query_type': classification_result.get('query_type', 'unknown'),
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        logger.info(f"Processing query: {query_info['query_id']} - '{query_text}'")
         
         try:
-            # Get conversation context
+            # Update metrics
+            self.metrics["total_queries"] += 1
+            query_type = classification_result.get("query_type", "unknown")
+            self.metrics["query_types"][query_type] = self.metrics["query_types"].get(query_type, 0) + 1
+            
+            # Get or create conversation context
             context = self.context_manager.get_context(session_id)
             
-            # Update context with new query
+            # Update context with the new query
             context.update_with_query(query_text, classification_result)
             
-            # Add additional context if provided
+            # Add any additional context
             if additional_context:
                 for key, value in additional_context.items():
                     if key not in context.to_dict():
                         setattr(context, key, value)
             
             # Process based on query type
-            query_type = classification_result.get('query_type', 'data_query')
+            query_info = {
+                "query_type": query_type,
+                "start_time": start_time,
+                "session_id": session_id,
+                "metadata": {}
+            }
             
-            if query_type == 'action_request':
-                response = self._process_action_request(
-                    query_text, classification_result, context, query_info
-                )
-            else:  # Default to data query
+            if query_type == "data_query":
                 response = self._process_data_query(
                     query_text, classification_result, context, query_info
                 )
+            elif query_type == "action_request":
+                response = self._process_action_request(
+                    query_text, classification_result, context, query_info
+                )
+            else:
+                # Handle other query types or return error
+                return self._create_error_response(
+                    ErrorTypes.PARSING_ERROR,
+                    f"Unsupported query type: {query_type}",
+                    query_info, 
+                    context
+                )
             
-            # Record successful query
-            self.metrics['successful_queries'] += 1
+            # Update metrics
+            self.metrics["successful_queries"] += 1
+            
+            return response
             
         except Exception as e:
-            logger.error(f"Error processing query {query_info['query_id']}: {str(e)}")
-            logger.error(traceback.format_exc())
-            
-            # Record failed query
-            self.metrics['failed_queries'] += 1
-            
-            # Generate error response
-            response = self._create_error_response(
-                'internal_error', 
-                str(e), 
-                query_info,
-                context if 'context' in locals() else None
+            # Log the error with the error handler
+            error_response = error_handler.handle_error(
+                e, 
+                ErrorTypes.INTERNAL_ERROR,
+                context={
+                    "query_text": query_text,
+                    "session_id": session_id,
+                    "query_type": classification_result.get("query_type", "unknown")
+                }
             )
-        
-        # Calculate processing time
-        processing_time = time.time() - start_time
-        
-        # Update timing metrics
-        self.metrics['total_processing_time'] += processing_time
-        self.metrics['avg_processing_time'] = (
-            self.metrics['total_processing_time'] / self.metrics['total_queries']
-        )
-        
-        # Add performance info to response metadata
-        if 'metadata' not in response:
-            response['metadata'] = {}
             
-        response['metadata'].update({
-            'query_id': query_info['query_id'],
-            'processing_time': processing_time,
-            'query_type': query_info.get('query_type', 'unknown')
-        })
-        
-        # If context exists, update it with the response
-        if 'context' in locals() and context is not None:
-            context.update_with_response(response.get('text', ''))
-        
-        logger.info(
-            f"Query {query_info['query_id']} processed in {processing_time:.4f}s "
-            f"with response type: {response.get('type', 'unknown')}"
-        )
-        
-        return response
+            # Convert to appropriate response format
+            return self._create_error_response(
+                ErrorTypes.INTERNAL_ERROR,
+                str(e),
+                query_info,
+                context
+            )
+        finally:
+            # Update timing metrics
+            processing_time = time.time() - start_time
+            self.metrics["total_processing_time"] += processing_time
+            if self.metrics["total_queries"] > 0:
+                self.metrics["average_processing_time"] = (
+                    self.metrics["total_processing_time"] / self.metrics["total_queries"]
+                )
     
     def _process_data_query(self, 
                           query_text: str,
@@ -215,82 +185,103 @@ class QueryProcessor:
                           context: ConversationContext,
                           query_info: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Process a data retrieval query.
+        Process a data query.
         
         Args:
-            query_text: The user's query text
-            classification_result: Results from query classification
+            query_text: Original query text
+            classification_result: Query classification data
             context: Conversation context
-            query_info: Query tracking information
+            query_info: Query metadata
             
         Returns:
-            Response dictionary
+            Formatted response
         """
-        # Extract parameters from classification
-        params = classification_result.get('parameters', {})
-        entity_type = params.get('entity_type', context.get_reference_summary().get('entity_type'))
-        
-        # Check if we're missing required parameters
-        if not entity_type:
-            # We need clarification on entity type
-            return self._create_clarification_response(
-                'entity_type',
-                'what type of information you are looking for',
-                query_info,
-                context
-            )
-        
-        # Generate SQL from the query and context
         try:
-            sql_query, sql_params = self._generate_sql_from_query(
+            # Generate SQL from the query
+            sql_query, params = self._generate_sql_from_query(
                 query_text, classification_result, context
             )
-        except Exception as e:
-            logger.error(f"Error generating SQL: {str(e)}")
-            return self._create_error_response(
-                'invalid_query',
-                f"Unable to generate a database query: {str(e)}",
-                query_info,
-                context
+            
+            if not sql_query:
+                return self._create_error_response(
+                    ErrorTypes.SQL_GENERATION_ERROR,
+                    "Could not generate a valid SQL query from your request",
+                    query_info,
+                    context
+                )
+            
+            # Execute the query
+            result = self.data_access.execute_query(
+                sql_query=sql_query,
+                params=params,
+                use_cache=True
             )
-        
-        # Execute the query
-        df, metadata = self.data_access.query_to_dataframe(
-            sql_query=sql_query,
-            params=sql_params,
-            use_cache=True
-        )
-        
-        # Check for execution errors
-        if not metadata.get('success', False):
-            error_type = 'query_error'
-            if 'timeout' in metadata.get('error', '').lower():
-                error_type = 'timeout_error'
+            
+            # Check for errors in the result
+            if result.get("error"):
+                return self._create_error_response(
+                    self.ERROR_TYPES.get(
+                        result.get("error_type", "database_query"),
+                        ErrorTypes.SQL_EXECUTION_ERROR
+                    ),
+                    result.get("message", "Database query error"),
+                    query_info,
+                    context
+                )
+            
+            # Check for empty results
+            if not result.get("data") or (
+                isinstance(result.get("data"), list) and len(result.get("data")) == 0
+            ):
+                # Create metadata for the response
+                metadata = {
+                    "entity_type": context.get_reference_summary().get("entity_type", "item"),
+                    "time_period": context.get_reference_summary().get("time_period", "")
+                }
+                
+                # Format the empty response
+                return self.response_service.format_response(
+                    response_type="data",
+                    data=[],
+                    context=context.to_dict(),
+                    metadata=metadata
+                )
+            
+            # Create metadata for the response
+            metadata = {
+                "entity_type": context.get_reference_summary().get("entity_type", "item"),
+                "time_period": context.get_reference_summary().get("time_period", ""),
+                "query_execution_time": result.get("execution_time", 0)
+            }
+            
+            # Format the success response
+            return self.response_service.format_response(
+                response_type="data",
+                data=result.get("data", []),
+                context=context.to_dict(),
+                metadata=metadata
+            )
+            
+        except Exception as e:
+            error_type = ErrorTypes.SQL_EXECUTION_ERROR
+            if "timeout" in str(e).lower():
+                error_type = ErrorTypes.TIMEOUT_ERROR
+            
+            error_response = error_handler.handle_error(
+                e, 
+                error_type,
+                context={
+                    "query_text": query_text,
+                    "classification": classification_result
+                }
+            )
             
             return self._create_error_response(
                 error_type,
-                metadata.get('error', 'Unknown database error'),
+                str(e),
                 query_info,
                 context
             )
-        
-        # Generate response
-        response_metadata = {
-            'entity_type': entity_type,
-            'time_period': context.get_reference_summary().get('time_period', 'the requested period'),
-            'execution_metadata': metadata,
-            **query_info
-        }
-        
-        # Format the response
-        response = self.response_service.format_response(
-            response_type='data',
-            data=df,
-            context=context.to_dict(),
-            metadata=response_metadata
-        )
-        
-        return response
     
     def _process_action_request(self, 
                               query_text: str,
@@ -298,141 +289,121 @@ class QueryProcessor:
                               context: ConversationContext,
                               query_info: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Process an action request query.
+        Process an action request.
         
         Args:
-            query_text: The user's query text
-            classification_result: Results from query classification
+            query_text: Original query text
+            classification_result: Query classification data
             context: Conversation context
-            query_info: Query tracking information
+            query_info: Query metadata
             
         Returns:
-            Response dictionary
+            Formatted response
         """
-        # Extract action parameters
-        params = classification_result.get('parameters', {})
-        action_type = params.get('action_type')
-        entity_type = params.get('entity_type', context.get_reference_summary().get('entity_type'))
-        entity_id = params.get('entity_id')
-        entity_name = params.get('entity_name')
-        
-        # Check if we have all required parameters
-        if not action_type:
-            return self._create_clarification_response(
-                'action_type',
-                'what action you want to perform',
+        try:
+            # Extract action parameters
+            action_type = classification_result.get("action", {}).get("type")
+            parameters = classification_result.get("action", {}).get("parameters", {})
+            
+            if not action_type:
+                return self._create_error_response(
+                    ErrorTypes.VALIDATION_ERROR,
+                    "No action type specified",
+                    query_info,
+                    context
+                )
+            
+            # Check for required parameters
+            required_params = classification_result.get("action", {}).get("required_params", [])
+            missing_params = [param for param in required_params if param not in parameters]
+            
+            if missing_params:
+                # Create a clarification response for missing parameters
+                return self._create_clarification_response(
+                    "missing_parameters",
+                    ", ".join(missing_params),
+                    query_info,
+                    context
+                )
+            
+            # Execute the action (this would normally call an action handler service)
+            # For now, return a mock response
+            action_response = {
+                "action": action_type,
+                "success": True,
+                "entity_type": parameters.get("entity_type", "item"),
+                "entity_name": parameters.get("name", parameters.get("id", "unknown")),
+                "message": f"Successfully performed {action_type}"
+            }
+            
+            # Create metadata for the response
+            metadata = {
+                "action_type": action_type,
+                "entity_type": parameters.get("entity_type", "item"),
+                "parameters": parameters
+            }
+            
+            # Format the success response
+            return self.response_service.format_response(
+                response_type="action",
+                data=action_response,
+                context=context.to_dict(),
+                metadata=metadata
+            )
+            
+        except Exception as e:
+            error_response = error_handler.handle_error(
+                e, 
+                ErrorTypes.ACTION_ERROR,
+                context={
+                    "query_text": query_text,
+                    "classification": classification_result,
+                    "action": classification_result.get("action", {})
+                }
+            )
+            
+            return self._create_error_response(
+                ErrorTypes.ACTION_ERROR,
+                str(e),
                 query_info,
                 context
             )
-        
-        if not entity_type:
-            return self._create_clarification_response(
-                'entity_type',
-                'what type of item you want to modify',
-                query_info,
-                context
-            )
-        
-        if not (entity_id or entity_name):
-            return self._create_clarification_response(
-                'entity_name',
-                f'which {entity_type} you want to modify',
-                query_info,
-                context
-            )
-        
-        # For this implementation, we'll just simulate the action
-        # In a real implementation, we would call the ActionHandler service
-        
-        # Simulate successful action
-        action_result = {
-            'action': action_type,
-            'entity_type': entity_type,
-            'entity_name': entity_name or f"ID: {entity_id}",
-            'success': True,
-            'details': f"The {entity_type} has been updated successfully."
-        }
-        
-        # Format response
-        response_metadata = {
-            'entity_type': entity_type,
-            'entity_name': entity_name or f"ID: {entity_id}",
-            **query_info
-        }
-        
-        response = self.response_service.format_response(
-            response_type='action',
-            data=action_result,
-            context=context.to_dict(),
-            metadata=response_metadata
-        )
-        
-        return response
     
     def _generate_sql_from_query(self, 
                                query_text: str,
                                classification_result: Dict[str, Any],
                                context: ConversationContext) -> Tuple[str, Dict[str, Any]]:
         """
-        Generate SQL from the query and context.
+        Generate a SQL query from the natural language query.
         
         Args:
-            query_text: The user's query text
-            classification_result: Results from query classification
+            query_text: Original query text
+            classification_result: Query classification data
             context: Conversation context
             
         Returns:
-            Tuple of (sql_query, sql_parameters)
+            Tuple of (sql_query, parameters)
         """
-        # This is a simplified implementation
-        # In a real system, you would use a specialized SQL generator
-        # based on the query type and parameters
+        # This would normally use a SQL generator service
+        # For now, return a mock query
+        entity_type = classification_result.get("entity_type", "orders")
+        time_filter = context.get_reference_summary().get("time_period", "")
         
-        # Extract parameters
-        params = classification_result.get('parameters', {})
-        entity_type = params.get('entity_type', context.get_reference_summary().get('entity_type', 'items'))
-        
-        # Get time period from context if available
-        time_refs = context.get_reference_summary().get('time_references', {})
-        start_date = time_refs.get('start_date')
-        end_date = time_refs.get('end_date')
-        
-        # Build very basic SQL (in reality, this would be much more sophisticated)
-        sql_params = {}
-        
-        if entity_type == 'orders':
-            sql = "SELECT * FROM orders"
-            
-            # Add time filters if available
-            where_clauses = []
-            if start_date:
-                where_clauses.append("order_date >= :start_date")
-                sql_params['start_date'] = start_date
-            
-            if end_date:
-                where_clauses.append("order_date <= :end_date")
-                sql_params['end_date'] = end_date
-            
-            if where_clauses:
-                sql += " WHERE " + " AND ".join(where_clauses)
-                
-            # Add limit
-            sql += " LIMIT 100"
-            
-        elif entity_type == 'menu_items':
-            sql = "SELECT * FROM menu_items"
-            
-            # Add status filter
-            sql += " WHERE active = 1"
-            
-            # Add limit
-            sql += " LIMIT 100"
-            
+        if not time_filter:
+            time_filter = "WHERE order_date >= DATE('now', '-7 day')"
         else:
-            # Generic fallback
-            sql = f"SELECT * FROM {entity_type} LIMIT 100"
+            # Mock time filter transformation
+            time_filter = f"WHERE order_date BETWEEN :start_date AND :end_date"
+            
+        sql_query = f"SELECT * FROM {entity_type} {time_filter} LIMIT 10"
         
-        return sql, sql_params
+        # Mock parameters
+        params = {
+            "start_date": "2023-01-01",
+            "end_date": "2023-01-31"
+        }
+        
+        return sql_query, params
     
     def _create_error_response(self, 
                              error_type: str,
@@ -440,34 +411,45 @@ class QueryProcessor:
                              query_info: Dict[str, Any],
                              context: Optional[ConversationContext]) -> Dict[str, Any]:
         """
-        Create an error response.
+        Create a standardized error response.
         
         Args:
             error_type: Type of error
             error_message: Error message
-            query_info: Query tracking information
-            context: Conversation context (optional)
+            query_info: Query metadata
+            context: Conversation context
             
         Returns:
-            Error response dictionary
+            Formatted error response
         """
+        # Update metrics
+        self.metrics["failed_queries"] += 1
+        self.metrics["error_counts"][error_type] = self.metrics["error_counts"].get(error_type, 0) + 1
+        
+        # Get context as dict if available
+        context_dict = context.to_dict() if context else {}
+        
+        # Create error data
         error_data = {
-            'error': error_type,
-            'message': self.ERROR_TYPES.get(error_type, {}).get('message', error_message),
-            'recovery_suggestion': self.ERROR_TYPES.get(error_type, {}).get('recovery', 'default')
+            "error": error_type,
+            "message": error_message,
+            "timestamp": datetime.now().isoformat(),
+            "query_info": query_info
         }
         
-        # Format the error response
-        ctx_dict = context.to_dict() if context else {}
-        
-        response = self.response_service.format_response(
-            response_type='error',
-            data=error_data,
-            context=ctx_dict,
-            metadata={**query_info}
+        # Get recovery suggestion from error handler
+        recovery_suggestion = error_handler.DEFAULT_RECOVERY_SUGGESTIONS.get(
+            error_type, 
+            error_handler.DEFAULT_RECOVERY_SUGGESTIONS[ErrorTypes.INTERNAL_ERROR]
         )
+        error_data["recovery_suggestion"] = recovery_suggestion
         
-        return response
+        # Format the error response using the response service
+        return self.response_service.format_response(
+            response_type="error",
+            data=error_data,
+            context=context_dict
+        )
     
     def _create_clarification_response(self, 
                                      clarification_type: str,
@@ -475,86 +457,71 @@ class QueryProcessor:
                                      query_info: Dict[str, Any],
                                      context: ConversationContext) -> Dict[str, Any]:
         """
-        Create a clarification response.
+        Create a clarification request response.
         
         Args:
             clarification_type: Type of clarification needed
-            clarification_subject: Subject requiring clarification
-            query_info: Query tracking information
+            clarification_subject: Subject of the clarification
+            query_info: Query metadata
             context: Conversation context
             
         Returns:
-            Clarification response dictionary
+            Formatted clarification response
         """
+        # Update context to indicate clarification is needed
+        context.clarification_state = context.CLARIFYING
+        context.clarification_type = clarification_type
+        context.clarification_subject = clarification_subject
+        
+        # Create clarification data
         clarification_data = {
-            'clarification_type': clarification_type,
-            'clarification_subject': clarification_subject
+            "type": clarification_type,
+            "subject": clarification_subject,
+            "timestamp": datetime.now().isoformat(),
+            "query_info": query_info
         }
         
-        # Add options if available
-        if clarification_type == 'entity_type':
-            # Suggest common entity types based on the system's capabilities
-            clarification_data['options'] = ['orders', 'menu items', 'customers', 'sales']
-        elif clarification_type == 'time_period':
-            # Suggest common time periods
-            clarification_data['options'] = ['today', 'yesterday', 'this week', 'last week', 'this month', 'last month']
-        
         # Format the clarification response
-        response = self.response_service.format_response(
-            response_type='clarification',
+        return self.response_service.format_response(
+            response_type="clarification",
             data=clarification_data,
             context=context.to_dict(),
-            metadata={**query_info}
+            metadata={"clarification_subject": clarification_subject}
         )
-        
-        return response
     
     def get_metrics(self) -> Dict[str, Any]:
         """
         Get performance metrics for the query processor.
         
         Returns:
-            Dictionary with metric information
+            Dictionary of metrics
         """
-        metrics = self.metrics.copy()
-        metrics['data_access_metrics'] = self.data_access.get_performance_metrics()
-        return metrics
+        return self.metrics.copy()
     
     def health_check(self) -> Dict[str, Any]:
         """
-        Perform a health check on the query processor and its dependencies.
+        Perform a health check for the query processor.
         
         Returns:
-            Dict with health status information
+            Health status dictionary
         """
-        start_time = time.time()
-        
-        # Check data access health
         data_access_health = self.data_access.health_check()
         
-        # Check response service health
-        response_service_health = self.response_service.health_check()
+        # Get error rate from error handler
+        error_handler_health = error_handler.health_check()
         
-        # Overall status is OK if all components are OK
-        status = "ok"
-        if data_access_health.get('status') != 'ok' or response_service_health.get('status') != 'ok':
-            status = "error"
-        
-        health_info = {
-            "service": "query_processor",
-            "status": status,
+        return {
+            "status": "healthy" if data_access_health.get("status") == "healthy" else "degraded",
             "components": {
                 "data_access": data_access_health,
-                "response_service": response_service_health
+                "error_handler": error_handler_health
             },
             "metrics": {
-                "total_queries": self.metrics['total_queries'],
+                "total_queries": self.metrics["total_queries"],
                 "success_rate": (
-                    self.metrics['successful_queries'] / self.metrics['total_queries'] * 100
-                    if self.metrics['total_queries'] > 0 else 0
-                )
-            },
-            "response_time": time.time() - start_time
-        }
-        
-        return health_info 
+                    self.metrics["successful_queries"] / self.metrics["total_queries"]
+                    if self.metrics["total_queries"] > 0 else 1.0
+                ),
+                "average_processing_time": self.metrics["average_processing_time"]
+            }
+        } 
