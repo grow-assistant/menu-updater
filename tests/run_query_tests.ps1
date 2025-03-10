@@ -12,11 +12,11 @@ if (Test-Path ".env") {
     Write-Host "Loaded environment variables from .env file."
 } else {
     Write-Host "No .env file found. Make sure you have the required environment variables set."
-    Write-Host "Required variables: OPENAI_API_KEY, GEMINI_API_KEY, DATABASE_URL, ELEVENLABS_API_KEY"
+    Write-Host "Required variables: OPENAI_API_KEY, GEMINI_API_KEY, DB_CONNECTION_STRING, ELEVENLABS_API_KEY"
 }
 
 # Verify environment variables are set
-$requiredVars = @("OPENAI_API_KEY", "GEMINI_API_KEY", "DATABASE_URL", "ELEVENLABS_API_KEY")
+$requiredVars = @("OPENAI_API_KEY", "GEMINI_API_KEY", "DB_CONNECTION_STRING", "ELEVENLABS_API_KEY")
 $missingVars = $requiredVars | Where-Object { [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($_)) }
 
 if ($missingVars.Count -gt 0) {
