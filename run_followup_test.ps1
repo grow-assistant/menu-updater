@@ -1,12 +1,31 @@
 # PowerShell script to run the follow-up query test
 
-# Set environment variables
-$env:OPENAI_API_KEY = "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"
-$env:GEMINI_API_KEY = "AIzaSyDkSUyf4trFy0LDF6nVmvsCy17eMR9gsWI" 
-$env:DATABASE_URL = "postgresql://postgres:Swoop123!@localhost:5433/byrdi"
-$env:ELEVENLABS_API_KEY = "sk_6b0386660b88145b59fdd5b2dfa5a8da5e817484542dee64"
+# Check if .env file exists and load variables from it
+if (Test-Path ".env") {
+    Get-Content ".env" | ForEach-Object {
+        if ($_ -match "^\s*([^#][^=]+)=(.*)$") {
+            $name = $matches[1].Trim()
+            $value = $matches[2].Trim()
+            [Environment]::SetEnvironmentVariable($name, $value)
+        }
+    }
+    Write-Host "Loaded environment variables from .env file."
+} else {
+    Write-Host "No .env file found. Make sure you have the required environment variables set."
+    Write-Host "Required variables: OPENAI_API_KEY, GEMINI_API_KEY, DATABASE_URL, ELEVENLABS_API_KEY"
+}
 
-Write-Host "Environment variables set."
+# Verify environment variables are set
+$requiredVars = @("OPENAI_API_KEY", "GEMINI_API_KEY", "DATABASE_URL", "ELEVENLABS_API_KEY")
+$missingVars = $requiredVars | Where-Object { [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($_)) }
+
+if ($missingVars.Count -gt 0) {
+    Write-Host "❌ Missing required environment variables: $($missingVars -join ', ')" -ForegroundColor Red
+    Write-Host "Please set these variables in your .env file or system environment."
+    exit 1
+}
+
+Write-Host "Environment variables verified."
 Write-Host "Running follow-up query test..."
 
 # Run the test
