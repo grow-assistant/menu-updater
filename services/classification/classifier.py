@@ -31,6 +31,9 @@ class ClassificationService:
         # Classification cache
         self._classification_cache = {}
         
+        # Track the last classification result for context
+        self._last_classification = None
+        
         # Set OpenAI API key if provided
         if self.api_key:
             openai.api_key = self.api_key
@@ -51,16 +54,19 @@ class ClassificationService:
         """
         logger.debug(f"Classifying query via classify method: '{query}'")
         
-        # Call the actual implementation method
+        # Call the actual implementation method with previous classification context
         result = self.classify_query(query, cached_dates, use_cache)
+        
+        # Store this classification for future context
+        self._last_classification = result.copy()
         
         # Transform the output to match what the orchestrator expects
         return {
             "category": result.get("query_type", "general_question"),
             "confidence": result.get("confidence", 0.0),
             "skip_database": result.get("skip_database", False),
-            "time_period_clause": result.get("time_period_clause", None),  # Add time period clause to response
-            "is_followup": result.get("is_followup", False)  # Add follow-up question indicator
+            "time_period_clause": result.get("time_period_clause", None),
+            "is_followup": result.get("is_followup", False)
         }
     
     def health_check(self) -> bool:
@@ -94,16 +100,31 @@ class ClassificationService:
     
     def _fallback_classification(self, query: str) -> Dict[str, Any]:
         """Provide a fallback classification when API calls fail."""
-        return {
-            "query": query,
-            "query_type": "general_question",  # Default fallback
-            "confidence": 0.1,
-            "time_elapsed": 0.0,
-            "from_cache": False,
-            "classification_method": "fallback",
-            "time_period_clause": None,  # Default empty time period clause
-            "is_followup": False
-        }
+        # If we have previous classification and this looks like a followup,
+        # use the previous query type instead of defaulting to general_question
+        if self._last_classification and any(token in query.lower() for token in ["those", "them", "that", "these"]):
+            # This might be a followup question based on simple heuristics
+            return {
+                "query": query,
+                "query_type": self._last_classification.get("query_type", "general_question"),
+                "confidence": 0.4,
+                "time_elapsed": 0.0,
+                "from_cache": False,
+                "classification_method": "fallback_with_context",
+                "time_period_clause": self._last_classification.get("time_period_clause"),
+                "is_followup": True
+            }
+        else:
+            return {
+                "query": query,
+                "query_type": "general_question",  # Default fallback
+                "confidence": 0.1,
+                "time_elapsed": 0.0,
+                "from_cache": False,
+                "classification_method": "fallback",
+                "time_period_clause": None,
+                "is_followup": False
+            }
     
     def classify_query(self, query: str, cached_dates=None, use_cache=True) -> Dict[str, Any]:
         """
@@ -148,8 +169,8 @@ class ClassificationService:
                     {"role": "user", "content": prompt["user"]}
                 ],
                 temperature=0.2,
-                max_tokens=300,  # Increased token limit to accommodate time period clause extraction
-                response_format={"type": "json_object"}  # Request JSON format for structured output
+                max_tokens=300,
+                response_format={"type": "json_object"}
             )
             
             # Log the OpenAI response
@@ -160,6 +181,32 @@ class ClassificationService:
             
             # Parse the response
             result = self.parse_classification_response(response, query)
+            
+            # Check if this is a followup question based on LLM's determination
+            if result.get("is_followup", False) and self._last_classification:
+                # Use the previous query type and timeframe for followup questions
+                result["query_type"] = self._last_classification.get("query_type", result["query_type"])
+                
+                # For time-related information, keep the previous context if relevant
+                if not result.get("time_period_clause"):
+                    result["time_period_clause"] = self._last_classification.get("time_period_clause")
+                
+                # Increase confidence for followup classification
+                result["confidence"] = max(result["confidence"], 0.85)
+            
+            # Ensure order_history queries always have a proper time_period_clause
+            if result["query_type"] == "order_history" and not result.get("time_period_clause"):
+                # Generate a default time period clause for last month
+                from datetime import datetime, timedelta
+                
+                today = datetime.now()
+                # First day of previous month
+                first_day = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+                # Last day of previous month
+                last_day = today.replace(day=1) - timedelta(days=1)
+                
+                # Create a BETWEEN clause with the dates
+                result["time_period_clause"] = f"WHERE updated_at BETWEEN '{first_day.strftime('%Y-%m-%d')}' AND '{last_day.strftime('%Y-%m-%d')}'"
             
             # Add metadata
             result["query"] = query
@@ -190,6 +237,40 @@ class ClassificationService:
                 query_type = parsed_json.get("query_type", "").strip().lower()
                 time_period_clause = parsed_json.get("time_period_clause", None)
                 is_followup = parsed_json.get("is_followup", False)
+                
+                # For order_history, ensure we have a proper time period clause with dates
+                if query_type == "order_history":
+                    # Check if we have start and end dates in the response
+                    start_date = parsed_json.get("start_date")
+                    end_date = parsed_json.get("end_date")
+                    
+                    # If we have dates but no time_period_clause, create one
+                    if start_date and end_date and not time_period_clause:
+                        time_period_clause = f"WHERE updated_at BETWEEN '{start_date}' AND '{end_date}'"
+                    
+                    # If we have a time_period_clause but it doesn't include specific dates, enhance it
+                    elif time_period_clause and "BETWEEN" not in time_period_clause and "=" not in time_period_clause:
+                        # Extract dates from general time periods
+                        from datetime import datetime, timedelta
+                        today = datetime.now()
+                        
+                        # Default to last month if we can't parse specific dates
+                        if "month" in time_period_clause.lower():
+                            # First day of previous month
+                            first_day = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+                            # Last day of previous month
+                            last_day = today.replace(day=1) - timedelta(days=1)
+                            
+                            # Replace with a specific BETWEEN clause
+                            time_period_clause = f"WHERE updated_at BETWEEN '{first_day.strftime('%Y-%m-%d')}' AND '{last_day.strftime('%Y-%m-%d')}'"
+                        elif "week" in time_period_clause.lower():
+                            # First day of previous week (assuming week starts on Monday)
+                            first_day = today - timedelta(days=today.weekday() + 7)
+                            # Last day of previous week
+                            last_day = first_day + timedelta(days=6)
+                            
+                            # Replace with a specific BETWEEN clause
+                            time_period_clause = f"WHERE updated_at BETWEEN '{first_day.strftime('%Y-%m-%d')}' AND '{last_day.strftime('%Y-%m-%d')}'"
                 
                 # Validate query type
                 if query_type in self.categories:

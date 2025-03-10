@@ -90,6 +90,9 @@ class GeminiSQLGenerator:
         # Configuration options
         self.max_retries = config["services"]["sql_generator"].get("max_retries", 2)
         
+        # Test placeholder replacement functionality to verify it's working
+        self._verify_placeholder_replacement()
+        
     def _get_default_prompt_template(self) -> str:
         """Get default prompt template if file is not found."""
         return """
@@ -245,11 +248,14 @@ class GeminiSQLGenerator:
         # Start with the template
         prompt = self.prompt_template
         
+        # Initialize prompt_parts list to collect additional context
+        prompt_parts = []
+        
         # Import the actual location ID value from business rules
         from services.rules.business_rules import DEFAULT_LOCATION_ID
         
         # Add a strongly worded reminder about order status being integers and location ID filtering
-        critical_requirements = """
+        critical_requirements = f"""
 CRITICAL REQUIREMENTS:
 - Order status values must ALWAYS be used as integers, never as strings
 - Completed orders have status=7 (not 'COMPLETED')
@@ -257,12 +263,23 @@ CRITICAL REQUIREMENTS:
 - In-progress orders have status between 3-5 (not 'IN PROGRESS')
 
 *** MANDATORY LOCATION FILTERING ***
-- Every query on the orders table MUST filter by location_id
-- You MUST include: o.location_id = {location_id}
+- Every query on the orders table MUST filter by location_id 
+- ALWAYS use the exact value: o.location_id = {DEFAULT_LOCATION_ID}
+- DO NOT use placeholders like {{location_id}}
 - This is a CRITICAL security requirement for data isolation
-- Without this filter, results will include data from all locations
-- The specific location ID to use is: {location_id}
-""".format(location_id=DEFAULT_LOCATION_ID)
+- The specific location ID value is: {DEFAULT_LOCATION_ID}
+- You must ALWAYS use this exact numeric value: {DEFAULT_LOCATION_ID}
+- NEVER use curly braces or placeholders in generated SQL
+
+*** TIME-BASED DEFAULT BEHAVIOR ***
+- When a query mentions "this month" or "current month" without specific dates, use the most recent COMPLETE month
+- When a query asks about "orders in a month" without specifying which month, default to the most recent complete month
+- For example, if today is October 15, 2023, "orders this month" refers to October 2023 (month to date)
+- Use date_trunc('month', current_date - interval '1 month') to get the first day of the most recent complete month
+- Use date_trunc('month', current_date) - interval '1 day' to get the last day of the most recent complete month
+- Always use explicit date ranges in your WHERE clause for time-based queries (e.g., BETWEEN start_date AND end_date)
+- Only use the current month (in progress) when the query explicitly asks for "current in-progress month" or similar
+"""
         
         # Format schema information if available
         schema_str = ""
@@ -285,21 +302,27 @@ CRITICAL REQUIREMENTS:
         # Format examples if available
         examples_str = self._format_examples(examples)
         
-        # Add previous SQL queries as context if available
+        # Initialize previous_sql_str regardless of whether there's previous SQL
         previous_sql_str = ""
-        if "previous_sql" in context and context["previous_sql"]:
-            previous_sql = context["previous_sql"]
-            previous_sql_str = "\nPrevious Related SQL Queries (for context):\n"
+        
+        # Fix the previous SQL history handling
+        if context and context.get("previous_sql"):
+            previous_sql = context.get("previous_sql")
+            previous_sql_str = "# Previous SQL query for context:\n"
             
-            for i, sql_entry in enumerate(reversed(previous_sql), 1):
-                previous_sql_str += f"Previous Query {i}:\n"
-                previous_sql_str += f"User Asked: {sql_entry.get('query', 'Unknown')}\n"
-                previous_sql_str += f"SQL Generated: {sql_entry.get('sql', 'Unknown')}\n\n"
-                
-            previous_sql_str += """
-IMPORTANT CONTEXT MAINTENANCE INSTRUCTIONS:
-"""
-
+            # Check if previous_sql is a string or a dictionary/object
+            if isinstance(previous_sql, str):
+                # Handle case when previous_sql is a string
+                previous_sql_str += f"SQL: {previous_sql}\n"
+                if context.get("previous_query"):
+                    previous_sql_str += f"User Asked: {context.get('previous_query', 'Unknown')}\n"
+            else:
+                # Handle case when previous_sql is a dictionary/object with get method
+                previous_sql_str += f"SQL: {previous_sql.get('sql', 'Unknown')}\n"
+                previous_sql_str += f"User Asked: {previous_sql.get('query', 'Unknown')}\n"
+            
+            prompt_parts.append(previous_sql_str)
+        
         # Add follow-up question context
         followup_context_str = ""
         if "previous_query" in context:
@@ -582,12 +605,30 @@ CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
         # Logging for debug
         logger.debug(f"Extracted SQL: {processed_sql[:100]}...")
         
-        # Check for the presence of location_id filtering if this is an order query
-        # This is a critical security measure that must be enforced
+        # Get the DEFAULT_LOCATION_ID from business rules
         from services.rules.business_rules import DEFAULT_LOCATION_ID
+        
+        # Detect and replace ANY placeholder format with the actual value
+        # This handles {location_id}, {{location_id}}, and other variations
+        placeholder_patterns = [
+            r"\{location_id\}",  # {location_id}
+            r"\s*\{\{location_id\}\}",  # {{location_id}}
+            r":\s*location_id",  # :location_id (for prepared statements)
+            r"%\(location_id\)s"  # %(location_id)s (for psycopg2 style)
+        ]
+        
+        for pattern in placeholder_patterns:
+            if re.search(pattern, processed_sql):
+                original = processed_sql
+                processed_sql = re.sub(pattern, str(DEFAULT_LOCATION_ID), processed_sql)
+                logger.info(f"Replaced location_id placeholder format '{pattern}' with actual value {DEFAULT_LOCATION_ID}")
         
         # Check if this is a query on the orders table
         if " orders " in processed_sql.lower() or " orders\n" in processed_sql.lower() or "from orders" in processed_sql.lower():
+            # Check for any remaining placeholder patterns that might indicate issues
+            if "{" in processed_sql and "}" in processed_sql:
+                logger.warning(f"Possible unhandled placeholder in SQL after processing: {processed_sql}")
+            
             # Get table alias if used
             alias_pattern = r"from\s+orders\s+(?:as\s+)?([a-zA-Z0-9_]+)"
             alias_match = re.search(alias_pattern, processed_sql.lower(), re.IGNORECASE)
@@ -598,8 +639,9 @@ CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
             else:
                 table_prefix = "orders."
             
-            # Check if location_id filtering is present
-            location_filter_pattern = rf"{table_prefix}location_id\s*=\s*\d+"
+            # Check if location_id filtering is present with a more robust pattern
+            # This will match location_id = 62 as well as location_id=62 (without space)
+            location_filter_pattern = r"(?:orders|[a-z])\.location_id\s*=\s*\d+"
             if not re.search(location_filter_pattern, processed_sql, re.IGNORECASE):
                 logger.warning(f"Location ID filtering missing in SQL query: {processed_sql}")
                 
@@ -620,6 +662,15 @@ CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
                         processed_sql += f"\nWHERE {table_prefix}location_id = {DEFAULT_LOCATION_ID}"
                 
                 logger.info(f"Location filter added to query: {processed_sql}")
+            else:
+                logger.info(f"Location filtering is present in the SQL query")
+        
+        # Final validation check - verify no curly braces remain
+        if "{" in processed_sql or "}" in processed_sql:
+            logger.warning(f"SQL may still contain placeholders: {processed_sql}")
+            # Try a more aggressive replacement as a fallback
+            processed_sql = re.sub(r"\{[^}]*\}", str(DEFAULT_LOCATION_ID), processed_sql)
+            logger.info(f"Performed aggressive placeholder replacement: {processed_sql}")
         
         return processed_sql
     
@@ -784,19 +835,208 @@ CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
     def _get_sql_examples(self, classification):
         """Get SQL examples for the given classification from the rules service."""
         try:
+            # Import the actual location ID value
+            from services.rules.business_rules import DEFAULT_LOCATION_ID
+            
             # Get the rules service from the service registry
             rules_service = ServiceRegistry.get_service('rules')
             if not rules_service:
-                self.logger.warning("Rules service not available, proceeding without examples")
+                logger.warning("Rules service not available, proceeding without examples")
                 return {"examples": []}
             
             # Get SQL examples from the rules service
             examples = rules_service.get_sql_examples(classification)
             if not examples:
-                self.logger.warning(f"No SQL examples found for classification: {classification}")
-                return {"examples": []}
+                logger.warning(f"No SQL examples found for classification: {classification}")
+                examples = []
             
-            return {"examples": examples}
+            # Add explicit examples with correct location ID usage
+            # These will be prepended to ensure they are seen first
+            location_examples = []
+            
+            if classification == "order_history":
+                location_examples = [
+                    {
+                        "query": "How many orders were completed on February 21, 2025?",
+                        "sql": f"""
+SELECT
+  COUNT(*) AS completed_orders_count
+FROM
+  orders o
+WHERE
+  (o.updated_at - INTERVAL '7 hours')::DATE = '2025-02-21'
+  AND o.status = 7
+  AND o.location_id = {DEFAULT_LOCATION_ID};
+"""
+                    },
+                    {
+                        "query": "Show me orders from last week",
+                        "sql": f"""
+SELECT
+  o.id,
+  o.created_at,
+  o.status,
+  o.total_amount
+FROM
+  orders o
+WHERE
+  o.location_id = {DEFAULT_LOCATION_ID}
+  AND (o.created_at - INTERVAL '7 hours')::DATE >= CURRENT_DATE - INTERVAL '7 days'
+  AND (o.created_at - INTERVAL '7 hours')::DATE < CURRENT_DATE;
+"""
+                    }
+                ]
+            elif classification == "popular_items":
+                location_examples = [
+                    {
+                        "query": "What were our top 5 selling items last month?",
+                        "sql": f"""
+SELECT
+  i.name,
+  COUNT(oi.id) AS order_count
+FROM
+  order_items oi
+JOIN
+  items i ON oi.item_id = i.id
+JOIN
+  orders o ON oi.order_id = o.id
+WHERE
+  o.location_id = {DEFAULT_LOCATION_ID}
+  AND (o.created_at - INTERVAL '7 hours')::DATE >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+  AND (o.created_at - INTERVAL '7 hours')::DATE < DATE_TRUNC('month', CURRENT_DATE)
+GROUP BY
+  i.name
+ORDER BY
+  order_count DESC
+LIMIT 5;
+"""
+                    }
+                ]
+            elif classification == "order_ratings":
+                location_examples = [
+                    {
+                        "query": "What was the average rating for orders last month?",
+                        "sql": f"""
+SELECT
+  AVG(r.rating) AS avg_rating
+FROM
+  ratings r
+JOIN
+  orders o ON r.order_id = o.id
+WHERE
+  o.location_id = {DEFAULT_LOCATION_ID}
+  AND (o.created_at - INTERVAL '7 hours')::DATE >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+  AND (o.created_at - INTERVAL '7 hours')::DATE < DATE_TRUNC('month', CURRENT_DATE);
+"""
+                    }
+                ]
+            elif classification == "trend_analysis":
+                location_examples = [
+                    {
+                        "query": "Show me the sales trend for the past 4 weeks",
+                        "sql": f"""
+SELECT
+  DATE_TRUNC('week', (o.created_at - INTERVAL '7 hours'))::DATE AS week_start,
+  SUM(o.total_amount) AS weekly_sales
+FROM
+  orders o
+WHERE
+  o.location_id = {DEFAULT_LOCATION_ID}
+  AND o.status = 7
+  AND (o.created_at - INTERVAL '7 hours')::DATE >= CURRENT_DATE - INTERVAL '4 weeks'
+GROUP BY
+  week_start
+ORDER BY
+  week_start;
+"""
+                    }
+                ]
+            elif classification == "menu_inquiry":
+                location_examples = [
+                    {
+                        "query": "Which menu items are vegetarian?",
+                        "sql": f"""
+SELECT
+  i.name,
+  i.description,
+  i.price
+FROM
+  items i
+JOIN
+  menu_items mi ON i.id = mi.item_id
+WHERE
+  mi.location_id = {DEFAULT_LOCATION_ID}
+  AND mi.is_active = TRUE
+  AND i.tags LIKE '%vegetarian%';
+"""
+                    }
+                ]
+            
+            # Add a default example for any category not explicitly handled
+            if not location_examples:
+                location_examples = [
+                    {
+                        "query": "Generic query requiring location filtering",
+                        "sql": f"""
+-- This is an example of a query properly filtered by location_id
+SELECT
+  o.id,
+  o.created_at,
+  o.total_amount
+FROM
+  orders o
+WHERE
+  o.location_id = {DEFAULT_LOCATION_ID}
+  -- Always use the exact number ({DEFAULT_LOCATION_ID}) for location_id, never a placeholder
+  -- Additional conditions would go here
+LIMIT 10;
+"""
+                    }
+                ]
+            
+            # Add the explicit examples to the start of the examples list
+            all_examples = location_examples + examples
+            
+            logger.info(f"Loaded {len(all_examples)} examples for {classification} (including {len(location_examples)} location ID examples)")
+            
+            return {"examples": all_examples}
         except Exception as e:
-            self.logger.error(f"Error getting SQL examples: {e}")
-            return {"examples": []} 
+            logger.error(f"Error getting SQL examples: {e}")
+            return {"examples": []}
+
+    def _test_placeholder_replacement(self, test_sql):
+        """
+        Test function to verify placeholder replacement works correctly.
+        
+        Args:
+            test_sql: SQL string with placeholders to test
+            
+        Returns:
+            Processed SQL with placeholders replaced
+        """
+        logger.info(f"Testing placeholder replacement on: {test_sql}")
+        from services.rules.business_rules import DEFAULT_LOCATION_ID
+        
+        # Apply our normal extraction process
+        processed_sql = self._extract_sql(test_sql)
+        
+        # Log the results
+        logger.info(f"SQL after placeholder replacement: {processed_sql}")
+        logger.info(f"Location ID placeholder replacement successful: {'{location_id}' not in processed_sql}")
+        logger.info(f"DEFAULT_LOCATION_ID value ({DEFAULT_LOCATION_ID}) is in result: {str(DEFAULT_LOCATION_ID) in processed_sql}")
+        
+        return processed_sql 
+
+    def _verify_placeholder_replacement(self):
+        """
+        Verify placeholder replacement functionality during initialization.
+        """
+        # Test placeholder replacement with a known SQL query
+        test_sql = "SELECT * FROM orders WHERE location_id = {location_id}"
+        processed_sql = self._test_placeholder_replacement(test_sql)
+        
+        # Check if the processed SQL contains the location_id placeholder
+        if "{location_id}" in processed_sql:
+            logger.warning("Placeholder replacement failed during initialization")
+        else:
+            logger.info("Placeholder replacement verified successfully during initialization") 

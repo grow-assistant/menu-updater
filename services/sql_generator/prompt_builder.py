@@ -188,6 +188,25 @@ class SQLPromptBuilder:
         elif query_type in ["menu_query", "order_history", "query_performance", "query_ratings"]:
             prompt += "\nThis is a read query. Generate SQL to retrieve information."
         
+        # Add time-based defaults for order queries
+        if 'order' in query_type.lower() or 'order' in query.lower():
+            prompt += "\nIMPORTANT: For time-based queries, follow these rules:"
+            prompt += "\n- Interpret time expressions precisely as follows:"
+            prompt += "\n  * 'in the last week/month/quarter/year' means a ROLLING time period (e.g., 'in the last month' = the last 30 days from today)"
+            prompt += "\n  * 'last week/month/quarter/year' means the PREVIOUS COMPLETE time period (e.g., 'last month' = the full previous calendar month)"
+            prompt += "\n  * 'this week/month/quarter/year' means the CURRENT PARTIAL time period (e.g., 'this month' = month-to-date)"
+            prompt += "\n- Use explicit date ranges with PostgreSQL date functions in your WHERE clause"
+            prompt += "\n- For rolling periods, use: current_date - interval '30 days' for 'in the last month'"
+            prompt += "\n- For previous complete periods, use: date_trunc('month', current_date - interval '1 month')"
+            prompt += "\n- For current partial periods, use: date_trunc('month', current_date)"
+            prompt += "\n- Always include both start AND end dates in your BETWEEN clauses"
+            
+            # Add location filtering instruction for order queries
+            prompt += "\n\nCRITICAL: Location filtering requirement"
+            prompt += "\n- Every query on the orders table MUST filter by location_id"
+            prompt += "\n- Use: o.location_id = 62 (exact value, not a placeholder)"
+            prompt += "\n- This is a security requirement for data isolation"
+        
         return prompt
     
     def _format_params(self, params: Dict[str, Any]) -> str:

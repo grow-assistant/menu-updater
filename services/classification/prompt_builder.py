@@ -130,11 +130,19 @@ Your task is to:
 4. IDENTIFY ANY TIME PERIOD INFORMATION and convert it to a SQL WHERE clause for the 'updated_at' column.
 
 FOLLOW-UP QUESTION DETECTION:
-- A follow-up question often refers to previous information without explicitly stating it
-- Look for phrases like "those orders", "that time", "them", "those items", etc.
-- If the query seems incomplete without prior context, it's likely a follow-up
-- Example: "Who placed those orders?" is a follow-up to a previous query about orders
-- Example: "What items were included?" is a follow-up to a previous order discussion
+- A question is ONLY considered a follow-up if it's a logical continuation to a previous query
+- The primary test: "Would this question make sense without any prior conversation context?"
+- If the answer is NO, then it's a follow-up question
+- Look for pronouns referring to previous context: "those orders", "that time", "them", "those items"
+- Look for implied information: "How many were sold?" (without specifying what items)
+- Questions that stand on their own are NOT follow-ups, even if related to a previous topic
+- YOU must determine this, not any hard-coded logic or rules
+
+Example follow-up patterns:
+- Questions using pronouns without clear antecedents in the same question
+- Questions that omit critical information (what items, what time period, etc.)
+- Questions that directly reference a previous response
+- Questions that only make sense in the context of previous conversation
 
 When classifying follow-up questions:
 - Maintain the same query_type as the most logical parent query
@@ -159,22 +167,31 @@ Here are examples of different query types:
 
 EXAMPLES OF FOLLOW-UP QUESTIONS:
 - Initial: "How many orders were completed yesterday?" (order_history)
-  Follow-up: "Who placed those orders?" (still order_history)
+  Follow-up: "Who placed those orders?" (still order_history, is_followup=true)
 - Initial: "What were our most popular items last month?" (popular_items)
-  Follow-up: "How many of each did we sell?" (still popular_items)
+  Follow-up: "How many of each did we sell?" (still popular_items, is_followup=true)
 - Initial: "Show me sales data for February." (trend_analysis)
-  Follow-up: "How does that compare to January?" (still trend_analysis)
+  Follow-up: "How does that compare to January?" (still trend_analysis, is_followup=true)
+- Individual question: "What were the most popular items last week?" (popular_items, is_followup=false)
+  Even if asked after another question, this is NOT a follow-up because it's complete on its own.
 
-Respond with a JSON object containing three fields:
-1. "query_type": The category that best matches the query
-2. "time_period_clause": A SQL WHERE clause for time constraints if present, or null if not applicable
-3. "is_followup": Boolean indicating if this is a follow-up question
+Your response MUST accurately identify if a question is a follow-up based SOLELY on the question's content and whether it requires previous context to make sense. This determination must be reflected in the "is_followup" field of your JSON response.
 
-Example response format:
+For queries related to 'order_history', please also extract and provide:
+1. A specific start_date in ISO format (YYYY-MM-DD)
+2. A specific end_date in ISO format (YYYY-MM-DD)
+
+For example, if the query is 'Show me orders from last month', you should determine:
+- start_date: The first day of last month (e.g., '2025-02-01')
+- end_date: The last day of last month (e.g., '2025-02-28')
+
+Example response format for order_history queries:
 {{
   "query_type": "order_history",
-  "time_period_clause": "WHERE updated_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 WEEK)",
-  "is_followup": false
+  "time_period_clause": "WHERE updated_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH)",
+  "is_followup": false,
+  "start_date": "2025-02-01",
+  "end_date": "2025-02-28"
 }}
 
 For follow-up questions:
