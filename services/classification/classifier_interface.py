@@ -21,9 +21,14 @@ class QueryClassifierInterface:
     A class that provides a common interface for classifying queries.
     """
     
-    def __init__(self):
-        """Initialize the Query Classifier Interface."""
-        self._classifier = ClassificationService()
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        """
+        Initialize the Query Classifier Interface.
+        
+        Args:
+            config: Optional configuration dictionary
+        """
+        self._classifier = ClassificationService(config=config)
         self._prompt_builder = classification_prompt_builder
         logger.info("QueryClassifierInterface initialized")
     
@@ -32,7 +37,8 @@ class QueryClassifierInterface:
         query: str,
         model: Optional[str] = None,
         temperature: Optional[float] = None,
-        use_cache: bool = True
+        use_cache: bool = True,
+        conversation_context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Classify a query into one of the supported query types.
@@ -42,14 +48,23 @@ class QueryClassifierInterface:
             model: Model to use for classification (defaults to configured default)
             temperature: Temperature for generation (defaults to configured default)
             use_cache: Whether to use cached classifications
+            conversation_context: Optional conversation context for improved classification
             
         Returns:
             Dictionary with classification results
         """
         try:
-            result = self._classifier.classify_query(
-                query=query
-            )
+            # Use context if provided for better classification
+            if conversation_context:
+                result = self._classifier.get_classification_with_context(
+                    query=query,
+                    conversation_context=conversation_context
+                )
+            else:
+                result = self._classifier.classify_query(
+                    query=query,
+                    use_cache=use_cache
+                )
             
             return result
         except Exception as e:
@@ -59,7 +74,9 @@ class QueryClassifierInterface:
                 "query": query,
                 "query_type": "general",
                 "confidence": 0.1,
-                "error": str(e)
+                "parameters": {},
+                "error": str(e),
+                "needs_clarification": True
             }
     
     async def classify_query_async(
@@ -67,7 +84,8 @@ class QueryClassifierInterface:
         query: str,
         model: Optional[str] = None,
         temperature: Optional[float] = None,
-        use_cache: bool = True
+        use_cache: bool = True,
+        conversation_context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Asynchronously classify a query into one of the supported query types.
@@ -77,6 +95,7 @@ class QueryClassifierInterface:
             model: Model to use for classification (defaults to configured default)
             temperature: Temperature for generation (defaults to configured default)
             use_cache: Whether to use cached classifications
+            conversation_context: Optional conversation context for improved classification
             
         Returns:
             Dictionary with classification results
@@ -86,7 +105,7 @@ class QueryClassifierInterface:
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(
                 None, 
-                lambda: self.classify_query(query, model, temperature, use_cache)
+                lambda: self.classify_query(query, model, temperature, use_cache, conversation_context)
             )
             return result
         except Exception as e:
@@ -96,7 +115,9 @@ class QueryClassifierInterface:
                 "query": query,
                 "query_type": "general",
                 "confidence": 0.1,
-                "error": str(e)
+                "parameters": {},
+                "error": str(e),
+                "needs_clarification": True
             }
     
     def get_supported_query_types(self) -> List[str]:
@@ -122,8 +143,7 @@ class QueryClassifierInterface:
     
     def clear_cache(self) -> None:
         """Clear the classification cache."""
-        # Implement if caching is added
-        pass
+        self._classifier.clear_cache()
 
 
 # Singleton instance

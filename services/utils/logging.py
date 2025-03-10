@@ -231,49 +231,73 @@ def setup_ai_api_logging():
     
     logger.info(f"AI API logging configured for session: {latest_session_dir.name}")
 
-def log_openai_request(prompt: str, parameters: Dict[str, Any] = None, context: Optional[str] = None):
-    """Log an OpenAI API request"""
-    openai_logger = logging.getLogger("openai_categorization")
-    openai_logger.info("OpenAI API REQUEST")
+def log_openai_request(
+    prompt: str = None, 
+    parameters: Dict[str, Any] = None, 
+    context: Optional[str] = None, 
+    model: str = None,
+    system_prompt: str = None,
+    user_prompt: str = None
+):
+    """
+    Log an OpenAI API request for debugging and auditing.
     
-    # Handle Unicode characters safely for Windows Console output
-    try:
-        openai_logger.info(f"PROMPT: {prompt}")
-    except UnicodeEncodeError:
-        # If encoding fails, just log that we have a Unicode prompt
-        openai_logger.info("PROMPT: [Unicode prompt - contains characters that can't be displayed in current console encoding]")
+    Args:
+        prompt: The prompt text (legacy parameter)
+        parameters: The parameters passed to the API (legacy parameter)
+        context: Optional context information (legacy parameter)
+        model: The model being used
+        system_prompt: The system prompt for chat completions
+        user_prompt: The user prompt for chat completions
+    """
+    # For backward compatibility
+    if prompt is not None and system_prompt is None and user_prompt is None:
+        log_message = f"OpenAI API Request:\n{prompt}"
+        if parameters:
+            log_message += f"\nParameters: {json.dumps(parameters, indent=2)}"
+        if context:
+            log_message += f"\nContext: {context}"
+    else:
+        # New style logging
+        log_message = "OpenAI API Request:"
+        if model:
+            log_message += f"\nModel: {model}"
+        if system_prompt:
+            log_message += f"\nSystem: {system_prompt}"
+        if user_prompt:
+            log_message += f"\nUser: {user_prompt}"
     
-    if parameters:
-        try:
-            openai_logger.info(f"PARAMETERS: {json.dumps(parameters, default=str)}")
-        except UnicodeEncodeError:
-            openai_logger.info("PARAMETERS: [Contains Unicode characters that can't be displayed]")
-    
-    if context:
-        try:
-            openai_logger.info(f"CONTEXT: {context}")
-        except UnicodeEncodeError:
-            openai_logger.info("CONTEXT: [Contains Unicode characters that can't be displayed]")
-    
-    openai_logger.info("-" * 50)
-    # Force flush handlers
-    for handler in openai_logger.handlers:
-        handler.flush()
+    logger.debug(log_message)
 
 def log_openai_response(response: Any, processing_time: float = None):
-    """Log an OpenAI API response"""
-    openai_logger = logging.getLogger("openai_categorization")
-    openai_logger.info("OpenAI API RESPONSE")
+    """
+    Log an OpenAI API response for debugging and auditing.
+    
+    Args:
+        response: The API response object
+        processing_time: Optional processing time in seconds
+    """
+    # Format the response for logging
     try:
-        openai_logger.info(f"RESPONSE: {json.dumps(response, default=str)}")
-    except:
-        openai_logger.info(f"RESPONSE: {str(response)}")
-    if processing_time:
-        openai_logger.info(f"PROCESSING TIME: {processing_time:.2f} seconds")
-    openai_logger.info("=" * 50)
-    # Force flush handlers
-    for handler in openai_logger.handlers:
-        handler.flush()
+        if hasattr(response, 'choices') and hasattr(response.choices[0], 'message'):
+            # This is a response from the newer client-based API
+            content = response.choices[0].message.content
+            log_message = f"OpenAI API Response:\n{content[:500]}..."
+        elif isinstance(response, dict) and 'choices' in response:
+            # This is a response in dictionary format
+            content = response['choices'][0]['message']['content']
+            log_message = f"OpenAI API Response:\n{content[:500]}..."
+        else:
+            # Unknown format, just convert to string
+            log_message = f"OpenAI API Response:\n{str(response)[:500]}..."
+        
+        if processing_time is not None:
+            log_message += f"\nProcessing time: {processing_time:.2f}s"
+            
+        logger.debug(log_message)
+    except Exception as e:
+        logger.error(f"Error logging OpenAI response: {e}")
+        logger.debug(f"Raw response: {response}")
 
 def log_gemini_request(prompt: str, parameters: Dict[str, Any] = None, context: Optional[str] = None):
     """Log a Google Gemini API request"""
