@@ -69,6 +69,16 @@ class ClassificationService:
         # Store this classification for future context
         self._last_classification = result.copy()
         
+        # Generate time_period_clause if needed and missing
+        time_period_clause = result.get("time_period_clause")
+        if not time_period_clause and result.get("query_type") == "order_history":
+            # Extract time period from parameters
+            time_period = result.get("parameters", {}).get("time_period")
+            if time_period:
+                # Generate a SQL WHERE clause based on the time period
+                time_period_clause = self._generate_time_period_clause(time_period)
+                result["time_period_clause"] = time_period_clause
+        
         # Transform the output to match what the orchestrator expects
         return {
             "category": result.get("query_type", "general_question"),
@@ -474,4 +484,41 @@ class ClassificationService:
             enhanced_result["query_type"] = context["current_topic"]
             enhanced_result["is_follow_up"] = True
         
-        return enhanced_result 
+        return enhanced_result
+    
+    def _generate_time_period_clause(self, time_period: str) -> str:
+        """
+        Generate a SQL WHERE clause for the given time period.
+        
+        Args:
+            time_period: The time period description (e.g., 'last month', 'between January and March')
+            
+        Returns:
+            A SQL WHERE clause for the time period
+        """
+        time_period = time_period.lower().strip()
+        
+        # Handle common time period patterns
+        if time_period == "today":
+            return "WHERE updated_at >= CURRENT_DATE"
+        elif time_period == "yesterday":
+            return "WHERE updated_at >= CURRENT_DATE - INTERVAL '1 day' AND updated_at < CURRENT_DATE"
+        elif time_period == "last week":
+            return "WHERE updated_at >= CURRENT_DATE - INTERVAL '7 days'"
+        elif time_period == "last month":
+            return "WHERE updated_at >= CURRENT_DATE - INTERVAL '1 month'"
+        elif time_period == "last year":
+            return "WHERE updated_at >= CURRENT_DATE - INTERVAL '1 year'"
+        elif re.match(r"^\d{4}-\d{2}-\d{2}$", time_period):
+            # Date in YYYY-MM-DD format
+            return f"WHERE updated_at = '{time_period}'"
+        elif re.match(r"^\d{2}/\d{2}/\d{4}$", time_period):
+            # Date in MM/DD/YYYY format
+            date_match = re.match(r"^(\d{2})/(\d{2})/(\d{4})$", time_period)
+            if date_match:
+                month, day, year = date_match.groups()
+                return f"WHERE updated_at = '{year}-{month}-{day}'"
+        
+        # Default to a generic time_period_clause for the orchestrator
+        # This ensures the orchestrator gets a string, not None
+        return f"WHERE updated_at LIKE '%{time_period}%'" 
