@@ -272,9 +272,17 @@ class ClassificationService:
             # Parse the JSON
             classification_data = json.loads(message_content)
             
-            # Extract category
+            # Extract category and validate it
             if "query_type" in classification_data:
-                result["query_type"] = classification_data["query_type"]
+                query_type = classification_data["query_type"]
+                # Check if the query_type is valid (in the available categories)
+                if query_type in self.categories:
+                    result["query_type"] = query_type
+                else:
+                    # If invalid category, use the default
+                    result["query_type"] = "general_question"
+                    logger.warning(f"Invalid category received: {query_type}. Using general_question instead.")
+                
                 result["confidence"] = 0.9  # High confidence for direct classification
                 
             # Extract time period clause

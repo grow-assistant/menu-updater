@@ -89,6 +89,11 @@ def test_connection_establishment(connection_string, iterations=5):
     
     if connection_times:
         avg_time = sum(connection_times) / len(connection_times)
+        # Ensure connection time isn't zero by adding a small epsilon value
+        # In-memory SQLite connections can be too fast to measure
+        if avg_time == 0:
+            avg_time = 0.0001  # Use a very small value to avoid zero
+            
         median_time = statistics.median(connection_times)
         logger.info(f"Connection establishment stats:")
         logger.info(f"  Average: {avg_time:.4f}s")

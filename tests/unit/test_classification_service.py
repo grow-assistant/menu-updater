@@ -110,23 +110,28 @@ class TestClassificationService:
         config = test_config.copy()
         config["api"] = {"openai": {"api_key": "test_api_key", "model": "gpt-4o-mini"}}
         
-        # Let's directly check the fallback behavior by mocking the openai.chat.completions.create function
-        with patch('services.classification.classifier.openai.chat.completions.create') as mock_create:
-            # Make the API call raise an exception to trigger the fallback
-            mock_create.side_effect = Exception("API Error")
-            
-            # Create the classifier and call the classify method
-            classifier = ClassificationService(config=config)
-            result = classifier.classify("Show me menu items at Idle Hour")
-            
-            # Verify the fallback result based on the transformation done by classify method
-            assert result["category"] == "general_question"  # query_type becomes category
-            assert "confidence" in result
-            assert "time_period_clause" in result
-            assert "is_followup" in result
-            
-            # Verify that the OpenAI API was called once (and failed)
-            assert mock_create.call_count == 1
+        # Create a mock client
+        mock_client = MagicMock()
+        
+        # Make the API call raise an exception to trigger the fallback
+        mock_client.chat.completions.create.side_effect = Exception("API Error")
+        
+        # Create the classifier with our mock client
+        classifier = ClassificationService(config=config)
+        # Replace its client with our mock
+        classifier.client = mock_client
+        
+        # Call the classify method
+        result = classifier.classify("Show me menu items at Idle Hour")
+        
+        # Verify the fallback result based on the transformation done by classify method
+        assert result["category"] == "general_question"  # query_type becomes category
+        assert "confidence" in result
+        assert "time_period_clause" in result
+        assert "is_followup" in result
+        
+        # Verify that the OpenAI API was called once (and failed)
+        assert mock_client.chat.completions.create.call_count == 1
 
     def test_health_check_success(self, test_config):
         """Test the health_check method with a successful API response."""
@@ -134,17 +139,21 @@ class TestClassificationService:
         config = test_config.copy()
         config["api"] = {"openai": {"api_key": "test_api_key", "model": "gpt-4o-mini"}}
         
-        # Mock the openai.models.list method to simulate a successful API call
-        with patch('services.classification.classifier.openai.models.list') as mock_list:
-            mock_list.return_value = ["model1", "model2"]
-            
-            # Create the classifier and call the health_check method
-            classifier = ClassificationService(config=config)
-            result = classifier.health_check()
-            
-            # Verify the result
-            assert result is True
-            assert mock_list.call_count == 1
+        # Create the classifier
+        classifier = ClassificationService(config=config)
+        
+        # Create a mock client and replace the actual one
+        mock_client = MagicMock()
+        mock_client.models.list.return_value = ["model1", "model2"]
+        classifier.client = mock_client
+        
+        # Call the health_check method
+        result = classifier.health_check()
+        
+        # Verify the result
+        assert result is True
+        # Verify that the models.list method was called
+        mock_client.models.list.assert_called_once()
 
     def test_health_check_failure(self, test_config):
         """Test the health_check method with a failed API call."""
@@ -152,17 +161,21 @@ class TestClassificationService:
         config = test_config.copy()
         config["api"] = {"openai": {"api_key": "test_api_key", "model": "gpt-4o-mini"}}
         
-        # Mock the openai.models.list method to simulate a failed API call
-        with patch('services.classification.classifier.openai.models.list') as mock_list:
-            mock_list.side_effect = Exception("API Error")
-            
-            # Create the classifier and call the health_check method
-            classifier = ClassificationService(config=config)
-            result = classifier.health_check()
-            
-            # Verify the result
-            assert result is False
-            assert mock_list.call_count == 1
+        # Create the classifier
+        classifier = ClassificationService(config=config)
+        
+        # Create a mock client and replace the actual one
+        mock_client = MagicMock()
+        mock_client.models.list.side_effect = Exception("API Error")
+        classifier.client = mock_client
+        
+        # Call the health_check method
+        result = classifier.health_check()
+        
+        # Verify the result
+        assert result is False
+        # Verify that the models.list method was called
+        mock_client.models.list.assert_called_once()
 
     def test_clear_cache(self, test_config):
         """Test the clear_cache method."""
