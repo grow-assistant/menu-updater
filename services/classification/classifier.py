@@ -8,6 +8,7 @@ import time
 from typing import Dict, Any, List, Optional, Union
 import asyncio
 import re
+from openai import OpenAI
 
 from services.classification.prompt_builder import ClassificationPromptBuilder, classification_prompt_builder
 from services.utils.logging import log_openai_request, log_openai_response
@@ -34,9 +35,14 @@ class ClassificationService:
         # Track the last classification result for context
         self._last_classification = None
         
-        # Set OpenAI API key if provided
+        # Initialize OpenAI client if API key is provided
         if self.api_key:
-            openai.api_key = self.api_key
+            # Use the newer client-based approach instead of setting API key directly
+            self.client = OpenAI(api_key=self.api_key)
+            logger.info("OpenAI client initialized for classification service")
+        else:
+            self.client = None
+            logger.warning("OpenAI API key not provided for classification service")
     
     def classify(self, query: str, cached_dates=None, use_cache=True) -> Dict[str, Any]:
         """
@@ -72,9 +78,9 @@ class ClassificationService:
     def health_check(self) -> bool:
         """Check if the service is healthy."""
         try:
-            # Simple API check
-            if self.api_key:
-                openai.models.list()
+            # Use the client-based approach for health check
+            if self.client:
+                self.client.models.list()
                 return True
             return False
         except Exception as e:
@@ -161,8 +167,13 @@ class ClassificationService:
                 }
             )
             
-            # Call OpenAI API
-            response = openai.chat.completions.create(
+            # Use the client-based approach instead of the deprecated module approach
+            if not self.client:
+                logger.error("OpenAI client not initialized. Using fallback classification.")
+                return self._fallback_classification(query)
+                
+            # Call OpenAI API using the client
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": prompt["system"]},
@@ -226,94 +237,66 @@ class ClassificationService:
             return self._fallback_classification(query)
     
     def parse_classification_response(self, response: Dict[str, Any], query: str) -> Dict[str, Any]:
-        """Parse the classification response from the API."""
-        try:
-            # Extract the content from response
-            content = response.choices[0].message.content.strip()
-            
-            # Try to parse as JSON
-            try:
-                parsed_json = json.loads(content)
-                query_type = parsed_json.get("query_type", "").strip().lower()
-                time_period_clause = parsed_json.get("time_period_clause", None)
-                is_followup = parsed_json.get("is_followup", False)
-                
-                # For order_history, ensure we have a proper time period clause with dates
-                if query_type == "order_history":
-                    # Check if we have start and end dates in the response
-                    start_date = parsed_json.get("start_date")
-                    end_date = parsed_json.get("end_date")
-                    
-                    # If we have dates but no time_period_clause, create one
-                    if start_date and end_date and not time_period_clause:
-                        time_period_clause = f"WHERE updated_at BETWEEN '{start_date}' AND '{end_date}'"
-                    
-                    # If we have a time_period_clause but it doesn't include specific dates, enhance it
-                    elif time_period_clause and "BETWEEN" not in time_period_clause and "=" not in time_period_clause:
-                        # Extract dates from general time periods
-                        from datetime import datetime, timedelta
-                        today = datetime.now()
-                        
-                        # Default to last month if we can't parse specific dates
-                        if "month" in time_period_clause.lower():
-                            # First day of previous month
-                            first_day = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
-                            # Last day of previous month
-                            last_day = today.replace(day=1) - timedelta(days=1)
-                            
-                            # Replace with a specific BETWEEN clause
-                            time_period_clause = f"WHERE updated_at BETWEEN '{first_day.strftime('%Y-%m-%d')}' AND '{last_day.strftime('%Y-%m-%d')}'"
-                        elif "week" in time_period_clause.lower():
-                            # First day of previous week (assuming week starts on Monday)
-                            first_day = today - timedelta(days=today.weekday() + 7)
-                            # Last day of previous week
-                            last_day = first_day + timedelta(days=6)
-                            
-                            # Replace with a specific BETWEEN clause
-                            time_period_clause = f"WHERE updated_at BETWEEN '{first_day.strftime('%Y-%m-%d')}' AND '{last_day.strftime('%Y-%m-%d')}'"
-                
-                # Validate query type
-                if query_type in self.categories:
-                    return {
-                        "query_type": query_type,
-                        "confidence": 0.9,
-                        "time_period_clause": time_period_clause,
-                        "is_followup": is_followup
-                    }
-            except json.JSONDecodeError:
-                # Fall back to text parsing if JSON parsing fails
-                content_lower = content.lower()
-                
-                # Default to empty time period clause
-                time_period_clause = None
-                is_followup = "follow-up" in content_lower or "followup" in content_lower
-                
-                # Check if the content contains a valid category
-                for valid_category in self.categories:
-                    if valid_category in content_lower:
-                        return {
-                            "query_type": valid_category,
-                            "confidence": 0.8,
-                            "time_period_clause": time_period_clause,
-                            "is_followup": is_followup
-                        }
-            
-            # No valid category found
-            return {
-                "query_type": "general_question",
-                "confidence": 0.5,
-                "time_period_clause": None,
-                "is_followup": False
-            }
+        """
+        Parse the response from the OpenAI classification API.
         
+        Args:
+            response: The API response
+            query: The original query
+            
+        Returns:
+            Dictionary with parsed classification results
+        """
+        result = {
+            "query": query,
+            "classification_method": "openai",
+            "query_type": "general_question", # Default to general_question
+            "confidence": 0.0,
+            "skip_database": False,
+            "time_period_clause": None,
+            "is_followup": False
+        }
+        
+        try:
+            # Get the content from the response based on the API version
+            if hasattr(response, 'choices') and hasattr(response.choices[0], 'message'):
+                # This is a response from the client-based API (newer)
+                message_content = response.choices[0].message.content
+            elif isinstance(response, dict) and 'choices' in response:
+                # This is a response from the module-based API (older) or mocked
+                message_content = response['choices'][0]['message']['content']
+            else:
+                logger.error(f"Unexpected response format: {response}")
+                return result
+                
+            # Parse the JSON
+            classification_data = json.loads(message_content)
+            
+            # Extract category
+            if "query_type" in classification_data:
+                result["query_type"] = classification_data["query_type"]
+                result["confidence"] = 0.9  # High confidence for direct classification
+                
+            # Extract time period clause
+            if "time_period_clause" in classification_data:
+                result["time_period_clause"] = classification_data["time_period_clause"]
+                
+            # Extract date information for order history
+            if result["query_type"] == "order_history":
+                if "start_date" in classification_data:
+                    result["start_date"] = classification_data.get("start_date")
+                if "end_date" in classification_data:
+                    result["end_date"] = classification_data.get("end_date")
+                    
+            # Extract followup information
+            if "is_followup" in classification_data:
+                result["is_followup"] = classification_data["is_followup"]
+                
+            return result
         except Exception as e:
-            logger.error(f"Error parsing classification response: {str(e)}")
-            return {
-                "query_type": "general_question",
-                "confidence": 0.1,
-                "time_period_clause": None,
-                "is_followup": False
-            }
+            logger.error(f"Error parsing classification response: {e}")
+            logger.error(f"Response: {response}")
+            return result
     
     async def classify_query_async(self, query: str, cached_dates=None, use_cache=True) -> Dict[str, Any]:
         """Asynchronous version of classify_query."""

@@ -783,17 +783,39 @@ User Query: {query}
             logger.info(f"Enable rich media: {self.enable_rich_media}")
             logger.info("=======================================")
             
-            # Simple test query
-            response = self.client.chat.completions.create(
-                model=self.default_model,
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": "Hello"}
-                ],
-                max_tokens=5
-            )
+            # Make sure we have a client
+            if not self.client:
+                if self.openai_api_key:
+                    logger.info("Recreating OpenAI client during health check")
+                    self.client = OpenAI(api_key=self.openai_api_key)
+                else:
+                    logger.error("No OpenAI API key available for health check")
+                    return False
             
-            return True
+            # Simple test query - just get models list instead of making a completion request
+            # This is more reliable and uses less tokens
+            try:
+                models = self.client.models.list()
+                logger.info(f"Health check successful - found {len(models.data)} models")
+                return True
+            except Exception as e:
+                logger.error(f"Models list check failed: {str(e)}")
+                
+                # Fallback to a simple completion as a secondary check
+                try:
+                    response = self.client.chat.completions.create(
+                        model=self.default_model,
+                        messages=[
+                            {"role": "system", "content": "You are a helpful assistant."},
+                            {"role": "user", "content": "Hello"}
+                        ],
+                        max_tokens=5
+                    )
+                    return True
+                except Exception as e2:
+                    logger.error(f"Chat completion check also failed: {str(e2)}")
+                    return False
+            
         except Exception as e:
             logger.error(f"Health check failed: {str(e)}")
             return False
