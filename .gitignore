@@ -139,8 +139,12 @@ seed_files/
 
 # Logs directory (based on your codebase)
 logs/
+logs
 
 # Environment files
 .env
 .env.*
 *.env
+
+# Pytest configuration
+pytest.ini
