@@ -111,7 +111,7 @@ class TestPromptIntegration:
         # Create a minimal config for the Orchestrator
         config = {
             "api": {
-                "openai": {"api_key": "test-key", "model": "gpt-4"},
+                "openai": {"api_key": "test-key", "model": "gpt-4o"},
                 "gemini": {"api_key": "test-key"},
                 "elevenlabs": {"api_key": "test-key"}
             },

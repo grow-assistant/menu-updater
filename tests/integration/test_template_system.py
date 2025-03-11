@@ -230,7 +230,7 @@ class TestTemplateSystem:
                 # Mock config for initialization
                 config = {
                     "api": {
-                        "openai": {"api_key": "test-key", "model": "gpt-4"},
+                        "openai": {"api_key": "test-key", "model": "gpt-4o"},
                         "elevenlabs": {"api_key": "test-key"}
                     },
                     "services": {
@@ -279,7 +279,7 @@ class TestTemplateSystem:
             # Mock config for services
             config = {
                 "api": {
-                    "openai": {"api_key": "test-key", "model": "gpt-4"},
+                    "openai": {"api_key": "test-key", "model": "gpt-4o"},
                     "gemini": {"api_key": "test-key"},
                     "elevenlabs": {"api_key": "test-key"}
                 },

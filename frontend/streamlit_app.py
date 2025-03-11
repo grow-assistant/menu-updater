@@ -613,7 +613,7 @@ def load_config():
         "api": {
             "openai": {
                 "api_key": os.environ.get("OPENAI_API_KEY", ""),
-                "model": os.environ.get("OPENAI_MODEL", "gpt-4")
+                "model": os.environ.get("OPENAI_MODEL", "gpt-4o")
             },
             "elevenlabs": {
                 "api_key": os.environ.get("ELEVENLABS_API_KEY", ""),

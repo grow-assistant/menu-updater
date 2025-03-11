@@ -105,7 +105,7 @@ class TestAppQueryExecution:
                     # Create a mock config
                     config = {
                         "api": {
-                            "openai": {"api_key": "dummy_key", "model": "gpt-4"},
+                            "openai": {"api_key": "dummy_key", "model": "gpt-4o"},
                             "gemini": {"api_key": "dummy_key"}
                         },
                         "database": {
@@ -144,7 +144,7 @@ class TestAppQueryExecution:
                 # If classify exists, just test it directly
                 config = {
                     "api": {
-                        "openai": {"api_key": "dummy_key", "model": "gpt-4"},
+                        "openai": {"api_key": "dummy_key", "model": "gpt-4o"},
                         "gemini": {"api_key": "dummy_key"}
                     },
                     "database": {
