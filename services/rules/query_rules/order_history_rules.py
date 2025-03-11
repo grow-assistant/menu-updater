@@ -137,7 +137,8 @@ ORDER_HISTORY_RULES = {
     "date_handling": {
         "format_support": "Handle various date formats (MM/DD/YYYY, YYYY-MM-DD) in input parameters",
         "relative_dates": "For 'yesterday', 'last week', 'last month', use date arithmetic relative to current_date",
-        "date_comparison": "When comparing dates, cast timestamps to date type for whole-day comparisons"
+        "date_comparison": "When comparing dates, cast timestamps to date type for whole-day comparisons",
+        "date_field": "CRITICAL: Always use o.updated_at for date filtering, NOT o.order_date (which doesn't exist). Format as: (o.updated_at - INTERVAL '7 hours')::date"
     }
 }
 
@@ -186,6 +187,7 @@ def get_rules(rules_service=None) -> Dict[str, Any]:
     if "critical_requirements" not in modified_rules:
         modified_rules["critical_requirements"] = {}
     modified_rules["critical_requirements"]["location_isolation"] = f"EVERY SQL query MUST include 'o.location_id = {DEFAULT_LOCATION_ID}' in the WHERE clause without exception"
+    modified_rules["critical_requirements"]["date_field"] = "CRITICAL: The orders table has updated_at field, NOT order_date. Always use (o.updated_at - INTERVAL '7 hours')::date for date filtering."
     
     return {
         "name": "order_history",

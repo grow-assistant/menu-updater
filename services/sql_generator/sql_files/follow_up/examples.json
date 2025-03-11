@@ -1,0 +1,14 @@
+[
+  {
+    "query": "Who placed the most orders last month?",
+    "sql": "SELECT\n  u.first_name || ' ' || u.last_name AS customer_name,\n  COUNT(o.id) AS total_completed_orders\nFROM\n  orders o\nJOIN\n  users u ON o.customer_id = u.id\nWHERE\n  o.location_id = 62\n  AND o.status = 7\n  AND (o.updated_at - INTERVAL '7 hours')::date BETWEEN date_trunc('month', current_date - interval '1 month') AND date_trunc('month', current_date) - interval '1 day'\nGROUP BY\n  u.id, u.first_name, u.last_name\nORDER BY\n  total_completed_orders DESC\nLIMIT 1;"
+  },
+  {
+    "query": "What customer ordered the most in that time period?",
+    "sql": "SELECT\n  u.first_name || ' ' || u.last_name AS customer_name,\n  COUNT(o.id) AS order_count\nFROM\n  orders o\nJOIN\n  users u ON o.customer_id = u.id\nWHERE\n  o.location_id = 62\n  AND o.status = 7\n  AND (o.updated_at - INTERVAL '7 hours')::date BETWEEN date_trunc('month', current_date - interval '1 month') AND date_trunc('month', current_date) - interval '1 day'\nGROUP BY\n  u.id, u.first_name, u.last_name\nORDER BY\n  order_count DESC\nLIMIT 1;"
+  },
+  {
+    "query": "Which customer spent the most last month?",
+    "sql": "SELECT\n  u.first_name || ' ' || u.last_name AS customer_name,\n  SUM(o.total) AS total_spent\nFROM\n  orders o\nJOIN\n  users u ON o.customer_id = u.id\nWHERE\n  o.location_id = 62\n  AND o.status = 7\n  AND (o.updated_at - INTERVAL '7 hours')::date BETWEEN date_trunc('month', current_date - interval '1 month') AND date_trunc('month', current_date) - interval '1 day'\nGROUP BY\n  u.id, u.first_name, u.last_name\nORDER BY\n  total_spent DESC\nLIMIT 1;"
+  }
+] 

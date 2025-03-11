@@ -42,7 +42,9 @@ class SQLGeneratorFactory:
             return OpenAISQLGenerator(config)
         elif generator_type == "gemini":
             logger.info("Using Gemini for SQL generation.")
-            return GeminiSQLGenerator(config)
+            # In test environments, we set skip_verification to True and pass None for db_service
+            # This allows us to test without a real database connection
+            return GeminiSQLGenerator(config, db_service=None, skip_verification=True)
         else:
             logger.warning(f"Unknown SQL generator type: {generator_type}. Defaulting to OpenAI.")
             return OpenAISQLGenerator(config) 

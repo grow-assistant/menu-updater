@@ -47,6 +47,7 @@ class SQLExampleLoader:
         
         # Build the path to the examples directory for this query type
         query_examples_dir = os.path.join(self.examples_dir, query_type)
+        logger.info(f"Looking for examples in directory: {query_examples_dir}")
         
         # Check if directory exists
         if not os.path.exists(query_examples_dir):
@@ -55,10 +56,14 @@ class SQLExampleLoader:
         
         examples = []
         
+        # Log what files exist in the directory
+        logger.info(f"Files in {query_examples_dir}: {os.listdir(query_examples_dir) if os.path.exists(query_examples_dir) else 'directory not found'}")
+        
         # Look for JSON files containing examples
         for filename in os.listdir(query_examples_dir):
             if filename.endswith('.json'):
                 file_path = os.path.join(query_examples_dir, filename)
+                logger.info(f"Processing JSON example file: {file_path}")
                 try:
                     with open(file_path, 'r') as f:
                         file_examples = json.load(f)
@@ -67,6 +72,7 @@ class SQLExampleLoader:
                     for example in file_examples:
                         if 'query' in example and 'sql' in example:
                             examples.append(example)
+                            logger.debug(f"Added example query: {example['query'][:30]}...")
                         else:
                             logger.warning(f"Invalid example in {file_path}: {example}")
                             

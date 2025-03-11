@@ -7,6 +7,7 @@ import json
 import time
 import importlib
 import inspect
+import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union, Callable
 
@@ -16,11 +17,14 @@ logger = logging.getLogger(__name__)
 
 class RulesService:
     def __init__(self, config: Dict[str, Any]):
-        """Initialize the rules service with caching capabilities."""
-        self.config = config
+        """
+        Initialize the RulesService.
         
-        # Set up rules paths - point to existing directory
-        self.rules_path = config["services"]["rules"].get("rules_path", "services/rules/query_rules")
+        Args:
+            config: Configuration for the rules service
+        """
+        self.config = config
+        self.rules_path = config.get("services", {}).get("rules", {}).get("rules_path", "./resources/rules")
         self.resources_dir = config["services"]["rules"].get("resources_dir", "resources")
         
         # Set up SQL files path - pointing to existing sql_generator module
@@ -51,6 +55,9 @@ class RulesService:
         # Load custom category to module mappings if provided in config
         if "query_rules_mapping" in config["services"]["rules"]:
             self.query_rules_mapping.update(config["services"]["rules"]["query_rules_mapping"])
+        
+        # Initialize logger
+        self.logger = logging.getLogger(__name__)
         
         # Load rules
         self.load_rules()
@@ -137,43 +144,34 @@ class RulesService:
             }
     
     def _load_query_rules_modules(self):
-        """Dynamically load query rules modules."""
-        # Get the directory of query rules
-        query_rules_dir = os.path.join(os.path.dirname(__file__), "query_rules")
-        
-        if not os.path.exists(query_rules_dir):
-            logger.warning(f"Query rules directory not found: {query_rules_dir}")
-            return
-        
-        # Import query_rules module directly
+        """
+        Load all query rules modules from the rules directory.
+        Each module should have a standardized interface including get_X_rules() functions.
+        """
         try:
-            import services.rules.query_rules as query_rules
+            # Get a list of all modules in the current directory
+            self.query_rules_modules = {}
             
-            # Assign the real implementations to the proxy functions
-            query_rules.load_sql_patterns_from_directory = self.load_sql_patterns_from_directory
-            query_rules.replace_placeholders = self.replace_placeholders
-            query_rules.load_all_sql_files_from_directory = self.load_all_sql_files_from_directory
+            # Add core modules that should always be loaded if they exist
+            core_modules = [
+                "menu_inquiry_rules", 
+                "order_history_rules", 
+                "order_ratings_rules", 
+                "popular_items_rules", 
+                "trend_analysis_rules",
+            ]
             
-            logger.info("Assigned implementations to query_rules proxy functions")
-        except Exception as e:
-            logger.error(f"Error assigning implementations to query_rules proxy functions: {str(e)}")
-        
-        # Load all Python modules in the directory
-        try:
-            # Import all Python files in the query_rules directory
-            for filename in os.listdir(query_rules_dir):
-                if filename.endswith(".py") and not filename.startswith("__"):
-                    module_name = filename[:-3]  # Remove .py extension
-                    try:
-                        # Import the module
-                        module = importlib.import_module(f"services.rules.query_rules.{module_name}")
-                        
-                        # Check if the module has a get_rules function
-                        if hasattr(module, "get_rules") and inspect.isfunction(module.get_rules):
-                            self.query_rules_modules[module_name] = module
-                            logger.info(f"Loaded query rules module: {module_name}")
-                    except Exception as e:
-                        logger.error(f"Error loading query rules module {module_name}: {str(e)}")
+            for module_name in core_modules:
+                try:
+                    if module_name in sys.modules:
+                        module = sys.modules[module_name]
+                    else:
+                        module = importlib.import_module(f"services.rules.{module_name}")
+                    
+                    self.query_rules_modules[module_name] = module
+                    self.logger.info(f"Loaded query rules module: {module_name}")
+                except ImportError as e:
+                    self.logger.warning(f"Could not import {module_name}: {e}")
         except Exception as e:
             logger.error(f"Error loading query rules modules: {str(e)}")
     

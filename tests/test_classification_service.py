@@ -153,6 +153,7 @@ class TestClassificationService:
         assert result["query_type"] == "order_history"
         assert "parameters" in result
         assert "time_period" in result["parameters"]
+        assert "filters" in result["parameters"], "Filters key missing from parameters"
         assert len(result["parameters"]["filters"]) == 2
         assert "sort" in result["parameters"]
         assert result["parameters"]["sort"]["field"] == "total"
