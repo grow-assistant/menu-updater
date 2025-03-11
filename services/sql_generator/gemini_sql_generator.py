@@ -521,35 +521,13 @@ CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
                 logger.warning("Rules service not available, proceeding without examples")
                 return {"examples": []}
             
-            # Initialize examples as a list
-            examples = []
-            
             # Get SQL examples from the rules service
             logger.info(f"Getting SQL examples for classification: {classification}")
-            rules_examples = rules_service.get_sql_examples(classification)
-            
-            # Handle various formats that might be returned from the rules service
-            if isinstance(rules_examples, list):
-                logger.info(f"Rules service returned a list of {len(rules_examples)} examples")
-                examples = rules_examples
-            elif isinstance(rules_examples, dict):
-                logger.info(f"Rules service returned a dictionary with keys: {list(rules_examples.keys())}")
-                # Check if the dictionary has "examples" key
-                if "examples" in rules_examples:
-                    examples = rules_examples["examples"]
-                # Check if it has "patterns" key (from get_sql_patterns)
-                elif "patterns" in rules_examples:
-                    # Convert patterns to examples format
-                    patterns = rules_examples.get("patterns", {})
-                    for name, sql in patterns.items():
-                        examples.append({
-                            "query": f"Example for {name}",
-                            "sql": sql
-                        })
-                    logger.info(f"Converted {len(patterns)} patterns to examples")
+            examples = rules_service.get_sql_examples(classification)
             
             if not examples:
                 logger.warning(f"No SQL examples found from rules service for classification: {classification}")
+                examples = []
             else:
                 logger.info(f"Found {len(examples)} examples from rules service for {classification}")
             

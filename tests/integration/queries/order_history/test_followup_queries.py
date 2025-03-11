@@ -147,9 +147,7 @@ class TestFollowupQueries:
         response = response.lower()
         
         # Check if the response is an error message (due to OpenAI API issues)
-        error_indicators = ["error", "sorry", "issue", "couldn't", "couldn't", "unable", "invalid"]
-        is_error_response = any(indicator in response for indicator in error_indicators)
-        if is_error_response:
+        if "error" in response or "sorry" in response or "issue" in response:
             print(f"\n⚠️ WARNING: Response contains an error message. Skipping content checks: {response}")
             return
         
