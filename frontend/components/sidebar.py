@@ -11,7 +11,7 @@ import os
 from resources.ui.personas import list_personas
 
 # Constants - using the restaurant locations from your app
-RESTAURANT_LOCATIONS = {
+LOCATIONS = {
     "Idle Hour Country Club": 62,
     "Pinetree Country Club (Main)": 61,
     "Pinetree Country Club (Grill)": 66,
@@ -40,11 +40,11 @@ def render_sidebar(st_obj: Any, session: Optional[Any] = None) -> None:
     # Restaurant location selection
     selected_restaurant = st_obj.sidebar.selectbox(
         "Select Restaurant",
-        options=list(RESTAURANT_LOCATIONS.keys()),
+        options=list(LOCATIONS.keys()),
         index=(
-            list(RESTAURANT_LOCATIONS.keys()).index(st_obj.session_state.location)
+            list(LOCATIONS.keys()).index(st_obj.session_state.location)
             if hasattr(st_obj.session_state, "location") and 
-               st_obj.session_state.location in RESTAURANT_LOCATIONS
+               st_obj.session_state.location in LOCATIONS
             else 0
         ),
         key="restaurant_selector",
@@ -53,7 +53,7 @@ def render_sidebar(st_obj: Any, session: Optional[Any] = None) -> None:
     # Update selected restaurant if changed
     if hasattr(st_obj.session_state, "location") and selected_restaurant != st_obj.session_state.location:
         st_obj.session_state.location = selected_restaurant
-        st_obj.session_state.location_id = RESTAURANT_LOCATIONS[selected_restaurant]
+        st_obj.session_state.location_id = LOCATIONS[selected_restaurant]
         if hasattr(st_obj.session_state, "orchestrator"):
             st_obj.session_state.orchestrator.set_location(
                 st_obj.session_state.location_id, 

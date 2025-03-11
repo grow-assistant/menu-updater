@@ -358,21 +358,6 @@ class QueryClassifier:
                 'value': value
             })
         
-        # Extract customer type filters
-        if re.search(r'\bnew customers\b', query_text.lower()):
-            filters.append({
-                'field': 'customer_type',
-                'operator': '=',
-                'value': 'new'
-            })
-        
-        if re.search(r'\bregular customers\b', query_text.lower()):
-            filters.append({
-                'field': 'customer_type',
-                'operator': '=',
-                'value': 'regular'
-            })
-        
         return filters
     
     def _extract_entities(self, query_text: str) -> Dict[str, List[Dict[str, Any]]]:

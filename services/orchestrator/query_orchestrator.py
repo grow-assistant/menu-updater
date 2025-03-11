@@ -375,8 +375,6 @@ class QueryOrchestrator:
                 filter_descriptions.append(f"between ${min_val} and ${max_val}")
             elif field == 'quantity' and operator == '>':
                 filter_descriptions.append(f"more than {value} orders")
-            elif field == 'customer_type':
-                filter_descriptions.append(f"{value} customers")
                 
         filter_text = ""
         if filter_descriptions:

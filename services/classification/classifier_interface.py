@@ -30,7 +30,55 @@ class QueryClassifierInterface:
         """
         self._classifier = ClassificationService(config=config)
         self._prompt_builder = classification_prompt_builder
+        # Initialize with database schema information
+        self._init_database_schema()
         logger.info("QueryClassifierInterface initialized")
+    
+    def _init_database_schema(self) -> None:
+        """Initialize database schema information for the classifier."""
+        # Updated database schema in sync with resources/database_fields.md
+        self.db_schema = {
+            "orders": [
+                "id", "created_at", "updated_at", "deleted_at", "customer_id", "vendor_id",
+                "location_id", "status", "total", "tax", "instructions", "type", "marker_id",
+                "fee", "loyalty_id", "fee_percent", "tip"
+            ],
+            "order_items": [
+                "id", "created_at", "updated_at", "deleted_at", "item_id", "quantity",
+                "order_id", "instructions"
+            ],
+            "items": [
+                "id", "created_at", "updated_at", "deleted_at", "name", "description",
+                "price", "category_id", "disabled", "seq_num"
+            ],
+            "categories": [
+                "id", "created_at", "updated_at", "deleted_at", "name", "description",
+                "menu_id", "disabled", "start_time", "end_time", "seq_num"
+            ],
+            "menus": [
+                "id", "created_at", "updated_at", "deleted_at", "name", "description",
+                "location_id", "disabled"
+            ],
+            "options": [
+                "id", "created_at", "updated_at", "deleted_at", "name", "description",
+                "min", "max", "item_id", "disabled"
+            ],
+            "option_items": [
+                "id", "created_at", "updated_at", "deleted_at", "name", "description",
+                "price", "option_id", "disabled"
+            ],
+            "locations": [
+                "id", "created_at", "updated_at", "deleted_at", "name", "description",
+                "timezone", "latitude", "longitude", "active", "disabled", "code", "tax_rate", "settings"
+            ],
+            "users": [
+                "id", "created_at", "updated_at", "deleted_at", "first_name", "last_name",
+                "email", "picture", "phone"
+            ]
+        }
+        # Provide schema to classifier and prompt builder
+        self._classifier.set_database_schema(self.db_schema)
+        self._prompt_builder.set_database_schema(self.db_schema)
     
     def classify_query(
         self, 
@@ -144,6 +192,15 @@ class QueryClassifierInterface:
     def clear_cache(self) -> None:
         """Clear the classification cache."""
         self._classifier.clear_cache()
+
+    def get_database_schema(self) -> Dict[str, List[str]]:
+        """
+        Get the database schema information.
+        
+        Returns:
+            Dictionary mapping table names to their fields
+        """
+        return self.db_schema
 
 
 # Singleton instance

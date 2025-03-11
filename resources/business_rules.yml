@@ -13,6 +13,5 @@ rules:
     - "Default location ID is 62"
     - "All queries should be scoped to a specific location_id"
   menu:
-    - "Menu items with enabled=false should not be displayed to customers"
     - "Price changes should be logged for audit purposes"
     - "Menu categories should be displayed in their configured order" 

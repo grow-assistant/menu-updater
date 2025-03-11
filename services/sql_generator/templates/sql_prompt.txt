@@ -16,6 +16,8 @@ Follow these guidelines:
 Database Schema:
 {schema}
 
+{schema_hints}
+
 Business Rules:
 {rules}
 
@@ -26,6 +28,8 @@ MANDATORY REQUIREMENTS:
 
 SQL Patterns:
 {patterns}
+
+{conversation_context}
 
 Examples:
 {examples}

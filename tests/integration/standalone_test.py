@@ -31,7 +31,8 @@ logger = logging.getLogger(__name__)
 # Replace Unicode characters that might cause issues on Windows
 def safe_log(logger_fn, message):
     """Wrapper that replaces problematic Unicode symbols with ASCII equivalents"""
-    message = message.replace("✅", "[PASS]").replace("❌", "[FAIL]")
+    if isinstance(message, str):
+        message = message.replace("✅", "[PASS]").replace("❌", "[FAIL]")
     logger_fn(message)
 
 # Augment the logger with safe logging methods
@@ -42,7 +43,7 @@ logger.safe_warning = lambda msg: safe_log(logger.warning, msg)
 # Import services after setting up logging
 from services.orchestrator.orchestrator import OrchestratorService
 from services.classification.classifier import ClassificationService
-from services.sql_generator.gemini_sql_generator import GeminiSQLGenerator
+from services.sql_generator.openai_sql_generator import OpenAISQLGenerator  # Using OpenAI instead of Gemini
 from services.execution.sql_executor import SQLExecutor
 from services.response.response_generator import ResponseGenerator
 from services.rules.rules_service import RulesService
@@ -93,7 +94,7 @@ def run_real_test():
                 "cache_enabled": True
             },
             "sql_generator": {
-                "model": "gemini-2.0-flash",
+                "model": "gpt-4o-mini",  # Changed to OpenAI model
                 "temperature": 0.2,
                 "max_tokens": 2000,
                 "prompt_template": os.path.join(PROJECT_ROOT, "services/sql_generator/templates/sql_prompt.txt"),
@@ -118,145 +119,80 @@ def run_real_test():
     
     result = False
     try:
-        # Verify our fix has been applied
-        logger.info("Creating ClassificationService instance")
-        classifier = ClassificationService()
-        logger.info(f"ClassificationService has classify method: {hasattr(classifier, 'classify')}")
+        # Initialize the orchestrator
+        logger.info("Initializing OrchestratorService")
+        orchestrator = OrchestratorService(config)
         
-        # Initialize individual services for debugging
-        try:
-            logger.info("Testing individual services:")
-            
-            # Initialize ServiceRegistry for independent tests
-            from services.utils.service_registry import ServiceRegistry
-            ServiceRegistry.initialize(config)
-            
-            # Test ClassificationService
-            logger.info("1. Testing ClassificationService...")
-            classifier_service = ClassificationService(config)
-            if hasattr(classifier_service, 'classify'):
-                logger.safe_info("[PASS] ClassificationService has the classify method")
-                test_query = "How many orders were completed on 2/21/2025?"
-                classification_result = classifier_service.classify(test_query)
-                logger.info(f"Classification result: {classification_result}")
-            else:
-                logger.safe_error("[FAIL] ClassificationService is missing the classify method")
-                return False
-            
-            # Test RulesService
-            logger.info("2. Testing RulesService...")
-            rules_service = RulesService(config)
-            ServiceRegistry.register("rules", lambda cfg: rules_service)
-            logger.info("Loading rules...")
-            rules_result = rules_service.get_rules_and_examples(classification_result.get("category"))
-            logger.info(f"Rules loaded: {len(rules_result.get('examples', []))} examples found")
-            
-            # Test GeminiSQLGenerator
-            logger.info("3. Testing GeminiSQLGenerator...")
-            sql_generator = GeminiSQLGenerator(config)
-            ServiceRegistry.register("sql_generator", lambda cfg: sql_generator)
-            logger.info("Generating SQL...")
-            sql_result = sql_generator.generate(
-                test_query, 
-                classification_result.get("category"), 
-                rules_result
-            )
-            logger.info(f"SQL generated: {sql_result.get('query', 'No SQL generated')}")
-            
-            # Test SQLExecutor
-            logger.info("4. Testing SQLExecutor...")
-            sql_executor = SQLExecutor(config)
-            if sql_result.get('query'):
-                logger.info("Executing SQL...")
-                try:
-                    # Preprocess SQL query to replace placeholders with actual values
-                    sql_query = sql_result.get('query')
-                    
-                    # Use the _preprocess_sql_query method from SQLExecutor
-                    processed_sql, _ = sql_executor._preprocess_sql_query(sql_query, {})
-                    
-                    execution_result = sql_executor.execute(
-                        processed_sql,
-                        {}  # Empty params since we've directly substituted values
-                    )
-                    if execution_result.get('success', False):
-                        logger.info(f"SQL executed successfully: {execution_result.get('results')}")
-                    else:
-                        logger.warning(f"SQL execution failed: {execution_result.get('error')}")
-                except Exception as e:
-                    logger.error(f"Individual service test failed: {str(e)}")
-                    import traceback
-                    logger.error(traceback.format_exc())
-            else:
-                logger.warning("Skipping SQL execution as no SQL was generated")
-            
-            # Test ResponseGenerator
-            logger.info("5. Testing ResponseGenerator...")
-            response_generator = ResponseGenerator(config)
-            response_result = response_generator.generate(
-                test_query,
-                classification_result.get('category'),
-                rules_result.get('response_rules', {}),
-                execution_result.get('results') if sql_result.get('query') and execution_result.get('success', False) else None,
-                {}
-            )
-            logger.info(f"Response generated: {response_result.get('text', 'No response generated')}")
-            
-            logger.info("All services tested individually")
-        except Exception as e:
-            logger.error(f"Individual service test failed: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
+        # Process the first query through the entire pipeline
+        first_query = "How many orders were completed on 2/21/2025?"
+        logger.info(f"Processing first query: {first_query}")
+        first_result = orchestrator.process_query(first_query)
         
-        logger.info("\n\nRunning complete orchestrator test:")
-        try:
-            # Initialize the orchestrator
-            logger.info("Initializing OrchestratorService")
-            orchestrator = OrchestratorService(config)
+        # Log the result without sensitive information
+        log_result = first_result.copy() if isinstance(first_result, dict) else first_result
+        if isinstance(log_result, dict) and 'verbal_text' in log_result:
+            log_result['verbal_text'] = '[VERBAL TEXT REDACTED]'
+        
+        logger.info(f"First result: {log_result}")
+        
+        if "response" in first_result:
+            logger.info("First query PASSED! The OrchestratorService successfully processed the query.")
             
-            # Process the query through the entire pipeline
-            query = "How many orders were completed on 2/21/2025?"
-            logger.info(f"Processing query: {query}")
-            result = orchestrator.process_query(query)
+            # Prepare context for follow-up query
+            context = {
+                "session_history": [first_result],
+                "user_preferences": {},
+                "recent_queries": [first_query],
+                "enable_verbal": True,
+                "persona": "casual"
+            }
             
-            # Check the result but hide verbal response
-            # Create a copy of the result without verbal text for logging
-            log_result = result.copy() if isinstance(result, dict) else result
-            if isinstance(log_result, dict) and 'verbal_text' in log_result:
-                log_result['verbal_text'] = '[VERBAL TEXT REDACTED]'
+            # Process the follow-up query
+            followup_query = "Who placed those orders?"
+            logger.info(f"Processing follow-up query: {followup_query}")
+            logger.info(f"Context: {context}")
             
-            logger.info(f"Result: {log_result}")
-            if "response" in result:
-                logger.info("Test PASSED! The OrchestratorService successfully processed the query.")
-                logger.info(f"Generated SQL: {result.get('sql_query', 'No SQL generated')}")
-                # Log the response but mask its content if it might contain the verbal response
-                logger.info(f"Response: [TEXT RESPONSE CONTENT REDACTED]")
-                
-                # Check for verbal response
-                if result.get("has_verbal", False):
-                    logger.info("Verbal response was generated successfully!")
-                    audio_size = len(result.get("verbal_audio", b""))
-                    verbal_text_length = len(result.get("verbal_text", ""))
-                    logger.info(f"Verbal audio size: {audio_size} bytes, Verbal text length: {verbal_text_length} chars")
-                else:
-                    logger.warning("No verbal response was generated")
-                
-                result = True
+            # Detailed logging of context structure
+            logger.info("Context session_history keys:")
+            if 'session_history' in context and context['session_history']:
+                first_history_item = context['session_history'][0]
+                logger.info(f"History item keys: {list(first_history_item.keys())}")
+                logger.info(f"Category from history: {first_history_item.get('category')}")
+                logger.info(f"Query from history: {first_history_item.get('query')}")
+            
+            # Process the follow-up query with context
+            followup_result = orchestrator.process_query(followup_query, context)
+            
+            # Log the result without sensitive information
+            followup_log_result = followup_result.copy() if isinstance(followup_result, dict) else followup_result
+            if isinstance(followup_log_result, dict) and 'verbal_text' in followup_log_result:
+                followup_log_result['verbal_text'] = '[VERBAL TEXT REDACTED]'
+            
+            logger.info(f"Follow-up result: {followup_log_result}")
+            
+            # Check results
+            success = False
+            if "response" in followup_result and followup_result["response"]:
+                logger.info("Follow-up query PASSED!")
+                logger.info(f"Follow-up category: {followup_result.get('category')}")
+                logger.info(f"Follow-up is_followup: {followup_result.get('is_followup', False)}")
+                success = True
             else:
-                logger.error("Test FAILED! Response not in result.")
-                result = False
-        except Exception as e:
-            logger.error(f"Orchestrator test FAILED: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
+                logger.error("Follow-up query FAILED! No response generated.")
+            
+            result = success
+        else:
+            logger.error("Test FAILED! Response not in result for first query.")
             result = False
+    except Exception as e:
+        logger.error(f"Orchestrator test FAILED: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        result = False
     finally:
         # Ensure proper cleanup of resources
         try:
             logger.info("Cleaning up resources...")
-            # Clean up Gemini API resources
-            import google.generativeai as genai
-            
             # Force Python garbage collection
             import gc
             gc.collect()

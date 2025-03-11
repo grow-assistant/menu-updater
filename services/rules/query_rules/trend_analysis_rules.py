@@ -16,15 +16,15 @@ TREND_ANALYSIS_SCHEMA = {
         "description": "Main orders table for trend analysis",
         "columns": {
             "id": "INTEGER PRIMARY KEY - Unique identifier",
-            "customer_id": "INTEGER - Foreign key to users table (customer)",
-            "vendor_id": "INTEGER - Foreign key to users table (vendor)",
-            "location_id": "INTEGER - Foreign key to locations table",
+            "customer_id": "INTEGER - Foreign key to users table (users.id)",
+            "vendor_id": "INTEGER - Foreign key to users table (users.id)",
+            "location_id": "INTEGER - Foreign key to locations table (locations.id)",
             "status": "INTEGER - Order status (7=completed, 6=cancelled, 3-5=in progress)",
             "total": "NUMERIC - Total order amount",
             "tax": "NUMERIC - Tax amount",
             "instructions": "TEXT - Special instructions for the order",
             "type": "INTEGER - Order type identifier",
-            "marker_id": "INTEGER - Foreign key to markers table",
+            "marker_id": "INTEGER - Foreign key to markers table (markers.id)",
             "fee": "NUMERIC - Service fee amount (default 0)",
             "loyalty_id": "CHARACTER VARYING(255) - Loyalty program identifier",
             "fee_percent": "NUMERIC - Service fee percentage (default 0)",
@@ -72,6 +72,33 @@ TREND_ANALYSIS_SCHEMA = {
             "deleted_at": "TIMESTAMP WITH TIME ZONE - When the item was deleted (if applicable)"
         },
         "relationships": ["FOREIGN KEY (category_id) REFERENCES categories(id)"]
+    },
+    "discounts": {
+        "description": "Discounts applied to orders",
+        "columns": {
+            "id": "INTEGER PRIMARY KEY - Unique identifier",
+            "order_id": "INTEGER - Foreign key to orders table",
+            "user_id": "INTEGER - Foreign key to users table",
+            "amount": "NUMERIC - Discount amount",
+            "reason": "TEXT - Reason for discount",
+            "created_at": "TIMESTAMP WITH TIME ZONE - When the discount was created",
+            "updated_at": "TIMESTAMP WITH TIME ZONE - When the discount was last updated",
+            "deleted_at": "TIMESTAMP WITH TIME ZONE - When the discount was deleted (if applicable)"
+        }
+    },
+    "users": {
+        "description": "User information for customers and vendors",
+        "columns": {
+            "id": "INTEGER PRIMARY KEY - Unique identifier",
+            "first_name": "TEXT - User's first name",
+            "last_name": "TEXT - User's last name",
+            "email": "TEXT - User's email address",
+            "phone": "TEXT - User's phone number",
+            "picture": "TEXT - User's profile picture URL",
+            "created_at": "TIMESTAMP WITH TIME ZONE - When the user was created",
+            "updated_at": "TIMESTAMP WITH TIME ZONE - When the user was last updated",
+            "deleted_at": "TIMESTAMP WITH TIME ZONE - When the user was deleted (if applicable)"
+        }
     }
 }
 
@@ -80,23 +107,23 @@ TREND_ANALYSIS_RULES = {
     "general": {
         "order_status_filter": "Only include completed orders (status = 7) for consistent performance analysis",
         "time_period_required": "Performance queries MUST be scoped to a specific time period (e.g., 'last 7 days', 'this month')",
-        "location_filter": "ALWAYS filter by o.location_id = [LOCATION_ID] for security and data isolation",
+        "location_filter": "ALWAYS filter by orders.location_id = [LOCATION_ID] for security and data isolation",
         "aggregation_groups": "When aggregating data, use meaningful groups like: daily trends, time of day, day of week, customer segments, or item categories",
-        "revenue_calculation": "For accurate revenue calculations always use: SUM(o.total - COALESCE(o.tip, 0))",
+        "revenue_calculation": "For accurate revenue calculations always use: SUM(orders.total - COALESCE(orders.tip, 0))",
         "averages": "When calculating averages, ALWAYS include the count of records used (n) and handle NULL values appropriately",
         "statistic_requirements": "For performance metrics ALWAYS include: 1) Total count 2) Sum/aggregate 3) Average 4) Percent of total where applicable",
         "sorting": "For ranked performance data, use ORDER BY with the primary metric DESC and LIMIT to an appropriate number of results (typically 5-10 for top performers)"
+        }
     }
-}
 
 # Standard performance metrics to include
 PERFORMANCE_METRICS = {
-    "order_counts": "COUNT(DISTINCT o.id)",
-    "revenue": "SUM(o.total - COALESCE(o.tip, 0))",
-    "average_order_value": "AVG(o.total - COALESCE(o.tip, 0))",
-    "average_prep_time": "AVG(EXTRACT(EPOCH FROM (o.updated_at - o.confirmed_at)) / 60)",
-    "order_completion_rate": "COUNT(CASE WHEN o.status = 7 THEN 1 END)::float / NULLIF(COUNT(*), 0) * 100",
-    "cancellation_rate": "COUNT(CASE WHEN o.status = 6 THEN 1 END)::float / NULLIF(COUNT(*), 0) * 100"
+    "order_counts": "COUNT(DISTINCT orders.id)",
+    "revenue": "SUM(orders.total - COALESCE(orders.tip, 0))",
+    "average_order_value": "AVG(orders.total - COALESCE(orders.tip, 0))",
+    "average_prep_time": "AVG(EXTRACT(EPOCH FROM (orders.updated_at - orders.confirmed_at)) / 60)",
+    "order_completion_rate": "COUNT(CASE WHEN orders.status = 7 THEN 1 END)::float / NULLIF(COUNT(*), 0) * 100",
+    "cancellation_rate": "COUNT(CASE WHEN orders.status = 6 THEN 1 END)::float / NULLIF(COUNT(*), 0) * 100"
 }
 
 def get_rules(rules_service=None) -> Dict[str, Any]:

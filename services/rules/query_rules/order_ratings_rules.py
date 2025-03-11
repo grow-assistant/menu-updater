@@ -71,7 +71,10 @@ ORDER_RATINGS_SCHEMA = {
             "rating_id": "INTEGER - Foreign key to order_ratings table",
             "category_id": "INTEGER - Foreign key to rating_categories table",
             "value": "INTEGER - Rating value (typically 1-5)",
-            "notes": "TEXT - Optional text feedback"
+            "notes": "CHARACTER VARYING(255) - Optional text feedback",
+            "created_at": "TIMESTAMP WITH TIME ZONE - When the feedback was created",
+            "updated_at": "TIMESTAMP WITH TIME ZONE - When the feedback was last updated",
+            "deleted_at": "TIMESTAMP WITH TIME ZONE - When the feedback was deleted (if applicable)"
         },
         "relationships": [
             "FOREIGN KEY (rating_id) REFERENCES order_ratings(id)",
@@ -84,8 +87,11 @@ ORDER_RATINGS_SCHEMA = {
         "columns": {
             "id": "INTEGER PRIMARY KEY - Unique identifier",
             "category_id": "INTEGER - Foreign key to rating_categories table",
-            "label": "TEXT - Display text of the response option",
-            "description": "TEXT - More detailed explanation of the response"
+            "label": "CHARACTER VARYING(255) - Display text of the response option",
+            "description": "CHARACTER VARYING(25) - More detailed explanation of the response",
+            "created_at": "TIMESTAMP WITH TIME ZONE - When the response was created",
+            "updated_at": "TIMESTAMP WITH TIME ZONE - When the response was last updated",
+            "deleted_at": "TIMESTAMP WITH TIME ZONE - When the response was deleted (if applicable)"
         },
         "relationships": ["FOREIGN KEY (category_id) REFERENCES rating_categories(id)"]
     },
@@ -94,7 +100,10 @@ ORDER_RATINGS_SCHEMA = {
         "columns": {
             "id": "INTEGER PRIMARY KEY - Unique identifier",
             "feedback_id": "INTEGER - Foreign key to order_ratings_feedback table",
-            "response_id": "INTEGER - Foreign key to rating_responses table"
+            "response_id": "INTEGER - Foreign key to rating_responses table",
+            "created_at": "TIMESTAMP WITH TIME ZONE - When the record was created",
+            "updated_at": "TIMESTAMP WITH TIME ZONE - When the record was last updated",
+            "deleted_at": "TIMESTAMP WITH TIME ZONE - When the record was deleted (if applicable)"
         },
         "relationships": [
             "FOREIGN KEY (feedback_id) REFERENCES order_ratings_feedback(id)",
@@ -109,7 +118,7 @@ ORDER_RATINGS_RULES = {
     "general": {
         "completed_orders_only": "Only include completed orders (status = 7) for ratings analysis",
         "time_period": "Filter by time period (e.g., last month, last quarter) for trend analysis",
-        "location_filter": "ALWAYS filter by o.location_id = [LOCATION_ID]",
+        "location_filter": "ALWAYS filter by orders.location_id = [LOCATION_ID]",
         "rating_range": "Rating values typically range from 1-5 with 5 being highest",
         "aggregation": "When aggregating, calculate count, average, and distribution of ratings",
         "unrated_orders": "Use LEFT JOIN to also include orders without ratings when appropriate",

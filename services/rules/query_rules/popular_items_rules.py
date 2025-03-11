@@ -97,9 +97,9 @@ POPULAR_ITEMS_RULES = {
     "general": {
         "completed_orders_only": "Only include completed orders (status = 7) for accurate popularity metrics",
         "time_period": "Filter by time period to show recent popularity (e.g., last 30 days, last 3 months)",
-        "location_filter": "ALWAYS filter by o.location_id = [LOCATION_ID]",
+        "location_filter": "ALWAYS filter by orders.location_id = [LOCATION_ID]",
         "join_structure": "Join orders to order_items to items to categories for complete data",
-        "quantity_aggregation": "Use SUM(oi.quantity) to account for multiple quantities of the same item in orders",
+        "quantity_aggregation": "Use SUM(order_items.quantity) to account for multiple quantities of the same item in orders",
         "popularity_metrics": "Include multiple metrics: order count, total quantity, revenue, percentage of total",
         "ordering": "Order by the primary popularity metric (quantity or revenue) in descending order",
         "null_handling": "Handle NULL values appropriately in all aggregations"

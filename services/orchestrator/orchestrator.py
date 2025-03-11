@@ -254,13 +254,50 @@ class OrchestratorService:
             # Step 1: Classify the query
             self.logger.debug(f"Classifying query: '{query}'")
             t1 = time.perf_counter()
-            classification = self.classifier.classify(query)
+            
+            # Pass conversation context to the classifier for better follow-up detection
+            conversation_context = None
+            if 'session_history' in context and context['session_history']:
+                # Get the last query's category to use for follow-up detection
+                if len(context['session_history']) > 0:
+                    last_query = context['session_history'][-1]
+                    conversation_context = {
+                        'current_topic': last_query.get('category'),
+                        'last_query': last_query.get('query'),
+                        'session_history': context['session_history']
+                    }
+                    self.logger.info(f"Providing context from previous query: {last_query.get('category')}")
+            
+            # Call classify with the conversation context
+            if hasattr(self.classifier, 'get_classification_with_context') and conversation_context:
+                self.logger.info("Using enhanced classification with context")
+                classification = self.classifier.get_classification_with_context(query, conversation_context)
+            else:
+                classification = self.classifier.classify(query)
+                
             category = classification.get("category")
             time_period_clause = classification.get("time_period_clause")  # Extract time period clause
             is_followup = classification.get("is_followup", False)  # Extract follow-up indicator
+            
+            # Override category for follow-up questions if it was classified as general
+            if is_followup or (category == "general" and conversation_context):
+                # Check for follow-up indicators
+                follow_up_indicators = ['they', 'them', 'those', 'that', 'it', 'this', 'their', 'these']
+                potential_followup = any(indicator in query.lower() for indicator in follow_up_indicators)
+                
+                if potential_followup and conversation_context and conversation_context.get('current_topic'):
+                    prev_category = conversation_context.get('current_topic')
+                    if prev_category and prev_category != 'general':
+                        self.logger.info(f"Follow-up detected: Override category from {category} to {prev_category}")
+                        category = prev_category
+                        is_followup = True
+                        classification["category"] = category
+                        classification["is_followup"] = True
+            
             timers['classification'] = time.perf_counter() - t1
             
             self.logger.info(f"Query classified as: {category}")
+            self.logger.info(f"Is follow-up: {is_followup}")
             
             # Handle time period context
             if time_period_clause:
@@ -553,10 +590,8 @@ class OrchestratorService:
                     # Get verbal audio data from response
                     if response_data and "verbal_audio" in response_data:
                         verbal_audio = response_data["verbal_audio"]
-                        # Remove detailed logging about verbal audio
                     elif response_data and "verbal_data" in response_data:  # For backward compatibility
                         verbal_audio = response_data["verbal_data"]
-                        # Remove detailed logging about verbal audio
                 else:
                     # Remove detailed query content from log
                     self.logger.info("Generating text-only response")
@@ -685,7 +720,6 @@ class OrchestratorService:
                             tts_result = self.get_tts_response(verbal_text)
                             if tts_result and tts_result.get("success"):
                                 verbal_audio = tts_result.get("audio")
-                                self.logger.info("Fallback TTS generated audio")
                             else:
                                 self.logger.error(f"Fallback TTS failed: {tts_result.get('error') if tts_result else 'Unknown error'}")
                         else:
@@ -714,7 +748,8 @@ class OrchestratorService:
             if verbal_audio:
                 result["verbal_audio"] = verbal_audio
                 result["verbal_text"] = verbal_text
-                self.logger.info("Added verbal audio to response")
+            else:
+                pass
             
             # Add a default response if none was generated but we have query results
             if result["response"] is None and query_results:

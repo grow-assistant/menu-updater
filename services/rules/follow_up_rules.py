@@ -24,8 +24,9 @@ def get_follow_up_rules() -> Dict[str, Any]:
         "maintain_time_period": "Maintain the same time period from the previous query unless explicitly changed",
         "maintain_filters": "Maintain filters from the previous query unless explicitly changed",
         "maintain_location": f"Always include location_id = {DEFAULT_LOCATION_ID} in queries",
-        "orders_customer_id": "When joining orders to users, use o.customer_id = u.id, NOT o.user_id",
-        "use_order_id": "When counting orders, use o.id NOT o.order_id"
+        "orders_customer_id": "When joining orders to users, use orders.customer_id = users.id for customer information",
+        "use_order_id": "When counting orders, use orders.id as the primary key",
+        "schema_adherence": "Always use field names that match the database schema exactly"
     }
 
 def enhance_rules_for_followup(original_rules: Dict[str, Any]) -> Dict[str, Any]:

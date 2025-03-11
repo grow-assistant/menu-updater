@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 from typing import Any, Dict, Optional
 from pathlib import Path
+import re
 
 # Set up logging configuration
 logger = logging.getLogger("swoop_ai")
@@ -81,6 +82,64 @@ class ModuleFilter(logging.Filter):
             filename = os.path.basename(record.pathname)
             return filename == self.module_name
         return False
+
+class BinaryDataFilter(logging.Filter):
+    """Filter that completely removes binary data from logs."""
+    def filter(self, record):
+        # Check if the message is binary data
+        if hasattr(record, 'msg'):
+            # If it's bytes or bytearray, completely skip the log
+            if isinstance(record.msg, (bytes, bytearray)):
+                return False
+            
+            # If it's a string that might be binary data
+            if isinstance(record.msg, str) and len(record.msg) > 100:
+                if sum(c.isprintable() for c in record.msg[:100]) < 80:
+                    return False
+                
+                # Check for common indicators of audio data in logs
+                lower_msg = record.msg.lower()
+                if any(term in lower_msg for term in ["audio", "verbal", "tts", "mp3", "wav", "elevenlabs"]):
+                    if any(binary_indicator in lower_msg for binary_indicator in ["bytes", "base64", "binary"]):
+                        return False
+        
+        return True
+
+class AudioDataFilter(logging.Filter):
+    """Aggressively filter out any log messages containing binary audio data."""
+    
+    def filter(self, record):
+        # If this is a record with a binary message, block it
+        if isinstance(record.msg, (bytes, bytearray)):
+            return False
+            
+        # If this is a string message, check for binary patterns
+        if isinstance(record.msg, str):
+            # Check for binary content indicators - look for patterns of non-printable characters
+            if any(pattern in record.msg for pattern in ['\xff', '\x00', '\x1f', '\x8b']):
+                return False
+                
+            # Check for MP3 file signatures
+            if 'ID3' in record.msg[:10] or '\xff\xfb' in record.msg:
+                return False
+                
+            # Check for Base64 encoded audio
+            if len(record.msg) > 100 and record.msg.count(';base64,') > 0:
+                return False
+                
+            # Block all ridiculously long log messages (likely binary data)
+            if len(record.msg) > 1000 and sum(c.isprintable() for c in record.msg[:100]) < 80:
+                return False
+        
+        # For args, check each argument
+        if hasattr(record, 'args') and record.args:
+            for arg in record.args:
+                if isinstance(arg, (bytes, bytearray)):
+                    # Replace binary args with a placeholder
+                    record.args = tuple(f"[BINARY_DATA:{len(arg)} bytes]" if isinstance(arg, (bytes, bytearray)) else arg 
+                                      for arg in record.args)
+                    
+        return True
 
 def setup_logging(
     log_level: str = "INFO",
@@ -169,6 +228,22 @@ def setup_logging(
         
     app_logger.info(f"Logging initialized at level {log_level}")
     app_logger.info(f"Log file: {log_file}")
+
+    # Add binary data filter
+    binary_data_filter = BinaryDataFilter()
+    app_logger.addFilter(binary_data_filter)
+
+    # Add to your logging setup
+    logger = logging.getLogger()
+    logger.addFilter(BinaryDataFilter())
+
+    # Apply AudioDataFilter to the root logger
+    root_logger.addFilter(AudioDataFilter())
+
+    # Also apply to all other loggers that might be used
+    for name in logging.root.manager.loggerDict:
+        logger = logging.getLogger(name)
+        logger.addFilter(AudioDataFilter())
 
 def setup_ai_api_logging():
     """
@@ -359,6 +434,35 @@ setup_logging()
 
 # Clean old logs on startup
 clean_old_logs()
+
+# Add this to completely redirect stdout/stderr to prevent prints
+import sys
+import os
+
+# Create a custom file-like object that filters binary data
+class BinaryFilter:
+    def __init__(self, stream):
+        self.stream = stream
+        
+    def write(self, data):
+        # Skip binary data
+        if isinstance(data, (bytes, bytearray)):
+            return
+            
+        # Skip string data that looks binary
+        if isinstance(data, str) and len(data) > 100:
+            if sum(c.isprintable() for c in data[:100]) < 80:
+                return
+                
+        # Write normal text
+        self.stream.write(data)
+        
+    def flush(self):
+        self.stream.flush()
+
+# Replace stdout and stderr
+sys.stdout = BinaryFilter(sys.stdout)
+sys.stderr = BinaryFilter(sys.stderr)
 
 # Export the commonly used functions
 __all__ = [

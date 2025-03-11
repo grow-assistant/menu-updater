@@ -567,4 +567,70 @@ class RulesService:
                 except Exception as e:
                     self.logger.error(f"Error getting rules from module {module_name}: {str(e)}")
         
-        return rules_and_examples 
+        return rules_and_examples
+    
+    def load_database_schema(self):
+        """
+        Load the database schema definition from resources/database_fields.md
+        or from a structured JSON/YAML representation of the same data.
+        """
+        try:
+            schema_path = os.path.join(self.resources_dir, "database_schema.yml")
+            if os.path.exists(schema_path):
+                self.database_schema = self.yaml_loader.load_yaml(schema_path)
+                logger.info(f"Loaded database schema from {schema_path}")
+            else:
+                # Fall back to parsing markdown file if structured file doesn't exist
+                md_path = os.path.join(self.resources_dir, "database_fields.md")
+                if os.path.exists(md_path):
+                    self.database_schema = self._parse_schema_from_markdown(md_path)
+                    logger.info(f"Parsed database schema from {md_path}")
+                else:
+                    logger.warning("Database schema definition not found")
+                    self.database_schema = {}
+        except Exception as e:
+            logger.error(f"Error loading database schema: {str(e)}")
+            self.database_schema = {}
+
+    def _parse_schema_from_markdown(self, md_path):
+        """
+        Parse the database schema from a markdown file.
+        """
+        schema = {}
+        current_table = None
+        
+        with open(md_path, 'r') as f:
+            lines = f.readlines()
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('## '):
+                # New table definition
+                current_table = line[3:].strip()
+                schema[current_table] = {"fields": []}
+            elif line.startswith('- ') and current_table:
+                # Field definition
+                field_def = line[2:].strip()
+                if '(' in field_def:
+                    field_name = field_def.split('(')[0].strip()
+                    field_type = field_def[field_def.find('(')+1:field_def.find(')')]
+                    schema[current_table]["fields"].append({
+                        "name": field_name,
+                        "type": field_type,
+                        "nullable": "NOT NULL" not in field_def,
+                        "primary_key": "primary key" in field_def.lower() or "NOT NULL" in field_def
+                    })
+        
+        return schema
+
+    def get_database_schema(self):
+        """
+        Get the database schema.
+        
+        Returns:
+            Dictionary containing the database schema
+        """
+        if not hasattr(self, 'database_schema') or not self.database_schema:
+            self.load_database_schema()
+        
+        return self.database_schema 

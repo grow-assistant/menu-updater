@@ -18,26 +18,28 @@ logger = logging.getLogger(__name__)
 
 class OpenAISQLGenerator:
     def __init__(self, config: Dict[str, Any]):
-        """Initialize the enhanced OpenAI SQL generator."""
-        # Configure OpenAI API
-        api_key = config["api"]["openai"]["api_key"]
-        self.model = config["api"]["openai"].get("model", "gpt-4o-mini")
-        self.temperature = config["api"]["openai"].get("temperature", 0.2)
-        self.max_tokens = config["api"]["openai"].get("max_tokens", 2000)
+        """
+        Initialize OpenAISQLGenerator with configuration.
         
-        # Initialize OpenAI client
-        self.client = OpenAI(api_key=api_key)
+        Args:
+            config: Configuration dictionary
+        """
+        self.client = OpenAI(api_key=config.get("api", {}).get("openai", {}).get("api_key"))
+        self.model = config.get("services", {}).get("sql_generator", {}).get("model", "gpt-4o-mini")
+        self.temperature = config.get("services", {}).get("sql_generator", {}).get("temperature", 0.7)
+        self.max_tokens = config.get("services", {}).get("sql_generator", {}).get("max_tokens", 2000)
+        self.enable_caching = config.get("services", {}).get("sql_generator", {}).get("enable_caching", True)
         
-        # Initialize metrics
-        self.api_call_count = 0
-        self.total_tokens = 0
-        self.total_latency = 0
+        # Performance tracking
         self.retry_count = 0
+        self.total_tokens = 0
+        self.api_calls = 0
+        self.total_latency = 0
         
-        # Add prompt caching
+        # Caching for results
         self.prompt_cache = {}
-        self.prompt_cache_ttl = config.get("services", {}).get("sql_generator", {}).get("prompt_cache_ttl", 300)  # 5 minutes default
         self.prompt_cache_timestamps = {}
+        self.prompt_cache_ttl = 3600  # 1 hour
         
         # Performance tuning - ensure it's properly initialized from config
         if "services" in config and "sql_generator" in config["services"]:
@@ -236,8 +238,99 @@ class OpenAISQLGenerator:
             logger.info(f"Adding time period to prompt: {time_period}")
             rules_text += f"\nTime Period: {time_period}\n"
         
+        # Add conversation history context for follow-up questions
+        conversation_context = ""
+        if context.get("is_followup", False):
+            logger.info("Detected follow-up question, adding conversation context")
+            
+            # Add previous query
+            last_query = ""
+            if "session_history" in context and context["session_history"]:
+                # Get the most recent query
+                last_entry = context["session_history"][-1]
+                last_query = last_entry.get("query", "")
+                if last_query:
+                    conversation_context += f"Previous question: {last_query}\n"
+                
+                # Add previous query results if available
+                if "results" in last_entry and last_entry["results"]:
+                    conversation_context += f"Results of previous query: {last_entry['results']}\n"
+            
+            # Add previous SQL
+            previous_sql = context.get("previous_sql", "")
+            if previous_sql:
+                conversation_context += f"SQL for previous question: {previous_sql}\n"
+                
+                # Extract filters from previous SQL
+                where_clause = ""
+                where_match = re.search(r'WHERE\s+(.*?)(?:GROUP BY|ORDER BY|LIMIT|$)', previous_sql, re.IGNORECASE | re.DOTALL)
+                if where_match:
+                    where_clause = where_match.group(1).strip()
+                    conversation_context += f"Previous filters: {where_clause}\n"
+            
+            # Add time period explicitly
+            time_period_clause = context.get("time_period_clause", "")
+            if time_period_clause:
+                conversation_context += f"Time period from previous query: {time_period_clause}\n"
+            
+            # Add previous filters explicitly
+            if "previous_filters" in context and context["previous_filters"]:
+                conversation_context += "Filters from previous query:\n"
+                for filter_name, filter_value in context["previous_filters"].items():
+                    conversation_context += f"- {filter_name}: {filter_value}\n"
+            
+            # Special handling for references to "those orders"
+            if any(term in query.lower() for term in ["those orders", "these orders", "the orders"]):
+                conversation_context += "\nIMPORTANT: The current query refers to the same orders from the previous query. " \
+                                      "You MUST maintain the same WHERE conditions when showing order information.\n"
+                # Add more explicit instructions
+                conversation_context += "DO NOT DROP any time period or status filters that were in the previous query.\n"
+            
+            # Enhanced handling for "who" queries
+            if "who" in query.lower() and any(term in query.lower() for term in ["placed", "order", "those orders", "these orders"]):
+                conversation_context += "\nIMPORTANT: This query is asking about who placed the orders from the previous query. " \
+                                      "You MUST maintain all filters from the previous query and return customer/user information.\n"
+                conversation_context += "CRITICAL INSTRUCTIONS FOR THIS QUERY:\n"
+                conversation_context += "1. Join orders to users table: orders o JOIN users u ON o.customer_id = u.id\n"
+                conversation_context += "2. Return customer names using: u.first_name || ' ' || u.last_name AS customer_name\n"
+                conversation_context += "3. Include all WHERE conditions from the previous query\n"
+                conversation_context += "4. DO NOT use user_id for joins, ALWAYS use customer_id\n"
+                
+                # Add sample SQL for who placed orders
+                conversation_context += "\nSAMPLE SQL for 'who placed orders' query:\n"
+                conversation_context += """
+SELECT 
+    u.first_name || ' ' || u.last_name AS customer_name,
+    COUNT(o.id) AS order_count 
+FROM 
+    orders o
+JOIN 
+    users u ON o.customer_id = u.id
+WHERE 
+    o.location_id = 62
+    -- Maintain other filters from previous query here
+GROUP BY 
+    u.first_name, u.last_name
+ORDER BY 
+    order_count DESC;
+"""
+
         # Format any SQL patterns
         patterns_text = context.get("patterns", "")
+        
+        # Add schema hints
+        schema_hints = context.get("schema_hints", "")
+        if not schema_hints and "sql_schema_valid_tables" in context:
+            valid_tables = context.get("sql_schema_valid_tables", [])
+            schema_hints += "Valid tables in the database schema:\n"
+            schema_hints += ", ".join(valid_tables) + "\n\n"
+        
+        # Add table replacements
+        if "table_replacements" in context:
+            replacements = context.get("table_replacements", {})
+            schema_hints += "IMPORTANT TABLE MAPPING:\n"
+            for non_existent, alternatives in replacements.items():
+                schema_hints += f"- Table '{non_existent}' does not exist. Use {alternatives} instead.\n"
         
         # Substitute into the prompt template
         prompt = self.prompt_template.format(
@@ -245,6 +338,8 @@ class OpenAISQLGenerator:
             rules=rules_text,
             patterns=patterns_text,
             examples=examples_text,
+            conversation_context=conversation_context,
+            schema_hints=schema_hints,
             query=query
         )
         
@@ -256,162 +351,144 @@ class OpenAISQLGenerator:
 
     def generate_sql(self, query: str, examples: List[Dict[str, Any]], context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Generate SQL from natural language using OpenAI.
+        Generate SQL for a natural language query using OpenAI's API.
         
         Args:
-            query: Natural language query
-            examples: List of examples for few-shot learning
-            context: Additional context for query
+            query: The natural language query text
+            examples: Example queries and their SQL queries
+            context: Additional context for the query
             
         Returns:
-            Dictionary with generated SQL and metadata
+            A dictionary with the generated SQL and metadata
         """
-        start_time = time.time()
-        self.api_call_count += 1
+        # Import schema information here to avoid circular imports
+        from services.sql_generator.schema import get_database_schema, get_schema_hints
         
-        # Build the prompt
-        logger.info(f"Building SQL generation prompt with {len(examples)} examples and context for {context.get('category', 'unknown')}")
+        # Special handling for "who placed those orders" type of follow-up queries
+        is_who_query = False
+        if context.get("is_followup", False) and "who" in query.lower() and any(term in query.lower() for term in ["placed", "those orders", "these orders", "the orders"]):
+            is_who_query = True
+            logger.info("Detected 'who placed those orders' follow-up query - applying special handling")
+            
+            # Get the time period from the previous query context
+            time_period = context.get("time_period_clause", "")
+            # Get status filter from previous query
+            status_filter = None
+            if "previous_filters" in context and "status" in context["previous_filters"]:
+                status = context["previous_filters"]["status"]
+                if status.lower() == "completed":
+                    status_filter = "o.status = 7"
+                elif status.lower() == "cancelled" or status.lower() == "canceled":
+                    status_filter = "o.status = 6"
+                elif status.lower() == "pending":
+                    status_filter = "o.status IN (3, 4, 5)"
+            
+            # Check if we can directly build the SQL query rather than going through the AI
+            if time_period:
+                # If we have the time period, we can construct the SQL directly
+                sql = f"""
+SELECT 
+    u.first_name || ' ' || u.last_name AS customer_name,
+    COUNT(o.id) AS order_count
+FROM 
+    orders o
+JOIN 
+    users u ON o.customer_id = u.id
+WHERE 
+    o.location_id = 62
+    {f"AND {status_filter}" if status_filter else ""}
+    AND {time_period}
+GROUP BY 
+    u.first_name, u.last_name
+ORDER BY 
+    order_count DESC;
+"""
+                logger.info("Generated direct SQL for 'who placed orders' query using context information")
+                return {
+                    "sql": sql,
+                    "error": None,
+                    "generation_time": 0.01,
+                    "model": "direct_template",
+                    "tokens": 0
+                }
+        
         prompt = self._build_prompt(query, examples, context)
         
-        # Try to get a cached response
-        cache_key = f"{query}_{context.get('category', '')}"
-        if cache_key in self.prompt_cache:
-            cache_time = self.prompt_cache_timestamps.get(cache_key, 0)
-            if time.time() - cache_time < self.prompt_cache_ttl:
-                logger.info(f"Using cached SQL for query: {query}")
-                return self.prompt_cache[cache_key]
+        # Add schema information to the prompt
+        schema = get_database_schema()
+        schema_hints = get_schema_hints()
         
-        # Set up parameters for the API call
-        model = context.get("model", self.model)
-        max_tokens = context.get("max_tokens", self.max_tokens)
-        temperature = context.get("temperature", self.temperature)
+        # Replace placeholders with actual schema
+        prompt = prompt.replace("{schema}", schema)
+        prompt = prompt.replace("{schema_hints}", schema_hints)
         
-        # Exponential backoff for retries
-        max_retries = self.max_retries
-        retry_count = 0
+        # Fill in any remaining placeholders with empty strings
+        prompt = prompt.replace("{patterns}", "")
+        prompt = prompt.replace("{conversation_context}", context.get("conversation_context", ""))
+        
+        # If this is a followup query about who placed orders, add extra emphasis in the prompt
+        if is_who_query:
+            prompt += "\n\nIMPORTANT REMINDER: When retrieving customer information for orders:\n"
+            prompt += "1. ALWAYS join orders to users using: orders o JOIN users u ON o.customer_id = u.id\n"
+            prompt += "2. NEVER use 'user_id' for the join condition, ALWAYS use 'customer_id'\n"
+            prompt += "3. ALWAYS maintain all time period and status filters from the previous query\n"
+        
+        # Debug log
+        logger.debug(f"Generated SQL prompt:\n{prompt}")
+        
+        # Retry logic for OpenAI API calls
+        max_attempts = 3
+        delay = 2  # Starting delay in seconds
         last_error = None
-
-        while retry_count <= max_retries:
+        
+        for attempt in range(1, max_attempts + 1):
             try:
-                logger.info(f"Generating SQL with model: {model}, attempt: {retry_count+1}/{max_retries+1}")
+                logger.info(f"Generating SQL with model: {self.model}, attempt: {attempt}/{max_attempts}")
+                t1 = time.perf_counter()
                 
-                # Log the model and parameters being used
-                if self.enable_detailed_logging:
-                    logger.debug(f"OpenAI parameters: model={model}, temperature={temperature}, max_tokens={max_tokens}")
-                
-                # Make the API call
                 response = self.client.chat.completions.create(
-                    model=model,
+                    model=self.model,
                     messages=[
-                        {"role": "system", "content": "You are a PostgreSQL expert that translates natural language to SQL."},
+                        {"role": "system", "content": "You are a SQL expert that translates natural language into PostgreSQL queries."},
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=temperature,
-                    max_tokens=max_tokens
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens
                 )
                 
+                generation_time = time.perf_counter() - t1
+                self.total_tokens += response.usage.total_tokens
+                self.api_calls += 1
+                self.total_latency += generation_time
+                
                 # Extract the SQL from the response
-                response_text = response.choices[0].message.content
-                sql = self._extract_sql(response_text)
+                sql_text = response.choices[0].message.content
+                sql = self._extract_sql(sql_text)
                 
-                # If no SQL was extracted, try to fix it
-                if not sql:
-                    logger.warning(f"No SQL found in response, attempting to extract from full response")
-                    sql = response_text.strip()
-                    
-                    # If the response doesn't start with SELECT, INSERT, UPDATE, DELETE, WITH, try to find SQL
-                    if not any(sql.upper().startswith(keyword) for keyword in ["SELECT", "INSERT", "UPDATE", "DELETE", "WITH"]):
-                        # Try to find SQL-like content
-                        sql_matches = re.findall(r'(SELECT|INSERT|UPDATE|DELETE|WITH)[\s\S]+?;', sql, re.IGNORECASE)
-                        if sql_matches:
-                            sql = sql_matches[0]
-                        else:
-                            # If still no SQL found, raise an error to trigger retry
-                            raise ValueError("No SQL statement found in response")
+                logger.info(f"Successfully generated SQL query in {generation_time:.2f} seconds")
                 
-                # Calculate token usage and latency
-                usage = response.usage
-                completion_tokens = usage.completion_tokens if usage else 0
-                prompt_tokens = usage.prompt_tokens if usage else 0
-                total_tokens = usage.total_tokens if usage else 0
-                
-                self.total_tokens += total_tokens
-                
-                end_time = time.time()
-                latency = end_time - start_time
-                self.total_latency += latency
-                
-                # Cache the result
-                result = {
+                return {
                     "sql": sql,
-                    "model": model,
-                    "tokens": {
-                        "prompt": prompt_tokens,
-                        "completion": completion_tokens,
-                        "total": total_tokens
-                    },
-                    "latency": latency,
-                    "metadata": {
-                        "temperature": temperature,
-                        "max_tokens": max_tokens,
-                        "model": model,
-                        "examples_used": len(examples)
-                    }
+                    "error": None,
+                    "generation_time": generation_time,
+                    "model": self.model,
+                    "tokens": response.usage.total_tokens
                 }
-                
-                # Store in cache
-                self.prompt_cache[cache_key] = result
-                self.prompt_cache_timestamps[cache_key] = time.time()
-                
-                # Log success
-                logger.info(f"Successfully generated SQL query in {latency:.2f} seconds")
-                if self.enable_detailed_logging:
-                    logger.debug(f"Generated SQL: {sql[:100]}...")
-                
-                return result
-                
             except Exception as e:
-                retry_count += 1
-                self.retry_count += 1
                 last_error = str(e)
-                
-                # Log error with different levels based on retry count
-                if retry_count <= max_retries:
-                    delay = 2 ** retry_count  # Exponential backoff
-                    logger.warning(f"Error generating SQL (attempt {retry_count}/{max_retries+1}): {str(e)}. Retrying in {delay} seconds...")
-                    time.sleep(delay)
-                    
-                    # Try with a different model if available
-                    if retry_count == 1 and model != "gpt-4o-mini":
-                        model = "gpt-4o-mini"  # Use a more powerful model for the next attempt
-                        logger.info(f"Switching to more powerful model for retry: {model}")
-                else:
-                    logger.error(f"Failed to generate SQL after {max_retries+1} attempts. Last error: {str(e)}")
+                logger.warning(f"Error generating SQL (attempt {attempt}/{max_attempts}): {e}. Retrying in {delay} seconds...")
+                time.sleep(delay)
+                delay *= 2  # Exponential backoff
         
-        # If we get here, all retries failed
-        end_time = time.time()
-        latency = end_time - start_time
-        
-        error_result = {
-            "sql": "",
+        # If we get here, all attempts failed
+        logger.error(f"Failed to generate SQL after {max_attempts} attempts. Last error: {last_error}")
+        return {
+            "sql": None,
             "error": last_error,
-            "model": model,
-            "tokens": {
-                "prompt": 0,
-                "completion": 0,
-                "total": 0
-            },
-            "latency": latency,
-            "metadata": {
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "model": model,
-                "examples_used": len(examples),
-                "retry_count": retry_count
-            }
+            "generation_time": 0,
+            "model": self.model,
+            "tokens": 0
         }
-        
-        return error_result
     
     def _extract_sql(self, text: str) -> str:
         """

@@ -394,10 +394,9 @@ class EnhancedDataAccess:
         
     def _extract_tables_from_query(self, sql_query: str) -> List[str]:
         """Extract table names from a SQL query for cache invalidation tracking."""
-        # This is a simplified implementation. In production, use a proper SQL parser.
         tables = []
         sql_keywords = {'select', 'where', 'group', 'order', 'having', 'limit', 'offset', 
-                      'on', 'and', 'or', 'by', 'as', 'union', 'all', 'join', 'from'}
+                        'on', 'and', 'or', 'by', 'as', 'union', 'all', 'join', 'from'}
         
         # Normalize query: remove extra whitespace and newlines
         normalized_query = ' '.join(sql_query.lower().replace('\n', ' ').split())
@@ -410,11 +409,10 @@ class EnhancedDataAccess:
                 table_name = parts[0].strip(',;()')
                 if table_name and table_name not in sql_keywords:
                     tables.append(table_name)
-                
                 # Check if there's an alias after the table name
                 if len(parts) > 1 and parts[1] not in sql_keywords:
                     alias = parts[1].strip(',;()')
-                    if alias and len(alias) <= 5 and alias not in sql_keywords:  # Reasonable alias length
+                    if alias and len(alias) <= 5 and alias not in sql_keywords:
                         tables.append(alias)
         
         # Extract tables from JOIN clauses
@@ -425,8 +423,7 @@ class EnhancedDataAccess:
                 table_name = parts[0].strip(',;()')
                 if table_name and table_name not in sql_keywords:
                     tables.append(table_name)
-                
-                # Check if there's an alias after the table name
+                # Check for alias after JOIN
                 if len(parts) > 1 and parts[1] not in sql_keywords:
                     alias = parts[1].strip(',;()')
                     if alias and len(alias) <= 5 and alias not in sql_keywords:

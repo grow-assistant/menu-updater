@@ -198,17 +198,17 @@ def debug_response_generator_initialization():
         )
         
         if verbal_response:
-            logger.info(f"Successfully generated verbal response ({len(verbal_response)} bytes)")
+            # Removed logging about verbal response size
             
-            # Save audio for verification
+            # Save audio for verification without logging
             output_dir = os.path.join("test_output")
             os.makedirs(output_dir, exist_ok=True)
             audio_path = os.path.join(output_dir, "response_generator_test.mp3")
             
             with open(audio_path, "wb") as f:
                 f.write(verbal_response)
-                
-            logger.info(f"Audio saved to {audio_path}")
+            
+            # Removed audio path logging
             return True
         else:
             logger.error("Failed to generate verbal response")

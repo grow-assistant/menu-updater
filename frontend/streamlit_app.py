@@ -114,7 +114,7 @@ def init_session_state():
         st.session_state["location_id"] = list(LOCATIONS.values())[0]
     
     if "location" not in st.session_state:
-        st.session_state["location"] = "Idle Hour Country Club"
+        st.session_state["location"] = list(LOCATIONS.keys())[0]
     
     if "persona" not in st.session_state:
         st.session_state["persona"] = "casual"
@@ -491,7 +491,7 @@ def run_app():
             # Play verbal response if available
             if result.get("verbal_audio"):
                 import base64
-                logger.info("Playing verbal response audio")
+                # Removed logging about verbal audio
                 audio_base64 = base64.b64encode(result["verbal_audio"]).decode()
                 audio_html = f"""
                     <audio autoplay="true" style="display:block; margin-top:10px;">

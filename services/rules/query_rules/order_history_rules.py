@@ -13,90 +13,105 @@ from services.rules.business_rules import DEFAULT_LOCATION_ID, TIMEZONE_OFFSET
 # Schema information for order history queries
 ORDER_HISTORY_SCHEMA = {
     "orders": {
-        "description": "Main orders table containing all order information",
+        "description": "Main orders table with order details",
         "columns": {
-            "id": "INTEGER PRIMARY KEY - Unique identifier",
-            "user_id": "INTEGER - Foreign key to users table (customer), also referred to as customer_id in some queries",
-            "customer_id": "INTEGER - Same as user_id, foreign key to users table for the customer",
-            "vendor_id": "INTEGER - Foreign key to users table (vendor)",
+            "id": "INTEGER PRIMARY KEY - Unique identifier for the order",
+            "customer_id": "INTEGER - Foreign key to users table (the customer)",
+            "vendor_id": "INTEGER - Foreign key to users table (the vendor)",
             "location_id": "INTEGER - Foreign key to locations table",
-            "marker_id": "INTEGER - Foreign key to markers table (optional)",
             "status": "INTEGER - Order status (7=completed, 6=cancelled, 3-5=in progress)",
-            "total": "INTEGER - Total amount in cents (includes tip)",
-            "tax": "INTEGER - Tax amount in cents",
-            "tip": "INTEGER - Tip amount in cents (optional)",
-            "fee": "INTEGER - Service fee amount in cents",
-            "fee_percent": "FLOAT - Service fee percentage",
+            "marker_id": "INTEGER - Foreign key to markers table",
+            "total": "NUMERIC - Total order amount",
+            "tax": "NUMERIC - Tax amount",
             "instructions": "TEXT - Special instructions for the order",
-            "type": "INTEGER - Order type identifier",
-            "updated_at": "TIMESTAMP - When the order was completed",
-            "created_at": "TIMESTAMP - When the order was created",
+            "fee": "NUMERIC - Service fee (default 0)",
+            "tip": "NUMERIC - Tip amount (default 0)",
+            "created_at": "TIMESTAMP WITH TIME ZONE - When the order was created",
+            "updated_at": "TIMESTAMP WITH TIME ZONE - When the order was last updated",
+            "deleted_at": "TIMESTAMP WITH TIME ZONE - When the order was deleted (if applicable)"
         },
         "relationships": [
-            "FOREIGN KEY (user_id) REFERENCES users(id)",
+            "FOREIGN KEY (customer_id) REFERENCES users(id)",
             "FOREIGN KEY (vendor_id) REFERENCES users(id)",
             "FOREIGN KEY (location_id) REFERENCES locations(id)",
             "FOREIGN KEY (marker_id) REFERENCES markers(id)"
-        ]
+        ],
+        "primary_key": "id",
+        "indexes": ["location_id", "customer_id", "status", "updated_at"],
+        "referenced_by": {
+            "order_items": "order_id",
+            "order_option_items": "order_id",
+            "order_ratings": "order_id",
+            "discounts": "order_id",
+            "messages": "order_id"
+        }
     },
     "order_items": {
-        "description": "Individual items within an order",
+        "description": "Items within an order",
         "columns": {
             "id": "INTEGER PRIMARY KEY - Unique identifier",
             "order_id": "INTEGER - Foreign key to orders table",
-            "item_id": "INTEGER - Foreign key to menu_items table",
+            "item_id": "INTEGER - Foreign key to items table",
             "quantity": "INTEGER - Number of this item ordered",
-            "price": "INTEGER - Price at time of order (in cents)",
-            "special_instructions": "TEXT - Special instructions for this item",
-            "created_at": "TIMESTAMP - When the record was created",
-            "updated_at": "TIMESTAMP - When the record was completed",
-            "deleted_at": "TIMESTAMP - When the record was deleted (if applicable)"
+            "instructions": "TEXT - Special instructions for this item",
+            "created_at": "TIMESTAMP WITH TIME ZONE - When the record was created",
+            "updated_at": "TIMESTAMP WITH TIME ZONE - When the record was last updated",
+            "deleted_at": "TIMESTAMP WITH TIME ZONE - When the record was deleted (if applicable)"
         },
         "relationships": [
             "FOREIGN KEY (order_id) REFERENCES orders(id)",
             "FOREIGN KEY (item_id) REFERENCES items(id)"
-        ]
+        ],
+        "primary_key": "id",
+        "indexes": ["order_id", "item_id"],
+        "referenced_by": {
+            "order_option_items": "order_item_id"
+        }
     },
     "order_option_items": {
         "description": "Options selected for order items",
         "columns": {
             "id": "INTEGER PRIMARY KEY - Unique identifier",
             "order_item_id": "INTEGER - Foreign key to order_items table",
+            "order_id": "INTEGER - Foreign key to orders table",
             "option_item_id": "INTEGER - Foreign key to option_items table",
-            "price": "INTEGER - Price at time of order (in cents)",
-            "quantity": "INTEGER - Quantity of this option selected",
-            "created_at": "TIMESTAMP - When the record was created",
-            "updated_at": "TIMESTAMP - When the record was completed",
-            "deleted_at": "TIMESTAMP - When the record was deleted (if applicable)"
+            "created_at": "TIMESTAMP WITH TIME ZONE - When the record was created",
+            "updated_at": "TIMESTAMP WITH TIME ZONE - When the record was last updated",
+            "deleted_at": "TIMESTAMP WITH TIME ZONE - When the record was deleted (if applicable)"
         },
         "relationships": [
             "FOREIGN KEY (order_item_id) REFERENCES order_items(id)",
-            "FOREIGN KEY (option_item_id) REFERENCES option_items(id)"
+            "FOREIGN KEY (option_item_id) REFERENCES option_items(id)",
+            "FOREIGN KEY (order_id) REFERENCES orders(id)"
         ]
     },
     "users": {
-        "description": "User information for customers and vendors",
+        "description": "User information for customers",
         "columns": {
             "id": "INTEGER PRIMARY KEY - Unique identifier",
             "first_name": "TEXT - User's first name",
             "last_name": "TEXT - User's last name",
             "email": "TEXT - User's email address",
             "phone": "TEXT - User's phone number",
-            "created_at": "TIMESTAMP - When the user was created",
+            "picture": "TEXT - User's profile picture URL",
+            "created_at": "TIMESTAMP WITH TIME ZONE - When the user was created",
+            "updated_at": "TIMESTAMP WITH TIME ZONE - When the user was last updated",
+            "deleted_at": "TIMESTAMP WITH TIME ZONE - When the user was deleted (if applicable)"
         },
     },
     "items": {
         "description": "Menu items available for ordering",
         "columns": {
             "id": "INTEGER PRIMARY KEY - Unique identifier",
-            "category_id": "INTEGER - Foreign key to menu_categories table",
-            "location_id": "INTEGER - Foreign key to locations table",
+            "category_id": "INTEGER - Foreign key to categories table",
             "name": "TEXT - Name of the menu item",
             "description": "TEXT - Description of the menu item",
-            "price": "INTEGER - Price in cents (e.g., $5.99 is stored as 599)",
-            "enabled": "BOOLEAN - Whether the item is currently available",
-            "created_at": "TIMESTAMP - When the item was created",
-            "updated_at": "TIMESTAMP - When the item was last updated",
+            "price": "NUMERIC - Price of the item",
+            "disabled": "BOOLEAN - Whether the item is currently available",
+            "seq_num": "INTEGER - Display sequence number (default 0)",
+            "created_at": "TIMESTAMP WITH TIME ZONE - When the item was created",
+            "updated_at": "TIMESTAMP WITH TIME ZONE - When the item was last updated",
+            "deleted_at": "TIMESTAMP WITH TIME ZONE - When the item was deleted (if applicable)"
         },
     },
     "option_items": {
@@ -104,28 +119,52 @@ ORDER_HISTORY_SCHEMA = {
         "columns": {
             "id": "INTEGER PRIMARY KEY - Unique identifier",
             "option_id": "INTEGER - Foreign key to options table",
-            "location_id": "INTEGER - Foreign key to locations table",
             "name": "TEXT - Name of the option item",
-            "price": "INTEGER - Additional price in cents",
+            "description": "TEXT - Description of the option item",
+            "price": "NUMERIC - Additional price",
+            "created_at": "TIMESTAMP WITH TIME ZONE - When the option item was created",
+            "updated_at": "TIMESTAMP WITH TIME ZONE - When the option item was last updated",
+            "deleted_at": "TIMESTAMP WITH TIME ZONE - When the option item was deleted (if applicable)"
         },
     },
+    "discounts": {
+        "description": "Discounts applied to orders",
+        "columns": {
+            "id": "INTEGER PRIMARY KEY - Unique identifier",
+            "order_id": "INTEGER - Foreign key to orders table",
+            "user_id": "INTEGER - Foreign key to users table",
+            "amount": "NUMERIC - Discount amount",
+            "reason": "TEXT - Reason for discount",
+            "created_at": "TIMESTAMP WITH TIME ZONE - When the discount was created",
+            "updated_at": "TIMESTAMP WITH TIME ZONE - When the discount was last updated",
+            "deleted_at": "TIMESTAMP WITH TIME ZONE - When the discount was deleted (if applicable)"
+        },
+        "relationships": [
+            "FOREIGN KEY (order_id) REFERENCES orders(id)",
+            "FOREIGN KEY (user_id) REFERENCES users(id)"
+        ],
+        "primary_key": "id",
+        "indexes": ["order_id", "user_id"]
+    }
 }
 
 # Query rules for order history
 ORDER_HISTORY_RULES = {
     "critical_requirements": {
-        "location_isolation": "EVERY SQL query MUST include 'o.location_id = " + str(DEFAULT_LOCATION_ID) + "' in the WHERE clause without exception",
-        "date_field_critical": "CRITICAL: The orders table does NOT have an updated_at column. Always use (o.updated_at - INTERVAL '7 hours')::date for date filtering - NEVER reference o.updated_at!"
+        "location_isolation": "EVERY SQL query MUST include 'orders.location_id = " + str(DEFAULT_LOCATION_ID) + "' in the WHERE clause without exception",
+        "timezone_handling": "Always adjust timestamps with timezone offset: (orders.updated_at - INTERVAL '" + str(TIMEZONE_OFFSET) + " hours')",
+        "customer_id_location": "CRITICAL: customer_id is a field on the orders table (orders.customer_id), NOT on the users table. Always join users to orders using orders.customer_id = users.id",
+        "no_customers_table": "CRITICAL: There is NO CUSTOMERS table in the database. The table is called USERS. Always use the users table for customer information."
     },
     "general": {
-        "date_filtering": "Use date range filters to narrow down order history: (o.updated_at - INTERVAL '7 hours')::date BETWEEN date1 AND date2",
-        "status_filter": "Filter by order status using o.status IN (status_codes) for specific order states",
-        "location_filter": "***CRITICAL REQUIREMENT*** ALWAYS filter by o.location_id = " + str(DEFAULT_LOCATION_ID) + " to ensure proper data isolation. This filter is MANDATORY for EVERY query without exception.",
+        "date_filtering": "Use date range filters to narrow down order history: (orders.updated_at - INTERVAL '7 hours')::date BETWEEN date1 AND date2",
+        "status_filter": "Filter by order status using orders.status IN (status_codes) for specific order states",
+        "location_filter": "***CRITICAL REQUIREMENT*** ALWAYS filter by orders.location_id = " + str(DEFAULT_LOCATION_ID) + " to ensure proper data isolation. This filter is MANDATORY for EVERY query without exception.",
         "join_structure": "Join orders to order_items to items for complete order details",
-        "order_by": "Sort by creation date (most recent first) using ORDER BY o.updated_at DESC",
-        "items_inclusion": "Use LEFT JOIN to include order_items: LEFT JOIN order_items oi ON o.id = oi.order_id",
-        "options_inclusion": "To include options: LEFT JOIN order_option_items ooi ON oi.id = ooi.order_item_id",
-        "customer_privacy": "When asked about WHO placed orders, ALWAYS join to the users table and return customer names. Example: JOIN users u ON o.customer_id = u.id and include u.first_name || ' ' || u.last_name AS customer_name in the SELECT clause."
+        "order_by": "Sort by creation date (most recent first) using ORDER BY orders.updated_at DESC",
+        "items_inclusion": "Use LEFT JOIN to include order_items: LEFT JOIN order_items ON orders.id = order_items.order_id",
+        "options_inclusion": "To include options: LEFT JOIN order_option_items ON order_items.id = order_option_items.order_item_id",
+        "customer_privacy": "When asked about WHO placed orders, ALWAYS join to the users table and return customer names. Example: JOIN users ON orders.customer_id = users.id and include users.first_name || ' ' || users.last_name AS customer_name in the SELECT clause."
     },
     "order_status": {
         "completed": "Completed orders have status=7",
@@ -142,7 +181,7 @@ ORDER_HISTORY_RULES = {
         "format_support": "Handle various date formats (MM/DD/YYYY, YYYY-MM-DD) in input parameters",
         "relative_dates": "For 'yesterday', 'last week', 'last month', use date arithmetic relative to current_date",
         "date_comparison": "When comparing dates, cast timestamps to date type for whole-day comparisons",
-        "date_field": "CRITICAL: Always use o.updated_at for date filtering, NOT o.updated_at (which doesn't exist). Format as: (o.updated_at - INTERVAL '7 hours')::date"
+        "date_field": "CRITICAL: Always use orders.updated_at for date filtering. Format as: (orders.updated_at - INTERVAL '7 hours')::date"
     }
 }
 
@@ -252,8 +291,8 @@ def get_rules(rules_service=None) -> Dict[str, Any]:
     # Add a critical requirement specifically for location filtering and date field
     if "critical_requirements" not in modified_rules:
         modified_rules["critical_requirements"] = {}
-    modified_rules["critical_requirements"]["location_isolation"] = f"EVERY SQL query MUST include 'o.location_id = {DEFAULT_LOCATION_ID}' in the WHERE clause without exception"
-    modified_rules["critical_requirements"]["date_field"] = "CRITICAL: The orders table does NOT have an updated_at column. Always use (o.updated_at - INTERVAL '7 hours')::date for date filtering - NEVER reference o.updated_at!"
+    modified_rules["critical_requirements"]["location_isolation"] = f"EVERY SQL query MUST include 'orders.location_id = {DEFAULT_LOCATION_ID}' in the WHERE clause without exception"
+    modified_rules["critical_requirements"]["date_field"] = "CRITICAL: When filtering orders by date, always use (orders.updated_at - INTERVAL '7 hours')::date in conditions"
     
     return {
         "name": "order_history",

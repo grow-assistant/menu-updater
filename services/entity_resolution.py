@@ -190,20 +190,51 @@ class EntityResolutionService:
                     })
         
         # Extract "the X" references (like "the category", "the item")
-        for entity_type in ['item', 'category', 'option']:
-            pattern = r'\b(that|the|this)\s+(' + re.escape(entity_type) + r')\b'
+        for entity_type in ['item', 'category', 'option', 'order']:
+            pattern = r'\b(that|the|this|those)\s+(' + re.escape(entity_type) + r'(?:s)?)\b'
             for match in re.finditer(pattern, query_text.lower()):
                 # Get the full matched text
                 full_text = match.group(0)
                 entity_type_matched = match.group(2)  # The entity type mentioned in the text
-                entity_type_plural = entity_type_matched + 's'  # Convert to plural for key lookup
+                
+                # Check if the entity is already plural
+                if entity_type_matched.endswith('s'):
+                    entity_type_plural = entity_type_matched
+                    plurality = 'plural'
+                else:
+                    entity_type_plural = entity_type_matched + 's'  # Convert to plural for key lookup
+                    plurality = 'singular'
                 
                 references.append({
                     'text': full_text,
                     'start': match.start(),
                     'end': match.end(),
                     'type': 'explicit_reference',
-                    'entity_type': entity_type_plural
+                    'entity_type': entity_type_plural,
+                    'plurality': plurality
+                })
+        
+        # Special case for domain-specific references (like "those orders")
+        domain_specific_patterns = [
+            (r'\b(those|these)\s+(orders|items|categories|options)\b', 'plural'),
+            (r'\b(that|this)\s+(order|item|category|option)\b', 'singular')
+        ]
+        
+        for pattern, plurality in domain_specific_patterns:
+            for match in re.finditer(pattern, query_text.lower()):
+                entity_type = match.group(2)  # The entity type (orders, items, etc.)
+                
+                # Ensure it's in plural form for consistency with our keys
+                if not entity_type.endswith('s'):
+                    entity_type += 's'
+                
+                references.append({
+                    'text': match.group(0),
+                    'start': match.start(),
+                    'end': match.end(),
+                    'type': 'domain_reference',
+                    'entity_type': entity_type,
+                    'plurality': plurality
                 })
         
         return references
@@ -220,6 +251,31 @@ class EntityResolutionService:
             List of references with added resolution information
         """
         resolved_references = []
+        
+        # Extract previous query information from session history
+        previous_entities = {}
+        previous_query_type = None
+        previous_filters = {}
+        
+        if 'session_history' in context and context['session_history']:
+            # Get the most recent query
+            last_query = context['session_history'][-1]
+            
+            # Extract query type
+            previous_query_type = last_query.get('category')
+            
+            # Extract entities
+            previous_entities = last_query.get('entities', {})
+            
+            # Extract filters (like date filters)
+            if 'sql_query' in last_query:
+                # Extract date filters from SQL
+                sql = last_query.get('sql_query', '')
+                if 'WHERE' in sql:
+                    # Simple extraction of date filters for now
+                    date_match = re.search(r'WHERE\s+.*?(date\s*[>=<]+\s*[\'"].*?[\'"])', sql, re.IGNORECASE)
+                    if date_match:
+                        previous_filters['date_filter'] = date_match.group(1)
         
         for ref in references:
             resolved_ref = ref.copy()
@@ -248,32 +304,64 @@ class EntityResolutionService:
                         resolved_ref['resolution'] = None
                 
                 elif ref['plurality'] == 'plural':
-                    # Look for the most recent plural entities
-                    entity_found = False
+                    # For plural pronouns, collect all relevant entities
+                    all_entities = []
+                    entity_type_found = None
                     for entity_type in ['items', 'categories', 'options', 'option_items']:
                         entities = active_entities.get(entity_type, [])
-                        if len(entities) > 1:
-                            # Use all entities of this type
-                            resolved_ref['resolution'] = entities
-                            resolved_ref['entity_type'] = entity_type
-                            entity_found = True
-                            break
+                        if entities and len(entities) > 1:
+                            all_entities.extend(entities)
+                            if not entity_type_found:
+                                entity_type_found = entity_type
                     
-                    if not entity_found:
+                    if all_entities:
+                        resolved_ref['resolution'] = all_entities
+                        resolved_ref['entity_type'] = entity_type_found
+                    else:
                         resolved_ref['is_ambiguous'] = True
                         resolved_ref['entity_type'] = None
                         resolved_ref['resolution'] = None
             
-            # Handle explicit references
+            # Handle domain-specific references (like "those orders")
+            elif ref['type'] == 'domain_reference':
+                entity_type = ref['entity_type']  # e.g., 'orders'
+                
+                # Special case for "those orders" when previous query was about orders
+                if entity_type == 'orders' and previous_query_type == 'order_history':
+                    # Create a reference to the previous query's parameters
+                    resolved_ref['resolution'] = {
+                        'type': 'query_reference',
+                        'query_type': 'order_history',
+                        'filters': previous_filters
+                    }
+                    resolved_ref['entity_type'] = 'orders'
+                    resolved_ref['is_query_reference'] = True
+                else:
+                    # Handle other domain references
+                    entities = previous_entities.get(entity_type, [])
+                    if entities:
+                        resolved_ref['resolution'] = entities
+                        resolved_ref['entity_type'] = entity_type
+                    else:
+                        resolved_ref['is_ambiguous'] = True
+                        resolved_ref['entity_type'] = entity_type
+                        resolved_ref['resolution'] = None
+            
+            # Handle explicit references (like "the category")
             elif ref['type'] == 'explicit_reference':
-                entity_type = ref['entity_type']  # Already in plural form
+                entity_type = ref['entity_type']
+                
+                # Get active entities of this type
                 active_entities = context.get('active_entities', {})
                 entities = active_entities.get(entity_type, [])
                 
                 if entities:
-                    # Use the most recent entity of the specified type
-                    resolved_ref['resolution'] = entities[-1]
-                    # entity_type is already set
+                    if ref.get('plurality') == 'singular' or len(entities) == 1:
+                        # Use the most recent entity for singular reference or when only one entity exists
+                        resolved_ref['resolution'] = entities[-1]
+                    else:
+                        # Use all entities of this type for plural references
+                        resolved_ref['resolution'] = entities
                 else:
                     resolved_ref['is_ambiguous'] = True
                     resolved_ref['resolution'] = None

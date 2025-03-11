@@ -46,14 +46,36 @@ BASE_QUERY_RULES: Dict[str, str] = {
 }
 
 ORDER_FILTERS: Dict[str, str] = {
-    "time_filter": "Use: (o.updated_at - INTERVAL '7 hours')::date for date filtering",
-    "status_filter": "Always include explicit status filtering: o.status IN (7) for completed orders",
+    "time_filter": "Use: (orders.updated_at - INTERVAL '7 hours')::date for date filtering",
+    "status_filter": "Always include explicit status filtering: orders.status IN (7) for completed orders",
+    "customer_filter": "Use orders.customer_id = users.id when joining to users table for customer information"
 }
 
 # Using DEFAULT_LOCATION_ID imported from business_rules.py
 # No longer duplicated here
 
 DEFAULT_BUSINESS_METRICS: Dict[str, Any] = BUSINESS_METRICS
+
+# Add schema reference to ensure correct field usage
+DATABASE_SCHEMA_REFERENCE = {
+    "orders": {
+        "primary_key": "id",
+        "customer_reference": "customer_id",  # Not user_id
+        "related_tables": ["order_items", "order_option_items", "order_ratings", "discounts"],
+        "status_field": "status",
+        "location_field": "location_id",
+        "types": ORDER_TYPES,
+        "statuses": ORDER_STATUS
+    },
+    "locations": {
+        "primary_key": "id",
+        "related_tables": ["menus", "location_hours", "api_keys", "markers"]
+    },
+    "users": {
+        "primary_key": "id",
+        "related_tables": ["identities", "roles"]
+    }
+}
 
 def get_status_name(status_code: int) -> str:
     """

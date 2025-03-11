@@ -297,6 +297,12 @@ class ResponseGenerator:
             error: Error message if the API call failed (optional)
         """
         try:
+            # Add this check at the beginning of the method
+            if api_name == "elevenlabs" and isinstance(response_data, bytes):
+                # Log only the size of binary data, not the content
+                logger.info(f"ElevenLabs API call returned {len(response_data)} bytes of audio data")
+                response_data = f"[AUDIO_DATA: {len(response_data)} bytes]"
+            
             # Generate a unique call ID
             call_id = secrets.token_hex(4)
             
@@ -844,7 +850,6 @@ in a professional and helpful manner."""
         try:
             # Detect if it's a tabular result set (all items have the same keys)
             if len(results) > 0 and all(set(r.keys()) == set(results[0].keys()) for r in results):
-                # Format for table display
                 table_guidance = f"""
                 These results are tabular data with {len(results)} rows and the following columns: 
                 {", ".join(results[0].keys())}.
@@ -853,30 +858,37 @@ in a professional and helpful manner."""
                 """
                 
                 # Determine if it's a menu result
-                if category == "menu" and any(k in results[0].keys() for k in ["name", "price", "description"]):
-                    return f"""
-                    MENU DATA (can be presented as a table):
-                    {basic_format}
-                    
-                    This appears to be menu item data. Consider organizing it into a clear menu format,
-                    with item names, prices, and descriptions properly aligned.
-                    """
+                if category == "menu":
+                    if "price" in results[0]:
+                        return f"""
+                        MENU DATA (can be presented as a table):
+                        {basic_format}
+                        
+                        This appears to be menu item data from the 'items' table. Consider organizing it into a clear menu format,
+                        with item names, prices, and descriptions properly aligned.
+                        """
+                    elif "name" in results[0] and "description" in results[0]:
+                        return f"""
+                        MENU DATA (from the menus table, without price info):
+                        {basic_format}
+                        
+                        This appears to be menu data. Consider organizing it clearly, even though price information is not included.
+                        """
                 
                 # Determine if it's an order history result
-                if category == "order_history" and any(k in results[0].keys() for k in ["order_id", "date", "amount"]):
+                if category == "order_history" and "id" in results[0] and "created_at" in results[0] and "total" in results[0]:
                     return f"""
                     ORDER HISTORY DATA (can be presented as a table):
                     {basic_format}
                     
-                    This appears to be order history data. Consider organizing it chronologically
-                    and highlighting key information like dates, order IDs, and amounts.
+                    This appears to be order history data from the 'orders' table. Consider organizing it chronologically
+                    and highlighting key information like the order ID, date (created_at), and total amount.
                     """
                 
                 return f"{table_guidance}\n\n{basic_format}"
             
             # Check if it might be data appropriate for a chart
             if category == "analysis" and len(results) > 0:
-                # Look for numeric values that might be plotted
                 numeric_keys = [k for k, v in results[0].items() if isinstance(v, (int, float))]
                 if numeric_keys and any(k for k in results[0].keys() if k in ["date", "month", "year", "category"]):
                     return f"""
@@ -887,7 +899,6 @@ in a professional and helpful manner."""
                     as a chart or graph. Consider describing the key trends or patterns in this data.
                     """
             
-            # Default return with basic formatting
             return basic_format
             
         except Exception as e:
@@ -1035,8 +1046,6 @@ in a professional and helpful manner."""
                 logger.warning("No verbal text was generated to convert to speech")
                 return None
                 
-            # Remove logging of verbal text content
-            
             # Generate audio with ElevenLabs
             audio_data = self._elevenlabs_tts(verbal_text)
             
@@ -1242,23 +1251,19 @@ in a professional and helpful manner."""
                         logger.error(f"Direct verbal text generation failed: {str(e)}")
                 
                 if verbal_text:
-                    # Remove logging of verbal text content
-                    logger.info("Generated verbal text")
+                    # Removed all logging related to verbal text
                     try:
-                        # Generate TTS only once
-                        logger.info("Attempting to generate verbal audio...")
+                        # Generate TTS with no logging
                         verbal_audio = self._elevenlabs_tts(verbal_text)
-                        if verbal_audio:
-                            # Only log that audio was generated, without content/size details
-                            logger.info("Successfully generated verbal audio")
-                        else:
-                            logger.error("Failed to generate verbal audio from ElevenLabs TTS")
+                        # No success logging
                     except Exception as e:
-                        logger.error(f"Error in TTS generation: {str(e)}")
+                        # Keep error logging but remove verbal details
+                        logger.error("Error in TTS generation")
                         import traceback
                         logger.error(f"Stack trace: {traceback.format_exc()}")
                 else:
-                    logger.error("No verbal text was generated")
+                    # Removed all warnings about verbal text
+                    pass
             except Exception as e:
                 logger.error(f"Error in verbal text generation: {str(e)}")
                 import traceback
@@ -1272,13 +1277,10 @@ in a professional and helpful manner."""
             if verbal_audio:
                 text_response["verbal_audio"] = verbal_audio
                 text_response["verbal_text"] = verbal_text
-                # Only log that audio was added, without mentioning the audio data itself
-                logger.info("Added verbal audio to response")
+                # Removed all logging about verbal audio
             else:
-                if verbal_text:
-                    logger.warning("Verbal text was generated but no verbal audio was produced")
-                else:
-                    logger.warning("No verbal text or audio generated")
+                # Removed all warnings about verbal audio
+                pass
                 
         except Exception as e:
             logger.error(f"Error in generate_with_verbal: {str(e)}")
@@ -1345,6 +1347,10 @@ in a professional and helpful manner."""
             Audio data as bytes, or None if generation failed
         """
         try:
+            # Disable logging for this function
+            original_level = logging.getLogger().level
+            logging.getLogger().setLevel(logging.ERROR)
+            
             if not text or not text.strip():
                 logger.warning("Cannot generate TTS with empty text")
                 return None
@@ -1453,7 +1459,8 @@ in a professional and helpful manner."""
                 return None
                 
         except Exception as e:
-            # Log the failed API call without detailed error information
+            # Restore logging level
+            logging.getLogger().setLevel(original_level)
             logger.error(f"Error calling ElevenLabs API: {str(e)}")
             import traceback
             logger.error(f"Stack trace: {traceback.format_exc()}")

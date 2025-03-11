@@ -16,6 +16,10 @@ logger = get_logger(__name__)
 class ResponsePromptBuilder:
     """
     Builds prompts for the Response Service using templates.
+    
+    Note: This class expects the SQL query results to conform to the database schema defined in 
+    resources/database_fields.md. In particular, any columns returned (e.g., for menu items from the
+    "items" table, or order details from the "orders" table) should match the documented fields.
     """
     
     def __init__(self, config=None):

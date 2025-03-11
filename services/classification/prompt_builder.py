@@ -26,6 +26,7 @@ class ClassificationPromptBuilder:
         """
         self.config = config or {}
         self.prompt_loader = get_prompt_loader()
+        self.db_schema = {}  # Initialize empty database schema
         
         # Initialize query categories and analysis types
         self._init_categories()
@@ -46,28 +47,27 @@ class ClassificationPromptBuilder:
         """Initialize schemas for parameters that should be extracted for each query type."""
         self.parameter_schemas = {
             "order_history": {
-                "time_period": "String describing the time period for query (e.g., 'last month', 'between January and March')",
-                "entities": "Array of menu item names, categories, or other entities mentioned",
-                "filters": "Array of filter conditions, each with field, operator, and value",
-                "sort": "Optional object with field to sort by and order direction",
-                "limit": "Optional integer for limiting result count",
-                "aggregation": "Optional aggregation function (sum, avg, count, etc.)"
+                "time_period": "String describing the time period for query (e.g., 'last month', '2025-02-21'). Applies to the 'orders' table using fields like created_at or updated_at.",
+                "filters": "Array of filter conditions, each with 'field', 'operator', and 'value'. Fields should match columns in the 'orders' table (e.g., total, status).",
+                "sort": "Optional object with 'field' (e.g., total, created_at) and 'order' (asc or desc) for sorting orders.",
+                "limit": "Optional integer specifying the maximum number of orders to return.",
+                "aggregation": "Optional aggregation function (SUM, AVG, COUNT, etc.) applied to a numeric field."
             },
             "menu": {
-                "entities": "Array of menu item names, categories, or other entities mentioned",
-                "attributes": "Array of attributes to include (price, description, options, etc.)",
-                "filters": "Optional array of filter conditions"
+                "entities": "Array of menu item names or category names. Should correspond with 'items' and 'categories' table columns.",
+                "attributes": "Array of attributes to include (e.g., name, price, description) from the 'items' table.",
+                "filters": "Optional array of filter conditions for menu items."
             },
             "action": {
-                "action": "String describing the action (update_price, disable_item, enable_option, etc.)",
-                "entities": "Array of menu item names, options, or categories to act upon",
-                "values": "Object containing values for the action (e.g., {price: 9.99})"
+                "action": "String describing the action (e.g., update_price, disable_item) that maps to an operation on a specific table field.",
+                "entities": "Array of target entity names (e.g., item names from the 'items' table).",
+                "values": "Object containing the values for the action (e.g., {price: 9.99})."
             },
             "general": {
-                "subject": "Optional string describing the general subject of the question"
+                "subject": "Optional string describing the general subject of the query."
             },
             "follow_up": {
-                "refers_to": "String describing what the follow-up refers to (e.g., 'previous_query', 'last_item')"
+                "refers_to": "String indicating the reference of the follow-up (e.g., 'previous_query', 'last_item')."
             }
         }
     
@@ -91,7 +91,7 @@ class ClassificationPromptBuilder:
                     "confidence": 0.92,
                     "parameters": {
                         "time_period": "all time",
-                        "sort": {"field": "quantity", "order": "desc"},
+                        "sort": {"field": "total", "order": "desc"},
                         "limit": 1
                     }
                 }
@@ -206,6 +206,16 @@ You must ALWAYS respond with a valid JSON object containing these keys.
     def is_valid_query_type(self, query_type: str) -> bool:
         """Check if a query type is valid."""
         return query_type in self.query_categories
+    
+    def set_database_schema(self, schema: Dict[str, List[str]]) -> None:
+        """
+        Set the database schema information for classification context.
+        
+        Args:
+            schema: A dictionary mapping table names to lists of column names
+        """
+        self.db_schema = schema
+        logger.info(f"Prompt builder database schema set with {len(schema)} tables")
 
 
 # Singleton instance for shared use

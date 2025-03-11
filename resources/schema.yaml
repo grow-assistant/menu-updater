@@ -1,0 +1,715 @@
+tables:
+  api_keys:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('api_keys_id_seq'::regclass)
+      api_key:
+        type: uuid
+        default: uuid_generate_v4()
+      location_id:
+        type: integer
+        nullable: false
+        references: locations.id
+      name:
+        type: character varying(255)
+        nullable: false
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+
+  categories:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('categories_id_seq'::regclass)
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      name:
+        type: text
+      description:
+        type: text
+      menu_id:
+        type: integer
+        nullable: false
+        references: menus.id
+      disabled:
+        type: boolean
+      start_time:
+        type: smallint
+      end_time:
+        type: smallint
+      seq_num:
+        type: integer
+        default: 0
+
+  device_sessions:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('device_sessions_id_seq'::regclass)
+      device_token:
+        type: text
+      device_type:
+        type: integer
+        nullable: false
+      user_id:
+        type: integer
+        nullable: false
+        references: users.id
+      expires_at:
+        type: timestamp with time zone
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+
+  discounts:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('discounts_id_seq'::regclass)
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      order_id:
+        type: integer
+        nullable: false
+        references: orders.id
+      user_id:
+        type: integer
+        nullable: false
+        references: users.id
+      amount:
+        type: numeric
+        nullable: false
+      reason:
+        type: text
+
+  identities:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('identities_id_seq'::regclass)
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      provider:
+        type: text
+      uid:
+        type: text
+      user_id:
+        type: integer
+        nullable: false
+        references: users.id
+      picture:
+        type: text
+
+  indicators:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('indicators_id_seq'::regclass)
+      name:
+        type: character varying(255)
+        nullable: false
+      uid:
+        type: character varying(255)
+      location_id:
+        type: integer
+        nullable: false
+        references: locations.id
+      api_key_id:
+        type: integer
+        nullable: false
+        references: api_keys.id
+      status:
+        type: integer
+        nullable: false
+      last_contact:
+        type: timestamp with time zone
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      version:
+        type: character varying(10)
+
+  items:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('items_id_seq'::regclass)
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      name:
+        type: text
+      description:
+        type: text
+      price:
+        type: numeric
+        nullable: false
+      category_id:
+        type: integer
+        nullable: false
+        references: categories.id
+      disabled:
+        type: boolean
+      seq_num:
+        type: integer
+        default: 0
+
+  location_hours:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('location_hours_id_seq'::regclass)
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      location_id:
+        type: integer
+        nullable: false
+        references: locations.id
+      day_of_week:
+        type: character varying(10)
+      time_slot:
+        type: integer
+      open_time:
+        type: time without time zone
+      close_time:
+        type: time without time zone
+
+  locations:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('locations_id_seq'::regclass)
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      name:
+        type: text
+      description:
+        type: text
+      timezone:
+        type: text
+        nullable: false
+      latitude:
+        type: double precision
+      longitude:
+        type: double precision
+      active:
+        type: boolean
+        nullable: false
+        default: TRUE
+      disabled:
+        type: boolean
+        nullable: false
+        default: FALSE
+      code:
+        type: text
+      tax_rate:
+        type: numeric
+        default: 0
+      settings:
+        type: json
+
+  markers:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('markers_id_seq'::regclass)
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      name:
+        type: text
+      disabled:
+        type: boolean
+        default: FALSE
+      location_id:
+        type: integer
+        nullable: false
+        references: locations.id
+
+  menus:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('menus_id_seq'::regclass)
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      name:
+        type: text
+      description:
+        type: text
+      location_id:
+        type: integer
+        nullable: false
+        references: locations.id
+      disabled:
+        type: boolean
+
+  messages:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('messages_id_seq'::regclass)
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      content:
+        type: text
+      sender_id:
+        type: integer
+        nullable: false
+        references: users.id
+      recipient_id:
+        type: integer
+        nullable: false
+        references: users.id
+      order_id:
+        type: integer
+        nullable: false
+        references: orders.id
+      read:
+        type: boolean
+        default: FALSE
+
+  option_items:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('option_items_id_seq'::regclass)
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      name:
+        type: text
+      description:
+        type: text
+      price:
+        type: numeric
+        nullable: false
+      option_id:
+        type: integer
+        nullable: false
+        references: options.id
+      disabled:
+        type: boolean
+
+  options:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('options_id_seq'::regclass)
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      name:
+        type: text
+      description:
+        type: text
+      min:
+        type: integer
+        nullable: false
+      max:
+        type: integer
+        nullable: false
+      item_id:
+        type: integer
+        nullable: false
+        references: items.id
+      disabled:
+        type: boolean
+
+  order_items:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('order_items_id_seq'::regclass)
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      item_id:
+        type: integer
+        nullable: false
+        references: items.id
+      quantity:
+        type: integer
+        nullable: false
+      order_id:
+        type: integer
+        nullable: false
+        references: orders.id
+      instructions:
+        type: text
+
+  order_option_items:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('order_option_items_id_seq'::regclass)
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      order_item_id:
+        type: integer
+        nullable: false
+        references: order_items.id
+      order_id:
+        type: integer
+        nullable: false
+        references: orders.id
+      option_item_id:
+        type: integer
+        nullable: false
+        references: option_items.id
+
+  order_ratings:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('order_ratings_id_seq'::regclass)
+      order_id:
+        type: integer
+        nullable: false
+        references: orders.id
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      acknowledged:
+        type: boolean
+        default: FALSE
+
+  order_ratings_feedback:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('order_ratings_feedback_id_seq'::regclass)
+      value:
+        type: integer
+        nullable: false
+      notes:
+        type: character varying(255)
+      rating_id:
+        type: integer
+        nullable: false
+        references: order_ratings.id
+      category_id:
+        type: integer
+        nullable: false
+        references: rating_categories.id
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+
+  order_ratings_feedback_responses:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('order_ratings_feedback_responses_id_seq'::regclass)
+      feedback_id:
+        type: integer
+        nullable: false
+        references: order_ratings_feedback.id
+      response_id:
+        type: integer
+        nullable: false
+        references: rating_responses.id
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+
+  orders:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('orders_id_seq'::regclass)
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      customer_id:
+        type: integer
+        nullable: false
+        references: users.id
+      vendor_id:
+        type: integer
+        nullable: false
+        references: users.id
+      location_id:
+        type: integer
+        nullable: false
+        references: locations.id
+      status:
+        type: integer
+        nullable: false
+      total:
+        type: numeric
+        nullable: false
+      tax:
+        type: numeric
+        nullable: false
+      instructions:
+        type: text
+      type:
+        type: integer
+        nullable: false
+      marker_id:
+        type: integer
+        nullable: false
+        references: markers.id
+      fee:
+        type: numeric
+        default: 0
+      loyalty_id:
+        type: character varying(255)
+      fee_percent:
+        type: numeric
+        default: 0
+      tip:
+        type: numeric
+        default: 0
+
+  promotions:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('promotions_id_seq'::regclass)
+      name:
+        type: character varying(255)
+        nullable: false
+      code:
+        type: character varying(25)
+        nullable: false
+      description:
+        type: text
+      location_id:
+        type: integer
+        nullable: false
+        references: locations.id
+      value:
+        type: double precision
+        nullable: false
+      type:
+        type: integer
+        nullable: false
+      disabled:
+        type: boolean
+        default: FALSE
+      expires:
+        type: timestamp with time zone
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      single_use:
+        type: boolean
+        default: FALSE
+      used:
+        type: boolean
+        default: FALSE
+
+  rating_categories:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('rating_categories_id_seq'::regclass)
+      label:
+        type: character varying(255)
+        nullable: false
+      description:
+        type: character varying(25)
+        nullable: false
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+
+  rating_responses:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('rating_responses_id_seq'::regclass)
+      label:
+        type: character varying(255)
+        nullable: false
+      description:
+        type: character varying(25)
+        nullable: false
+      category_id:
+        type: integer
+        nullable: false
+        references: rating_categories.id
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+
+  role_types:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('role_types_id_seq'::regclass)
+      name:
+        type: text
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+
+  roles:
+    fields:
+      user_id:
+        type: integer
+        nullable: false
+        references: users.id
+      location_id:
+        type: integer
+        nullable: false
+        references: locations.id
+      role_id:
+        type: integer
+        nullable: false
+        references: role_types.id
+
+  schema_migrations:
+    fields:
+      version:
+        type: bigint
+        nullable: false
+      dirty:
+        type: boolean
+        nullable: false
+
+  user_locations:
+    fields:
+      user_id:
+        type: integer
+        nullable: false
+        references: users.id
+      latitude:
+        type: double precision
+        nullable: false
+      longitude:
+        type: double precision
+        nullable: false
+      updated_at:
+        type: timestamp with time zone
+
+  users:
+    fields:
+      id:
+        type: integer
+        nullable: false
+        default: nextval('users_id_seq'::regclass)
+      created_at:
+        type: timestamp with time zone
+      updated_at:
+        type: timestamp with time zone
+      deleted_at:
+        type: timestamp with time zone
+      first_name:
+        type: text
+      last_name:
+        type: text
+      email:
+        type: text
+      picture:
+        type: text
+      phone:
+        type: text 

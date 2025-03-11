@@ -18,11 +18,11 @@ OPENAI_API_KEY=your_openai_api_key_here
 ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
 
 # Database Configuration
-DB_CONNECTION_STRING=postgresql://user:password@localhost:5432/dbname
+DB_CONNECTION_STRING=postgresql://user:password@localhost:5433/dbname
 DB_USER=your_db_user
 DB_PASSWORD=your_db_password
 DB_HOST=localhost
-DB_PORT=5432
+DB_PORT=5433
 DB_NAME=your_db_name
 
 # Application Settings

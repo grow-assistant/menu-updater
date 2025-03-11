@@ -518,59 +518,70 @@ class DatabaseConnectionManager:
         status["response_time"] = time.time() - start_time
         return status
     
+    def _extract_table_name(self, sql_query: str) -> Optional[str]:
+        """
+        Extract the first table name from the SQL query's FROM clause.
+        This simple implementation assumes a single-table (or main table) query.
+        """
+        match = re.search(r'FROM\s+([\w_]+)', sql_query, re.IGNORECASE)
+        if match:
+            return match.group(1).lower()
+        return None
+
     def _preprocess_query(self, sql_query: str, params: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
         """
         Preprocess a SQL query before execution.
-        
+
         This can include:
-        - Adding location_id filters
+        - Adding location_id filters (if the target table supports the field)
         - SQL injection prevention
         - Query normalization
         - Parameter type handling
-        
+
         Args:
             sql_query: The original SQL query
             params: The original parameters
-            
+
         Returns:
             Tuple of (processed_query, processed_params)
         """
         processed_query = sql_query
         processed_params = params.copy()
-        
-        # Add location_id filter if present in params but not in query
+
+        # Add location_id filter if present in params but not in query.
+        # Only add if the query targets a table that has a "location_id" field.
         if "location_id" in processed_params and "location_id" not in processed_query:
-            # Only modify SELECT queries
             if self._is_select_query(processed_query):
-                # Check if there's a WHERE clause
-                if "WHERE" in processed_query.upper():
-                    # Add to existing WHERE clause
-                    processed_query = re.sub(
-                        r"\bWHERE\b",
-                        "WHERE location_id = :location_id AND ",
-                        processed_query,
-                        flags=re.IGNORECASE
-                    )
-                else:
-                    # Find position to insert WHERE clause (after FROM table_name)
-                    from_match = re.search(r"\bFROM\s+\w+", processed_query, re.IGNORECASE)
-                    if from_match:
-                        insert_pos = from_match.end()
-                        processed_query = (
-                            processed_query[:insert_pos] + 
-                            " WHERE location_id = :location_id" + 
-                            processed_query[insert_pos:]
-                        )
-        
+                table_name = self._extract_table_name(sql_query)
+                if table_name:
+                    schema = self.get_table_schema(table_name, refresh=False)
+                    # Get a list of column names from the table schema
+                    columns = [col["name"] for col in schema.get("columns", [])]
+                    if "location_id" in columns:
+                        if "WHERE" in processed_query.upper():
+                            processed_query = re.sub(
+                                r"\bWHERE\b",
+                                "WHERE location_id = :location_id AND ",
+                                processed_query,
+                                flags=re.IGNORECASE
+                            )
+                        else:
+                            from_match = re.search(r"\bFROM\s+\w+", processed_query, re.IGNORECASE)
+                            if from_match:
+                                insert_pos = from_match.end()
+                                processed_query = (
+                                    processed_query[:insert_pos] +
+                                    " WHERE location_id = :location_id" +
+                                    processed_query[insert_pos:]
+                                )
+
         # Handle parameter types
         for key, value in processed_params.items():
-            # Convert datetime to ISO format string
             if isinstance(value, datetime):
                 processed_params[key] = value.isoformat()
-            # Convert lists to JSON strings
             elif isinstance(value, (list, dict)):
                 processed_params[key] = json.dumps(value)
-        
+
         return processed_query, processed_params
     
     def _is_select_query(self, sql_query: str) -> bool:
