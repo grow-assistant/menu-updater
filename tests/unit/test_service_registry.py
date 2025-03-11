@@ -8,6 +8,9 @@ from typing import Dict, Any
 from services.utils.service_registry import ServiceRegistry
 
 
+# Save the original get_service method to restore after tests
+original_get_service = ServiceRegistry.get_service
+
 class TestServiceRegistry:
     """Test class for the ServiceRegistry."""
 
@@ -16,6 +19,14 @@ class TestServiceRegistry:
         # Reset the class variables before each test
         ServiceRegistry._services = {}
         ServiceRegistry._config = None
+        
+        # Restore the original get_service method
+        ServiceRegistry.get_service = original_get_service
+
+    def teardown_method(self):
+        """Cleanup after each test."""
+        # Restore the original get_service method
+        ServiceRegistry.get_service = original_get_service
 
     def test_initialize(self):
         """Test initializing the service registry."""

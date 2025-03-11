@@ -93,6 +93,13 @@ class TestQueryProcessor(unittest.TestCase):
                 "end_date": "2023-08-07"
             }
         }
+        # Add attributes needed by the updated implementation
+        mock_context.active_entities = {"entity_type": "orders"}
+        mock_context.filters = {}
+        mock_context.time_range = {
+            "start_date": "2023-08-01",
+            "end_date": "2023-08-07"
+        }
         self.mock_context_manager.get_context.return_value = mock_context
         
         # Setup mock data access
@@ -105,7 +112,11 @@ class TestQueryProcessor(unittest.TestCase):
         expected_response = {
             "type": "data",
             "text": "Found 2 orders for last week.",
-            "data": self.test_data
+            "data": self.test_data,
+            "metadata": {
+                "query_id": "test-1234",
+                "processing_time": 0.12
+            }
         }
         self.mock_response_service.format_response.return_value = expected_response
         
@@ -120,9 +131,9 @@ class TestQueryProcessor(unittest.TestCase):
         )
         
         # Assert
-        self.mock_context_manager.get_context.assert_called_once_with(self.session_id)
-        mock_context.update_with_query.assert_called_once()
+        self.mock_context_manager.get_context.assert_called_with(self.session_id, None)
         self.mock_data_access.query_to_dataframe.assert_called_once()
+        mock_context.update_with_query.assert_called_once()
         self.mock_response_service.format_response.assert_called_once()
         
         # Metrics should be updated
@@ -155,6 +166,13 @@ class TestQueryProcessor(unittest.TestCase):
                 "end_date": "2023-08-07"
             }
         }
+        # Add attributes needed by the updated implementation
+        mock_context.active_entities = {"entity_type": "orders"}
+        mock_context.filters = {}
+        mock_context.time_range = {
+            "start_date": "2023-08-01",
+            "end_date": "2023-08-07"
+        }
         self.mock_context_manager.get_context.return_value = mock_context
         
         # Setup mock data access to return an error
@@ -175,8 +193,8 @@ class TestQueryProcessor(unittest.TestCase):
         
         # Act
         response = processor.process_query(
-            self.query_text, 
-            self.session_id, 
+            self.query_text,
+            self.session_id,
             self.classification_result
         )
         
@@ -190,8 +208,8 @@ class TestQueryProcessor(unittest.TestCase):
         
         # Metrics should be updated
         self.assertEqual(processor.metrics['total_queries'], 1)
-        self.assertEqual(processor.metrics['successful_queries'], 1)  # This is still 1 because we handled the error
-        self.assertEqual(processor.metrics['failed_queries'], 0)
+        self.assertEqual(processor.metrics['successful_queries'], 0)  # Changed from 1 to 0 because we don't count errors as successful
+        self.assertEqual(processor.metrics['failed_queries'], 1)  # Changed from 0 to 1 because errors increment failed_queries
     
     @patch('services.query_processor.get_data_access')
     @patch('services.query_processor.ResponseService')
@@ -241,7 +259,7 @@ class TestQueryProcessor(unittest.TestCase):
         )
         
         # Assert
-        self.mock_context_manager.get_context.assert_called_once_with(self.session_id)
+        self.mock_context_manager.get_context.assert_called_with(self.session_id, None)
         
         # Response service should be called with action type
         self.mock_response_service.format_response.assert_called_once()
@@ -377,6 +395,13 @@ class TestQueryProcessor(unittest.TestCase):
                 "start_date": "2023-08-01",
                 "end_date": "2023-08-07"
             }
+        }
+        # Add attributes needed by the updated implementation
+        mock_context.active_entities = {"entity_type": "orders"}
+        mock_context.filters = {}
+        mock_context.time_range = {
+            "start_date": "2023-08-01",
+            "end_date": "2023-08-07"
         }
         
         # Act

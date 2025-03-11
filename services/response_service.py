@@ -14,6 +14,7 @@ import random
 from datetime import datetime, timedelta
 import string
 import traceback
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -676,16 +677,18 @@ class ResponseService:
     
     def health_check(self) -> Dict[str, Any]:
         """
-        Perform a health check on the response service.
+        Check the health of the response service.
         
         Returns:
-            Dict with health status information
+            Dictionary with health information
         """
+        # Setup status response
         status = {
             "service": "response_service",
             "status": "ok",
             "template_types": len(self.templates),
-            "total_templates": sum(len(templates) for templates in self.templates.values())
+            "total_templates": sum(len(templates) for templates in self.templates.values()),
+            "timestamp": datetime.now().isoformat()
         }
         
         # Test template rendering
@@ -699,4 +702,225 @@ class ResponseService:
             status["error"] = str(e)
             logger.error(f"Template test failed in health check: {e}")
         
-        return status 
+        return status
+    
+    async def health_check_async(self) -> Dict[str, Any]:
+        """
+        Async version of the health check.
+        
+        Returns:
+            Dictionary with health information
+        """
+        # Run health check in a thread pool since it's not IO-bound
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.health_check)
+    
+    def format_error_response(self, 
+                            error_type: str,
+                            error_message: str,
+                            query_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Format an error response for the client.
+        
+        Args:
+            error_type: Type of error (e.g., database_error, parsing_error)
+            error_message: Human-readable error message
+            query_info: Information about the query that caused the error
+            
+        Returns:
+            Formatted error response
+        """
+        # Get recovery suggestion
+        recovery_suggestion = self.RECOVERY_SUGGESTIONS.get(
+            error_type, 
+            self.RECOVERY_SUGGESTIONS.get("default", "Please try again with a different query.")
+        )
+        
+        # Generate template variables
+        template_vars = {
+            "error_type": error_type,
+            "error_message": error_message,
+            "recovery_suggestion": recovery_suggestion,
+            "query": query_info.get("query_text", "")
+        }
+        
+        # Fill template
+        error_text = self._select_and_fill_template("error_response", template_vars)
+        
+        # Create response
+        response = {
+            "type": "error",
+            "text": error_text,
+            "error": error_type,
+            "details": {
+                "error_message": error_message,
+                "recovery_suggestion": recovery_suggestion
+            }
+        }
+        
+        return response
+    
+    async def format_error_response_async(self, 
+                                       error_type: str,
+                                       error_message: str,
+                                       query_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Async version of format_error_response.
+        
+        Args:
+            error_type: Type of error (e.g., database_error, parsing_error)
+            error_message: Human-readable error message
+            query_info: Information about the query that caused the error
+            
+        Returns:
+            Formatted error response
+        """
+        # Run in a thread pool since it's not IO-bound
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.format_error_response, error_type, error_message, query_info
+        )
+    
+    def format_clarification_response(self,
+                                  clarification_type: str,
+                                  clarification_subject: str,
+                                  query_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Format a clarification request for the client.
+        
+        Args:
+            clarification_type: Type of clarification needed (e.g., ambiguous_entity, missing_parameter)
+            clarification_subject: Subject requiring clarification
+            query_info: Information about the query
+            
+        Returns:
+            Formatted clarification response
+        """
+        # Generate template variables
+        template_vars = {
+            "clarification_type": clarification_type,
+            "clarification_subject": clarification_subject,
+            "query": query_info.get("query_text", "")
+        }
+        
+        # Fill template
+        clarification_text = self._select_and_fill_template("clarification_response", template_vars)
+        
+        # Create response
+        response = {
+            "type": "clarification",
+            "text": clarification_text,
+            "requires_response": True,
+            "clarification_type": clarification_type,
+            "clarification_subject": clarification_subject
+        }
+        
+        return response
+    
+    async def format_clarification_response_async(self,
+                                             clarification_type: str,
+                                             clarification_subject: str,
+                                             query_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Async version of format_clarification_response.
+        
+        Args:
+            clarification_type: Type of clarification needed (e.g., ambiguous_entity, missing_parameter)
+            clarification_subject: Subject requiring clarification
+            query_info: Information about the query
+            
+        Returns:
+            Formatted clarification response
+        """
+        # Run in a thread pool since it's not IO-bound
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.format_clarification_response, 
+            clarification_type, clarification_subject, query_info
+        )
+        
+    async def format_response_async(self, 
+                              response_type: str, 
+                              data: Optional[Any] = None, 
+                              context: Optional[Dict[str, Any]] = None,
+                              metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Async version of format_response. Format a response based on type and data.
+        
+        Args:
+            response_type: Type of response to generate
+            data: The data to include in the response
+            context: Conversation context information
+            metadata: Additional metadata for response formatting
+            
+        Returns:
+            Formatted response dictionary
+        """
+        # Run in a thread pool since it's not IO-bound
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.format_response, response_type, data, context, metadata
+        )
+        
+    async def data_response_async(self, 
+                            data: Union[List[Dict[str, Any]], pd.DataFrame, Dict[str, Any]], 
+                            context: Dict[str, Any],
+                            metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Async version of data_response. Format a data response.
+        
+        Args:
+            data: The data to include in the response
+            context: Conversation context
+            metadata: Additional metadata for formatting
+            
+        Returns:
+            Formatted data response
+        """
+        # Run in a thread pool since it's not IO-bound
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.data_response, data, context, metadata
+        )
+        
+    async def action_response_async(self, 
+                              data: Dict[str, Any], 
+                              context: Dict[str, Any],
+                              metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Async version of action_response. Format a response to an action request.
+        
+        Args:
+            data: Action result data
+            context: Conversation context
+            metadata: Additional metadata for formatting
+            
+        Returns:
+            Formatted action response
+        """
+        # Run in a thread pool since it's not IO-bound
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.action_response, data, context, metadata
+        )
+        
+    async def error_response_async(self, 
+                             data: Dict[str, Any], 
+                             context: Dict[str, Any],
+                             metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Async version of error_response. Format an error response.
+        
+        Args:
+            data: Error data
+            context: Conversation context
+            metadata: Additional metadata for formatting
+            
+        Returns:
+            Formatted error response
+        """
+        # Run in a thread pool since it's not IO-bound
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.error_response, data, context, metadata
+        ) 

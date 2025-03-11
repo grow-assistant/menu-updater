@@ -11,6 +11,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 import time
 from datetime import datetime
+import pandas as pd
 
 from services.utils.error_handler import ErrorHandler, ErrorTypes, error_handler
 from services.query_processor import QueryProcessor
@@ -66,11 +67,14 @@ class TestQueryProcessorErrorHandling(unittest.TestCase):
         mock_cm_class.return_value = self.mock_context_manager
         
         # Set up mock data access error
-        self.mock_data_access.execute_query.return_value = {
-            "error": True,
-            "error_type": "database_query",
-            "message": "SQL syntax error"
-        }
+        self.mock_data_access.query_to_dataframe.return_value = (
+            pd.DataFrame(),  # Empty DataFrame
+            {
+                "success": False,
+                "error": "SQL syntax error",
+                "error_type": "database_query"
+            }
+        )
         
         # Set up mock response service
         self.mock_response_service.format_response.return_value = {
@@ -103,7 +107,7 @@ class TestQueryProcessorErrorHandling(unittest.TestCase):
         # Assert
         self.assertEqual(response["type"], "error")
         self.assertEqual(response["error"], "sql_execution_error")
-        self.mock_data_access.execute_query.assert_called_once()
+        self.mock_data_access.query_to_dataframe.assert_called_once()
         mock_error_handler.handle_error.assert_not_called()  # shouldn't be called for expected errors
         
         # Check error metrics were updated
@@ -230,38 +234,37 @@ class TestQueryProcessorErrorHandling(unittest.TestCase):
     @patch('services.query_processor.ResponseService')
     @patch('services.query_processor.ContextManager')
     @patch('services.query_processor.error_handler')
-    def test_health_check_includes_error_metrics(self, mock_error_handler, mock_cm_class, 
+    def test_health_check_includes_error_metrics(self, mock_error_handler, mock_cm_class,
                                                mock_rs_class, mock_get_data_access):
         """Test that health check includes error handler health metrics."""
         # Arrange
         mock_get_data_access.return_value = self.mock_data_access
         mock_rs_class.return_value = self.mock_response_service
         mock_cm_class.return_value = self.mock_context_manager
-        
+
         # Set up mock health checks
-        self.mock_data_access.health_check.return_value = {"status": "healthy"}
+        self.mock_data_access.health_check.return_value = {"status": "ok"}
+        self.mock_response_service.health_check.return_value = {"status": "ok"}
         mock_error_handler.health_check.return_value = {
             "status": "healthy",
             "error_rate_1min": 0.0,
             "total_errors": 0
         }
-        
+
         # Create query processor
         processor = QueryProcessor(self.config)
         processor.data_access = self.mock_data_access
         processor.response_service = self.mock_response_service
         processor.context_manager = self.mock_context_manager
-        
+
         # Act
         health_status = processor.health_check()
-        
+
         # Assert
         self.assertEqual(health_status["status"], "healthy")
-        self.assertIn("error_handler", health_status["components"])
-        self.assertEqual(
-            health_status["components"]["error_handler"],
-            mock_error_handler.health_check.return_value
-        )
+        self.assertIn("error_stats", health_status)
+        self.assertEqual(health_status["error_stats"]["error_rate_1min"], 0.0)
+        self.assertEqual(health_status["error_stats"]["total_errors"], 0)
 
 if __name__ == '__main__':
     unittest.main() 

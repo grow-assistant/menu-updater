@@ -167,7 +167,7 @@ class TestDatabaseConnectionManager(unittest.TestCase):
         # Assert
         assert result["success"] is True
         assert len(result["data"]) == 3
-        assert result["rowcount"] == 3
+        assert result["row_count"] == 3
         assert result["execution_time"] > 0
     
     @patch('services.data.db_connection_manager.create_engine')

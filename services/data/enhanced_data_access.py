@@ -10,7 +10,9 @@ import pandas as pd
 import time
 import threading
 import json
+import asyncio
 from datetime import datetime
+import uuid
 
 from services.data.db_connection_manager import DatabaseConnectionManager
 from services.data.query_cache_manager import QueryCacheManager
@@ -29,6 +31,7 @@ class EnhancedDataAccess:
     - Query result standardization
     - Schema introspection
     - Transparent handling of database errors
+    - Asynchronous query execution support
     """
     
     def __init__(self, config: Dict[str, Any]):
@@ -49,6 +52,10 @@ class EnhancedDataAccess:
         # Tracked relations (for schema changes)
         self._tracked_tables: Set[str] = set()
         
+        # Event loop for async operations
+        self._loop = None
+        self._async_mode = config.get("async_mode", False)
+        
         # Register for cache invalidation when schema changes
         self.cache_manager.register_invalidation_callback(self._cache_invalidation_callback)
         
@@ -60,6 +67,16 @@ class EnhancedDataAccess:
         
         logger.info("Initialized EnhancedDataAccess layer")
     
+    def _get_event_loop(self):
+        """Get or create an event loop for async operations."""
+        if self._loop is None:
+            try:
+                self._loop = asyncio.get_event_loop()
+            except RuntimeError:
+                self._loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self._loop)
+        return self._loop
+
     def execute_query(self,
                      sql_query: str,
                      params: Optional[Dict[str, Any]] = None,
@@ -200,6 +217,222 @@ class EnhancedDataAccess:
             return pd.DataFrame(result["data"]), metadata
         else:
             return pd.DataFrame(), metadata
+            
+    async def query_to_dataframe_async(self, 
+                                   sql_query: str, 
+                                   params: Optional[Dict[str, Any]] = None,
+                                   use_cache: bool = True,
+                                   cache_ttl: Optional[int] = None,
+                                   timeout: Optional[int] = None) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+        """
+        Asynchronously execute a SQL query and return result as a pandas DataFrame.
+        
+        Args:
+            sql_query: SQL query to execute
+            params: Query parameters
+            use_cache: Whether to use query caching
+            cache_ttl: Cache time-to-live in seconds
+            timeout: Query timeout in seconds
+            
+        Returns:
+            Tuple of (DataFrame, metadata dict)
+              - Empty DataFrame on failure
+              - metadata contains success, timing, and error information
+        """
+        # First check the cache
+        cache_hit = False
+        start_time = time.time()
+        result = None
+        
+        if use_cache:
+            # Use the async cache method
+            cache_hit, cached_result = await self.cache_manager.get_async(sql_query, params)
+            if cache_hit:
+                result = cached_result
+                logger.debug(f"Async cache hit for query: {sql_query[:100]}...")
+        
+        if not cache_hit:
+            # Execute query asynchronously
+            try:
+                result = await self._execute_query_async(sql_query, params, timeout)
+                
+                # Cache the successful result if needed
+                if use_cache and result["success"]:
+                    is_select = sql_query.strip().lower().startswith("select")
+                    execution_time = result.get("execution_time", 0)
+                    
+                    # Use the async cache set method
+                    await self.cache_manager.set_async(
+                        sql_query, 
+                        params, 
+                        result, 
+                        is_select=is_select,
+                        execution_time=execution_time,
+                        ttl=cache_ttl
+                    )
+                    
+                    # Track tables for cache invalidation
+                    if self.cache_manager.should_cache_query(sql_query):
+                        for table in self._extract_tables_from_query(sql_query):
+                            self._tracked_tables.add(table)
+            except Exception as e:
+                logger.error(f"Async query execution error: {str(e)}")
+                result = {
+                    "success": False,
+                    "error": str(e),
+                    "data": [],
+                    "rowcount": 0,
+                    "execution_time": time.time() - start_time,
+                    "total_time": time.time() - start_time,
+                    "cached": False,
+                    "query_id": str(uuid.uuid4())
+                }
+                self._log_query_execution(result, sql_query)
+        
+        # Calculate total query time including cache lookup
+        total_time = time.time() - start_time
+        
+        # Update query timing stats
+        if "total_time" in result:
+            result["total_time"] = total_time
+            
+        # Prepare metadata dict
+        metadata = {
+            "success": result["success"],
+            "cached": result.get("cached", False),
+            "execution_time": result.get("execution_time", 0),
+            "total_time": result["total_time"],
+            "rowcount": result.get("rowcount", 0),
+            "error": result.get("error", None),
+            "query_id": result.get("query_id", str(uuid.uuid4()))
+        }
+        
+        # Convert to dataframe if successful
+        if result["success"] and isinstance(result.get("data", None), list):
+            return pd.DataFrame(result["data"]), metadata
+        else:
+            return pd.DataFrame(), metadata
+            
+    async def _execute_query_async(self, 
+                              sql_query: str, 
+                              params: Optional[Dict[str, Any]] = None,
+                              timeout: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Asynchronously execute a SQL query.
+        
+        Args:
+            sql_query: SQL query to execute
+            params: Query parameters 
+            timeout: Query timeout in seconds
+            
+        Returns:
+            Dictionary with query results and metadata
+        """
+        start_time = time.time()
+        query_id = str(uuid.uuid4())
+        
+        try:
+            # Get or create an event loop
+            loop = self._get_event_loop()
+            
+            # Define the lambda function to execute in thread pool
+            sync_execution = lambda: self.db_manager.execute_query(
+                sql_query=sql_query, 
+                params=params, 
+                timeout=timeout if timeout else self.config.get("query_timeout", 30)
+            )
+            
+            # Run the synchronous execute_query in a thread pool
+            db_result = await loop.run_in_executor(None, sync_execution)
+            
+            execution_time = time.time() - start_time
+            
+            # Format the result
+            result = {
+                "success": db_result["success"],
+                "data": db_result["data"] if "data" in db_result else [],
+                "rowcount": db_result["rowcount"] if "rowcount" in db_result else 0,
+                "execution_time": execution_time,
+                "total_time": execution_time,
+                "cached": False,
+                "query_id": query_id,
+                "error": db_result.get("error", None)
+            }
+            
+            # Log query execution
+            self._log_query_execution(result, sql_query)
+            
+            return result
+            
+        except asyncio.CancelledError:
+            logger.warning(f"Async query execution cancelled: {sql_query[:100]}...")
+            return {
+                "success": False,
+                "data": [],
+                "rowcount": 0,
+                "execution_time": time.time() - start_time,
+                "total_time": time.time() - start_time,
+                "cached": False,
+                "query_id": query_id,
+                "error": "Query execution was cancelled"
+            }
+        except Exception as e:
+            error_msg = f"Async query execution error: {str(e)}"
+            logger.error(error_msg)
+            logger.debug(f"Query that caused error: {sql_query}")
+            
+            return {
+                "success": False,
+                "data": [],
+                "rowcount": 0,
+                "execution_time": time.time() - start_time,
+                "total_time": time.time() - start_time,
+                "cached": False,
+                "query_id": query_id,
+                "error": error_msg
+            }
+        
+    def _extract_tables_from_query(self, sql_query: str) -> List[str]:
+        """Extract table names from a SQL query for cache invalidation tracking."""
+        # This is a simplified implementation. In production, use a proper SQL parser.
+        tables = []
+        sql_keywords = {'select', 'where', 'group', 'order', 'having', 'limit', 'offset', 
+                      'on', 'and', 'or', 'by', 'as', 'union', 'all', 'join', 'from'}
+        
+        # Normalize query: remove extra whitespace and newlines
+        normalized_query = ' '.join(sql_query.lower().replace('\n', ' ').split())
+        
+        # Extract tables from FROM clauses
+        from_parts = normalized_query.split(' from ')
+        for i in range(1, len(from_parts)):
+            parts = from_parts[i].split()
+            if parts:
+                table_name = parts[0].strip(',;()')
+                if table_name and table_name not in sql_keywords:
+                    tables.append(table_name)
+                
+                # Check if there's an alias after the table name
+                if len(parts) > 1 and parts[1] not in sql_keywords:
+                    alias = parts[1].strip(',;()')
+                    if alias and len(alias) <= 5 and alias not in sql_keywords:  # Reasonable alias length
+                        tables.append(alias)
+        
+        # Extract tables from JOIN clauses
+        join_parts = normalized_query.split(' join ')
+        for i in range(1, len(join_parts)):
+            parts = join_parts[i].split()
+            if parts:
+                table_name = parts[0].strip(',;()')
+                if table_name and table_name not in sql_keywords:
+                    tables.append(table_name)
+                
+                # Check if there's an alias after the table name
+                if len(parts) > 1 and parts[1] not in sql_keywords:
+                    alias = parts[1].strip(',;()')
+                    if alias and len(alias) <= 5 and alias not in sql_keywords:
+                        tables.append(alias)
+        
+        return tables
     
     def execute_batch(self, 
                      statements: List[Dict[str, Any]],

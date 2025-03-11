@@ -1,0 +1,58 @@
+[
+  {
+    "query": "How many orders were completed on February 21, 2025?",
+    "sql": "SELECT \n    COUNT(*) as order_count\nFROM \n    orders o\nWHERE \n    o.location_id = 62\n    AND o.status = 7 -- Completed orders\n    AND (o.updated_at - INTERVAL '7 hours')::date = TO_DATE('2/21/2025', 'MM/DD/YYYY');"
+  },
+  {
+    "query": "Show me the order details for February 21, 2025",
+    "sql": "SELECT\n    o.id AS order_id,\n    u.first_name || ' ' || u.last_name AS customer_name,\n    o.total AS order_total,\n    to_char((o.updated_at - INTERVAL '7 hours'), 'YYYY-MM-DD HH24:MI:SS') AS updated_at,\n    o.status AS order_status\nFROM \n    orders o\nJOIN \n    users u ON o.customer_id = u.id\nWHERE \n    o.location_id = 62\n    AND o.status = 7\n    AND (o.updated_at - INTERVAL '7 hours')::date = TO_DATE('2/21/2025', 'MM/DD/YYYY')\nORDER BY \n    o.updated_at;"
+  },
+  {
+    "query": "What was the total revenue last month?",
+    "sql": "SELECT COALESCE(SUM(total), 0) as total_revenue\nFROM orders\nWHERE location_id = 62\n  AND (updated_at - INTERVAL '7 hours')::date >= CURRENT_DATE - INTERVAL '1 month'\n  AND status = 7;"
+  },
+  {
+    "query": "How much revenue have we made this month?",
+    "sql": "SELECT COALESCE(SUM(total), 0) as current_month_revenue\nFROM orders\nWHERE location_id = 62\n  AND date_trunc('month', (updated_at - INTERVAL '7 hours')) = date_trunc('month', CURRENT_DATE)\n  AND status = 7;"
+  },
+  {
+    "query": "What was our revenue in the same month last year?",
+    "sql": "SELECT COALESCE(SUM(total), 0) as last_year_same_month_revenue\nFROM orders\nWHERE location_id = 62\n  AND date_trunc('month', (updated_at - INTERVAL '7 hours')) = date_trunc('month', CURRENT_DATE - INTERVAL '1 year')\n  AND status = 7;"
+  },
+  {
+    "query": "What are our top 5 menu items by revenue in the past quarter?",
+    "sql": "SELECT i.name as menu_item, COUNT(oi.id) as order_count,\n       COALESCE(SUM(i.price * oi.quantity), 0) as revenue\nFROM orders o\nJOIN order_items oi ON o.id = oi.order_id\nJOIN items i ON oi.item_id = i.id\nWHERE o.location_id = 62\n  AND (o.updated_at - INTERVAL '7 hours')::date >= CURRENT_DATE - INTERVAL '3 months'\n  AND o.status = 7\nGROUP BY i.name\nORDER BY revenue DESC\nLIMIT 5;"
+  },
+  {
+    "query": "How many new customers did we get in the past week?",
+    "sql": "WITH first_orders AS (\n    SELECT customer_id, MIN((updated_at - INTERVAL '7 hours')::date) as first_updated_at\n    FROM orders\n    WHERE location_id = 62\n      AND status = 7\n    GROUP BY customer_id\n)\nSELECT COUNT(*) as new_customers\nFROM first_orders\nWHERE first_updated_at >= CURRENT_DATE - INTERVAL '7 days';"
+  },
+  {
+    "query": "What percentage of our orders come from repeat customers?",
+    "sql": "WITH customer_orders AS (\n    SELECT customer_id, COUNT(*) as order_count\n    FROM orders\n    WHERE location_id = 62\n      AND status = 7\n    GROUP BY customer_id\n),\nrepeat_customers AS (\n    SELECT customer_id\n    FROM customer_orders\n    WHERE order_count > 1\n)\nSELECT \n    ROUND(\n        (SELECT COUNT(*) FROM orders o \n         WHERE o.location_id = 62 AND o.status = 7 \n           AND o.customer_id IN (SELECT customer_id FROM repeat_customers)\n        ) * 100.0\n        / NULLIF((SELECT COUNT(*) FROM orders o \n                  WHERE o.location_id = 62 AND o.status = 7), 0),\n        0\n    ) || '%' AS repeat_percentage;"
+  },
+  {
+    "query": "How many orders were canceled in the past month?",
+    "sql": "SELECT COUNT(*) as canceled_orders\nFROM orders\nWHERE location_id = 62\n  AND (updated_at - INTERVAL '7 hours')::date >= CURRENT_DATE - INTERVAL '1 month'\n  AND status IN (6);"
+  },
+  {
+    "query": "What's the average time between a customer's first and second order?",
+    "sql": "WITH first_two_orders AS (\n  SELECT customer_id, created_at,\n         ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY created_at) AS order_num\n  FROM orders\n  WHERE location_id = 62\n    AND status = 7\n),\nfirst_second AS (\n  SELECT customer_id,\n         MIN(CASE WHEN order_num = 1 THEN created_at END) AS first_order,\n         MIN(CASE WHEN order_num = 2 THEN created_at END) AS second_order\n  FROM first_two_orders\n  GROUP BY customer_id\n)\nSELECT ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (second_order - first_order))/(3600*24)))\n       AS average_days_between_first_and_second\nFROM first_second\nWHERE second_order IS NOT NULL;"
+  },
+  {
+    "query": "What's the lifetime value of our average customer?",
+    "sql": "SELECT TO_CHAR(AVG(total_spent), 'FM$999,999,990.00') as avg_lifetime_value\nFROM (\n    SELECT customer_id, SUM(total) as total_spent\n    FROM orders\n    WHERE location_id = 62\n      AND status = 7\n    GROUP BY customer_id\n) sub;"
+  },
+  {
+    "query": "Show me yesterday's order details with discounts",
+    "sql": "SELECT\n    o.id AS order_id,\n    to_char(o.updated_at - INTERVAL '7 hours', 'YYYY-MM-DD HH24:MI') AS updated_at,\n    u.first_name || ' ' || u.last_name AS customer,\n    regexp_replace(u.phone, '(\\d{3})(\\d{3})(\\d{4})', '(\\1) \\2-\\3') AS user_phone,\n    u.email AS user_email,\n    o.total AS order_total,\n    CAST(o.tip AS DECIMAL(10,2)) as tip,\n    COALESCE(d.amount, 0) as discount_amount,\n    o.status AS order_status\nFROM orders o\nINNER JOIN users u ON o.customer_id = u.id\nINNER JOIN locations l ON l.id = o.location_id\nLEFT JOIN discounts d on d.order_id = o.id\nWHERE l.id = 62\n  AND o.status = 7\n  AND (o.updated_at - INTERVAL '7 hours')::date = CURRENT_DATE - INTERVAL '1 day';"
+  },
+  {
+    "query": "How many orders were completed last month?",
+    "sql": "SELECT count(*)\nFROM orders o\nWHERE o.location_id = 62\n  AND o.status = 7 -- Completed orders\n  AND (o.updated_at - INTERVAL '7 hours')::date BETWEEN date_trunc('month', current_date - interval '1 month') AND date_trunc('month', current_date) - interval '1 day';"
+  },
+  {
+    "query": "How many orders were placed last month?",
+    "sql": "-- IMPORTANT: orders table has updated_at field (NOT order_date)\nSELECT count(*)\nFROM orders o\nWHERE o.location_id = 62\n  AND o.status = 7\n  AND (o.updated_at - INTERVAL '7 hours')::date BETWEEN date_trunc('month', current_date - interval '1 month') AND date_trunc('month', current_date) - interval '1 day';"
+  }
+]

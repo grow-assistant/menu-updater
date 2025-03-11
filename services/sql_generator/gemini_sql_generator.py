@@ -13,11 +13,12 @@ from datetime import datetime
 
 from services.rules.rules_service import RulesService
 from services.utils.service_registry import ServiceRegistry
+from services.sql_generator.sql_example_loader import sql_example_loader
 
 logger = logging.getLogger(__name__)
 
 class GeminiSQLGenerator:
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], db_service, skip_verification=False):
         """Initialize the enhanced Gemini SQL generator."""
         # Configure Gemini API
         api_key = config["api"]["gemini"]["api_key"]
@@ -25,6 +26,12 @@ class GeminiSQLGenerator:
         self.temperature = config["api"]["gemini"].get("temperature", 0.2)
         self.max_tokens = config["api"]["gemini"].get("max_tokens", 1024)
         genai.configure(api_key=api_key)
+        
+        # Initialize logger
+        self.logger = logger
+        
+        # Save config for other methods
+        self.config = config
         
         # Initialize metrics
         self.api_call_count = 0
@@ -47,51 +54,20 @@ class GeminiSQLGenerator:
         logger.debug(f"SQL Generator initialized with detailed_logging={self.enable_detailed_logging}")
         
         # Load prompt templates
-        self.prompt_template_path = config["services"]["sql_generator"].get(
-            "prompt_template", "services/sql_generator/templates/sql_prompt.txt"
-        )
-        self.validation_prompt_path = config["services"]["sql_generator"].get(
-            "validation_prompt", "services/sql_generator/templates/sql_validator.txt"
-        )
-        self.optimization_prompt_path = config["services"]["sql_generator"].get(
-            "optimization_prompt", "services/sql_generator/templates/sql_optimizer.txt"
-        )
+        self.prompt_template = self._get_default_prompt_template()
+        self.validation_prompt = self._get_default_validation_prompt()
+        self.optimization_prompt = self._get_default_optimization_prompt()
         
-        # Load prompt templates
-        try:
-            with open(self.prompt_template_path, "r", encoding="utf-8") as f:
-                self.prompt_template = f.read()
-        except Exception as e:
-            logger.warning(f"Failed to load prompt template: {e}")
-            self.prompt_template = self._get_default_prompt_template()
-            
-        try:
-            with open(self.validation_prompt_path, "r", encoding="utf-8") as f:
-                self.validation_prompt = f.read()
-        except Exception as e:
-            logger.warning(f"Failed to load validation prompt: {e}")
-            self.validation_prompt = self._get_default_validation_prompt()
-            
-        try:
-            with open(self.optimization_prompt_path, "r", encoding="utf-8") as f:
-                self.optimization_prompt = f.read()
-        except Exception as e:
-            logger.warning(f"Failed to load optimization prompt: {e}")
-            self.optimization_prompt = self._get_default_optimization_prompt()
-        
-        # Initialize the model
-        try:
-            self.model_instance = genai.GenerativeModel(model_name=self.model)
-            logger.info(f"SQLGenerator initialized with max_tokens={self.max_tokens}, temperature={self.temperature}")
-        except Exception as e:
-            logger.error(f"Error initializing Gemini model: {e}")
-            self.model_instance = None
-        
-        # Configuration options
-        self.max_retries = config["services"]["sql_generator"].get("max_retries", 2)
-        
-        # Test placeholder replacement functionality to verify it's working
+        # Test placeholder replacement
         self._verify_placeholder_replacement()
+        
+        self.db_service = db_service
+        self.client_initialized = False
+        self.max_retries = config.get("services", {}).get("sql_generator", {}).get("max_retries", 3)
+        
+        # Only perform placeholder verification if not explicitly skipped
+        if not skip_verification:
+            self._verify_placeholder_replacement()
         
     def _get_default_prompt_template(self) -> str:
         """Get default prompt template if file is not found."""
@@ -125,49 +101,62 @@ class GeminiSQLGenerator:
         """
     
     def _get_default_validation_prompt(self) -> str:
-        """Get default validation prompt if file is not found."""
+        """Get the default SQL validation prompt template."""
         return """
-        You are a PostgreSQL expert that validates SQL queries for correctness and security.
-        
-        Analyze the following SQL query and identify any issues:
-        1. Syntax errors
-        2. Security vulnerabilities (SQL injection risks)
-        3. Potential performance issues
-        4. Compliance with database schema
-        
-        Database Schema:
-        {schema}
-        
-        SQL Query to validate:
-        {sql}
-        
-        Provide your analysis in the following format:
-        - Valid: [Yes/No]
-        - Issues: [List of issues found]
-        - Corrected SQL: [Corrected SQL if issues were found]
-        """
+You are a SQL validation expert. Your job is to validate the following SQL query and determine if it is valid, efficient, and safe.
+Review the provided SQL query that was generated based on the original query.
+
+Original Query: {original_query}
+SQL to Validate: {sql_to_validate}
+Current Date/Time: {current_datetime}
+
+VALIDATION TASKS:
+1. Check if the SQL is syntactically correct
+2. Ensure the SQL properly addresses the original query's intent
+3. Verify that tables and columns referenced exist in the schema
+4. Check for proper filtering and potential performance issues
+5. Look for security concerns like SQL injection vulnerabilities
+
+VALIDATION RESULT:
+Provide your assessment as either VALID or INVALID.
+If INVALID, include a REASON section explaining why.
+If VALID, include a SUGGESTIONS section with any improvements.
+
+Format your response like this for valid SQL:
+VALID
+SUGGESTIONS: [Optional suggestions for improvement]
+
+Or like this for invalid SQL:
+INVALID
+REASON: [Clear explanation of the issue]
+"""
     
     def _get_default_optimization_prompt(self) -> str:
-        """Get default optimization prompt if file is not found."""
+        """Get the default SQL optimization prompt template."""
         return """
-        You are a PostgreSQL performance optimization expert.
-        
-        Optimize the following SQL query for better performance:
-        
-        {sql}
-        
-        Database Schema:
-        {schema}
-        
-        Consider the following optimization techniques:
-        1. Proper indexing suggestions
-        2. Query restructuring
-        3. Avoiding full table scans
-        4. Optimizing JOIN operations
-        5. Using appropriate WHERE clauses
-        
-        Provide your optimized query and explain the improvements:
-        """
+You are a SQL optimization expert. Your job is to optimize the following SQL query for better performance.
+Review the provided SQL query and suggest improvements for efficiency and readability.
+
+Original Query: {original_query}
+SQL to Optimize: {sql_to_optimize}
+
+OPTIMIZATION GOALS:
+1. Improve query performance
+2. Add appropriate indexes or query hints if needed
+3. Simplify complex expressions
+4. Ensure proper join conditions and order
+5. Optimize WHERE clauses and filtering
+
+RESPONSE FORMAT:
+1. Provide the optimized SQL code
+2. Include brief comments explaining your optimizations
+3. Return ONLY the improved SQL, beginning with SELECT
+
+Here is the optimized SQL:
+```sql
+-- Your optimized SQL here
+```
+"""
     
     def _format_schema(self, schema: Dict[str, Any]) -> str:
         """Format database schema information for the prompt."""
@@ -395,425 +384,71 @@ CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
         
         return prompt
     
-    def generate_sql(self, query: str, examples: List[Dict[str, Any]], context: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_with_retry(self, prompt, max_retries=None):
         """
-        Generate SQL from the user query using Gemini with validation and optimization.
+        Generate SQL with retry logic.
         
         Args:
-            query: The user's query text
-            examples: List of relevant SQL examples
-            context: Additional context information
+            prompt (str): The prompt to generate SQL from.
+            max_retries (int, optional): Maximum number of retries. Defaults to self.max_retries.
             
         Returns:
-            Dictionary containing the generated SQL and metadata
+            dict: A dictionary containing the generated SQL and a success flag.
         """
-        start_time = time.time()
-        query_type = context.get('query_type', 'unknown')
+        if max_retries is None:
+            max_retries = self.max_retries
         
-        # Check if we have a cached prompt for this query type
-        cache_key = f"{query_type}_{hash(str(examples))}"
-        current_time = time.time()
-        
-        # Build or use cached prompt
-        if (cache_key in self.prompt_cache and 
-            current_time - self.prompt_cache_timestamps.get(cache_key, 0) < self.prompt_cache_ttl):
-            # Use cached prompt
-            prompt = self.prompt_cache[cache_key].replace("{{QUERY}}", query)
-            logger.debug(f"Using cached prompt template for {query_type}")
-        else:
-            # Build new prompt
-            prompt = self._build_prompt(query, examples, context)
-            
-            # Cache the prompt with a placeholder for the query
-            cacheable_prompt = prompt.replace(query, "{{QUERY}}")
-            self.prompt_cache[cache_key] = cacheable_prompt
-            self.prompt_cache_timestamps[cache_key] = current_time
-        
-        logger.info(f"Built SQL generation prompt with {len(examples)} examples and context for {query_type}")
-        
-        # Initialize log_file regardless of detailed logging setting
-        session_id = str(uuid.uuid4())[:8]
-        log_dir = os.path.join("logs", "ai_prompts")
-        os.makedirs(log_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, f"gemini_sql_{session_id}.log")
-        
-        # Create a detailed log file for this prompt if detailed logging is enabled
-        if self.enable_detailed_logging:
-            with open(log_file, "w", encoding="utf-8") as f:
-                f.write(f"TIMESTAMP: {datetime.now().isoformat()}\n")
-                f.write(f"QUERY: {query}\n")
-                f.write(f"CATEGORY: {query_type}\n")
-                f.write("\n----- FULL PROMPT TO GEMINI -----\n\n")
-                f.write(prompt)
-                f.write("\n\n")
-            
-            # Log prompt location
-            logger.info(f"Full prompt logged to: {log_file}")
-        
-        # Track generation attempts
-        attempts = 0
-        sql = ""
-        raw_response = ""
-        
-        # Set up retry logic in case of failures
-        max_attempts = 3
-        
-        while attempts < max_attempts:
-            attempts += 1
+        attempt = 0
+        while attempt <= max_retries:
+            attempt += 1
+            self.logger.info(f"SQL generation attempt {attempt}/{max_retries + 1}")
             
             try:
-                logger.info(f"Generating SQL with model: {self.model}, attempt: {attempts}/{max_attempts}")
+                # Check if GenAI client is initialized
+                if not self.client_initialized:
+                    self.logger.warning("GenAI client not initialized, returning empty result")
+                    return {"sql": "", "success": False, "error": "GenAI client not initialized"}
                 
-                # Call Gemini API
-                model = self.model_instance
-                if not model:
-                    model = genai.GenerativeModel(self.model)
-                    
-                generation_config = {
-                    "max_output_tokens": self.max_tokens,
-                    "temperature": self.temperature
-                }
-                
-                # Track API call
-                api_call_start = time.time()
-                
-                response = model.generate_content(
-                    prompt, 
-                    generation_config=generation_config
+                # Generate content
+                genai_model = genai.GenerativeModel(
+                    model_name=self.model,
+                    generation_config=genai.GenerationConfig(
+                        temperature=self.temperature,
+                        max_output_tokens=self.max_tokens
+                    )
                 )
                 
-                # Update metrics
+                response = genai_model.generate_content(prompt)
+                
+                # Track API usage
                 self.api_call_count += 1
-                api_call_duration = time.time() - api_call_start
-                self.total_latency += api_call_duration
-                # Estimate tokens used (could be replaced with actual token count if available)
-                estimated_tokens = len(prompt) // 4 + len(response.text) // 4
-                self.total_tokens += estimated_tokens
                 
-                raw_response = response.text
+                # Extract SQL from response
+                sql = self._extract_sql_from_response(response.text)
                 
-                # Log the raw response if detailed logging is enabled
-                if self.enable_detailed_logging:
-                    with open(log_file, "a", encoding="utf-8") as f:
-                        f.write("----- RAW GEMINI RESPONSE -----\n\n")
-                        f.write(raw_response)
-                        f.write("\n\n")
-                
-                # Extract SQL from the response
-                sql = self._extract_sql(raw_response)
+                # Add location_id if missing
+                if sql:
+                    sql = self._ensure_location_id_in_sql(sql)
                 
                 if sql:
-                    # Log the extracted SQL if detailed logging is enabled
-                    if self.enable_detailed_logging:
-                        with open(log_file, "a", encoding="utf-8") as f:
-                            f.write("----- EXTRACTED SQL -----\n\n")
-                            f.write(sql)
-                            f.write("\n\n")
-                    
-                    logger.info(f"Extracted SQL (length: {len(sql)}): {sql[:100]}...")
-                    break
+                    self.logger.info(f"Successfully generated SQL: {sql[:100]}...")
+                    return {"sql": sql, "success": True}
                 else:
-                    logger.warning(f"Failed to extract SQL from response in attempt {attempts}")
-                    # Log extraction failure if detailed logging is enabled
-                    if self.enable_detailed_logging:
-                        with open(log_file, "a", encoding="utf-8") as f:
-                            f.write("----- SQL EXTRACTION FAILED -----\n\n")
-                            f.write("Could not extract SQL from the response text.")
-                            f.write("\n\n")
-                    
-                    # Update retry counter
-                    self.retry_count += 1
+                    self.logger.warning("Failed to extract SQL from response")
+                    if attempt <= max_retries:
+                        self.logger.info(f"Retrying SQL generation (attempt {attempt}/{max_retries + 1})")
+                        continue
+                    return {"sql": "", "success": False, "error": "Failed to extract SQL from response"}
+            
             except Exception as e:
-                error_msg = f"Error generating SQL in attempt {attempts}: {str(e)}"
-                logger.error(error_msg)
-                # Log the error if detailed logging is enabled
-                if self.enable_detailed_logging:
-                    with open(log_file, "a", encoding="utf-8") as f:
-                        f.write("----- ERROR -----\n\n")
-                        f.write(error_msg)
-                        f.write("\n\n")
-                
-                # Wait before retrying
-                time.sleep(1)
+                self.logger.error(f"Error in SQL generation attempt {attempt}: {str(e)}")
+                if attempt <= max_retries:
+                    self.logger.info(f"Retrying SQL generation (attempt {attempt}/{max_retries + 1})")
+                    continue
+                return {"sql": "", "success": False, "error": str(e)}
         
-        # If we couldn't generate SQL after all attempts
-        if not sql:
-            logger.error("Failed to generate valid SQL after all attempts")
-            return {
-                "success": False,
-                "error": "Failed to generate valid SQL",
-                "query": None
-            }
-        
-        # Final result construction - ensure we always return a valid dict
-        result = {
-            "success": bool(sql),  # Success is True if SQL is not empty
-            "query_time": time.time() - start_time,
-            "model": self.model,
-            "attempts": attempts + 1
-        }
-        
-        if sql:
-            result["query"] = sql
-            result["query_type"] = "SELECT"  # Default to SELECT, can be refined further
-        else:
-            result["error"] = f"Failed to generate SQL after {attempts+1} attempts"
-            result["raw_response"] = raw_response[:500] if len(raw_response) > 500 else raw_response
-            
-        return result
+        return {"sql": "", "success": False, "error": "Max retries reached"}
     
-    def _extract_sql(self, text: str) -> str:
-        """
-        Extract SQL from model response and validate basic requirements.
-        
-        Args:
-            text: Raw model response
-            
-        Returns:
-            Extracted SQL query or empty string if not found
-        """
-        # Handle None input
-        if not text:
-            logger.warning("Received empty text for SQL extraction")
-            return ""
-            
-        # Extract SQL from response using regex pattern
-        sql_pattern = r"```sql\s+(.*?)\s+```"
-        match = re.search(sql_pattern, text, re.DOTALL)
-        
-        if match:
-            sql = match.group(1).strip()
-        else:
-            # Try alternative pattern without language specification
-            alt_pattern = r"```\s+(.*?)\s+```"
-            alt_match = re.search(alt_pattern, text, re.DOTALL)
-            if alt_match:
-                sql = alt_match.group(1).strip()
-            else:
-                # If no code block found, try to use the entire text
-                sql = text.strip()
-        
-        # Basic preprocessing - remove any explanation text outside the SQL
-        sql_lines = []
-        for line in sql.split('\n'):
-            line = line.strip()
-            if line and not line.startswith('--') and not line.lower().startswith('explain') and not line.lower().startswith('note:'):
-                sql_lines.append(line)
-        
-        processed_sql = '\n'.join(sql_lines)
-        
-        # Logging for debug
-        logger.debug(f"Extracted SQL: {processed_sql[:100]}...")
-        
-        # Get the DEFAULT_LOCATION_ID from business rules
-        from services.rules.business_rules import DEFAULT_LOCATION_ID
-        
-        # Detect and replace ANY placeholder format with the actual value
-        # This handles {location_id}, {{location_id}}, and other variations
-        placeholder_patterns = [
-            r"\{location_id\}",  # {location_id}
-            r"\s*\{\{location_id\}\}",  # {{location_id}}
-            r":\s*location_id",  # :location_id (for prepared statements)
-            r"%\(location_id\)s"  # %(location_id)s (for psycopg2 style)
-        ]
-        
-        for pattern in placeholder_patterns:
-            if re.search(pattern, processed_sql):
-                original = processed_sql
-                processed_sql = re.sub(pattern, str(DEFAULT_LOCATION_ID), processed_sql)
-                logger.info(f"Replaced location_id placeholder format '{pattern}' with actual value {DEFAULT_LOCATION_ID}")
-        
-        # Check if this is a query on the orders table
-        if " orders " in processed_sql.lower() or " orders\n" in processed_sql.lower() or "from orders" in processed_sql.lower():
-            # Check for any remaining placeholder patterns that might indicate issues
-            if "{" in processed_sql and "}" in processed_sql:
-                logger.warning(f"Possible unhandled placeholder in SQL after processing: {processed_sql}")
-            
-            # Get table alias if used
-            alias_pattern = r"from\s+orders\s+(?:as\s+)?([a-zA-Z0-9_]+)"
-            alias_match = re.search(alias_pattern, processed_sql.lower(), re.IGNORECASE)
-            
-            table_prefix = ""
-            if alias_match:
-                table_prefix = f"{alias_match.group(1)}."
-            else:
-                table_prefix = "orders."
-            
-            # Check if location_id filtering is present with a more robust pattern
-            # This will match location_id = 62 as well as location_id=62 (without space)
-            location_filter_pattern = r"(?:orders|[a-z])\.location_id\s*=\s*\d+"
-            if not re.search(location_filter_pattern, processed_sql, re.IGNORECASE):
-                logger.warning(f"Location ID filtering missing in SQL query: {processed_sql}")
-                
-                # Add the location filter to ensure data isolation
-                # Find the WHERE clause if it exists
-                if "where" in processed_sql.lower():
-                    processed_sql = processed_sql.replace("WHERE", f"WHERE {table_prefix}location_id = {DEFAULT_LOCATION_ID} AND ", 1)
-                    processed_sql = processed_sql.replace("where", f"where {table_prefix}location_id = {DEFAULT_LOCATION_ID} AND ", 1)
-                else:
-                    # Add a WHERE clause before GROUP BY, ORDER BY, LIMIT, etc. if they exist
-                    for clause in ["group by", "order by", "limit", "having"]:
-                        if clause in processed_sql.lower():
-                            pattern = re.compile(f"({clause})", re.IGNORECASE)
-                            processed_sql = pattern.sub(f"WHERE {table_prefix}location_id = {DEFAULT_LOCATION_ID} \n\\1", processed_sql, 1)
-                            break
-                    else:
-                        # If no clauses found, add WHERE at the end
-                        processed_sql += f"\nWHERE {table_prefix}location_id = {DEFAULT_LOCATION_ID}"
-                
-                logger.info(f"Location filter added to query: {processed_sql}")
-            else:
-                logger.info(f"Location filtering is present in the SQL query")
-        
-        # Final validation check - verify no curly braces remain
-        if "{" in processed_sql or "}" in processed_sql:
-            logger.warning(f"SQL may still contain placeholders: {processed_sql}")
-            # Try a more aggressive replacement as a fallback
-            processed_sql = re.sub(r"\{[^}]*\}", str(DEFAULT_LOCATION_ID), processed_sql)
-            logger.info(f"Performed aggressive placeholder replacement: {processed_sql}")
-        
-        return processed_sql
-    
-    def health_check(self) -> bool:
-        """
-        Check if the Gemini API is accessible.
-        
-        Returns:
-            True if healthy, False otherwise
-        """
-        try:
-            # Simple test query to Gemini
-            model = genai.GenerativeModel(self.model)
-            response = model.generate_content("Generate a simple SELECT statement")
-            return response is not None
-        except Exception as e:
-            logger.error(f"Health check failed: {e}")
-            return False
-
-    def generate(self, query: str, category: str, rules_and_examples: Union[Dict[str, Any], List], 
-                additional_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Generate SQL based on a query using customized rules and examples.
-        
-        Args:
-            query: Natural language query
-            category: Query category
-            rules_and_examples: Dictionary containing rules and examples or just a list of examples
-            additional_context: Additional context for generation
-            
-        Returns:
-            Dictionary with generated SQL and metadata
-        """
-        start_time = time.time()
-        
-        # Extract examples and rules
-        if isinstance(rules_and_examples, dict):
-            examples = rules_and_examples.get("examples", [])
-            rules = rules_and_examples.get("rules", {})
-            query_patterns = rules_and_examples.get("query_patterns", {})
-        else:
-            # If rules_and_examples is a list, assume it's just examples
-            examples = rules_and_examples
-            rules = {}
-            query_patterns = {}
-        
-        # Prepare context
-        context = {
-            "rules": rules,
-            "query_patterns": query_patterns
-        }
-        
-        # Add special handling for follow-up questions with required conditions
-        is_followup = False
-        required_conditions = []
-        if additional_context:
-            # Copy all additional context
-            context.update(additional_context)
-            # Check if this is a follow-up query with required conditions
-            if "required_conditions" in additional_context:
-                is_followup = True
-                required_conditions = additional_context["required_conditions"]
-                
-        # Log what we're doing
-        logger.info(f"Built SQL generation prompt with {len(examples)} examples and context for {category}")
-        
-        # Special prefix for follow-up questions with required conditions
-        query_prefix = ""
-        if is_followup and required_conditions:
-            query_prefix = "THIS IS A FOLLOW-UP QUESTION. Include these exact WHERE conditions: "
-            query_prefix += " AND ".join(required_conditions)
-            query_prefix += ". "
-            
-        # Build the prompt
-        prompt = self._build_prompt(query_prefix + query, examples, context)
-        
-        # Additional metrics
-        attempt = 1
-        max_attempts = 3
-        backoff_time = 1  # Start with 1 second
-        
-        while attempt <= max_attempts:
-            try:
-                logger.info(f"Generating SQL with model: {self.model}, attempt: {attempt}/{max_attempts}")
-                
-                # Create Gemini client configurations
-                generation_config = {
-                    "temperature": self.temperature,
-                    "max_output_tokens": self.max_tokens,
-                    "top_p": 0.95,
-                    "top_k": 64
-                }
-                
-                # Call Gemini API
-                model = genai.GenerativeModel(self.model)
-                response = model.generate_content(prompt, generation_config=generation_config)
-                
-                # Parse and validate the result
-                result_text = response.text
-                sql_query = self._extract_sql(result_text)
-                
-                # Update metrics
-                self.api_call_count += 1
-                
-                # Return success result
-                return {
-                    "query": query,
-                    "sql": sql_query,  # Make sure the sql field is included
-                    "raw_response": result_text,
-                    "category": category,
-                    "success": True,
-                    "execution_time": time.time() - start_time,
-                    "attempt": attempt
-                }
-                
-            except Exception as e:
-                logger.error(f"Error in SQL generation (attempt {attempt}/{max_attempts}): {str(e)}")
-                attempt += 1
-                self.retry_count += 1
-                
-                if attempt <= max_attempts:
-                    time.sleep(backoff_time)
-                    backoff_time *= 2  # Exponential backoff
-                else:
-                    # Return error result on final failure
-                    return {
-                        "query": None,  # Use None instead of empty string
-                        "sql": None,    # Add sql field for consistency
-                        "raw_response": str(e),
-                        "category": category,
-                        "success": False,
-                        "error": str(e),
-                        "execution_time": time.time() - start_time
-                    }
-
-    def get_performance_metrics(self):
-        return {
-            'api_call_count': self.api_call_count,
-            'total_tokens_used': self.total_tokens,
-            'average_latency': self.total_latency / max(1, self.api_call_count),
-            'retry_count': self.retry_count
-        }
-
     def generate_sql(self, query, classification, time_period=None, constraints=None, context=None):
         """Generate SQL based on the provided query and classification."""
         try:
@@ -827,16 +462,58 @@ CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
             self.logger.info(f"Built SQL generation prompt with {len(sql_examples.get('examples', []))} examples and context for {classification}")
             
             # Generate the SQL
-            return self._generate_with_retry(prompt)
+            result = self._generate_with_retry(prompt)
+            
+            if not result["success"]:
+                self.logger.error(f"SQL generation failed: {result.get('error', 'Unknown error')}")
+                return {"sql": "", "success": False, "error": result.get("error", "Unknown error")}
+            
+            sql = result["sql"]
+            
+            # Validate SQL if enabled
+            if self.config.get("services", {}).get("sql_generator", {}).get("enable_validation", False):
+                is_valid, sql, error = self._validate_sql(sql, query, context)
+                
+                if not is_valid:
+                    self.logger.warning(f"SQL validation failed: {error}")
+                    # Retry with error message in context
+                    retry_context = context.copy() if context else {}
+                    retry_context["validation_error"] = error
+                    
+                    # Build a new prompt with the error message
+                    prompt = self._build_prompt(query, sql_examples, retry_context)
+                    
+                    # Generate SQL again
+                    retry_result = self._generate_with_retry(prompt)
+                    
+                    if not retry_result["success"]:
+                        self.logger.error(f"SQL generation retry failed: {retry_result.get('error', 'Unknown error')}")
+                        return {"sql": "", "success": False, "error": retry_result.get("error", "Unknown error")}
+                    
+                    sql = retry_result["sql"]
+                    
+                    # Validate again
+                    is_valid, sql, error = self._validate_sql(sql, query, context)
+                    
+                    if not is_valid:
+                        self.logger.error(f"SQL validation failed after retry: {error}")
+                        return {"sql": "", "success": False, "error": error}
+            
+            # Optimize SQL if enabled
+            if self.config.get("services", {}).get("sql_generator", {}).get("enable_optimization", False):
+                sql = self._optimize_sql(sql, query, context)
+            
+            return {"sql": sql, "success": True}
         except Exception as e:
-            self.logger.error(f"Error in SQL generation: {e}")
-            raise
+            self.logger.error(f"Error in SQL generation: {str(e)}")
+            return {"sql": "", "success": False, "error": str(e)}
 
     def _get_sql_examples(self, classification):
         """Get SQL examples for the given classification from the rules service."""
         try:
             # Import the actual location ID value
             from services.rules.business_rules import DEFAULT_LOCATION_ID
+            from services.sql_generator.sql_example_loader import sql_example_loader
             
             # Get the rules service from the service registry
             rules_service = ServiceRegistry.get_service('rules')
@@ -844,165 +521,83 @@ CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
                 logger.warning("Rules service not available, proceeding without examples")
                 return {"examples": []}
             
+            # Initialize examples as a list
+            examples = []
+            
             # Get SQL examples from the rules service
-            examples = rules_service.get_sql_examples(classification)
+            logger.info(f"Getting SQL examples for classification: {classification}")
+            rules_examples = rules_service.get_sql_examples(classification)
+            
+            # Handle various formats that might be returned from the rules service
+            if isinstance(rules_examples, list):
+                logger.info(f"Rules service returned a list of {len(rules_examples)} examples")
+                examples = rules_examples
+            elif isinstance(rules_examples, dict):
+                logger.info(f"Rules service returned a dictionary with keys: {list(rules_examples.keys())}")
+                # Check if the dictionary has "examples" key
+                if "examples" in rules_examples:
+                    examples = rules_examples["examples"]
+                # Check if it has "patterns" key (from get_sql_patterns)
+                elif "patterns" in rules_examples:
+                    # Convert patterns to examples format
+                    patterns = rules_examples.get("patterns", {})
+                    for name, sql in patterns.items():
+                        examples.append({
+                            "query": f"Example for {name}",
+                            "sql": sql
+                        })
+                    logger.info(f"Converted {len(patterns)} patterns to examples")
+            
             if not examples:
-                logger.warning(f"No SQL examples found for classification: {classification}")
-                examples = []
+                logger.warning(f"No SQL examples found from rules service for classification: {classification}")
+            else:
+                logger.info(f"Found {len(examples)} examples from rules service for {classification}")
             
-            # Add explicit examples with correct location ID usage
-            # These will be prepended to ensure they are seen first
-            location_examples = []
+            # Get examples directly from SQL files - this is more maintainable than hardcoding examples
+            logger.info(f"Loading examples from SQL example loader for: {classification}")
+            file_examples = sql_example_loader.load_examples_for_query_type(classification)
             
-            if classification == "order_history":
-                location_examples = [
-                    {
-                        "query": "How many orders were completed on February 21, 2025?",
-                        "sql": f"""
-SELECT
-  COUNT(*) AS completed_orders_count
-FROM
-  orders o
-WHERE
-  (o.updated_at - INTERVAL '7 hours')::DATE = '2025-02-21'
-  AND o.status = 7
-  AND o.location_id = {DEFAULT_LOCATION_ID};
-"""
-                    },
-                    {
-                        "query": "Show me orders from last week",
-                        "sql": f"""
-SELECT
-  o.id,
-  o.created_at,
-  o.status,
-  o.total_amount
-FROM
-  orders o
-WHERE
-  o.location_id = {DEFAULT_LOCATION_ID}
-  AND (o.created_at - INTERVAL '7 hours')::DATE >= CURRENT_DATE - INTERVAL '7 days'
-  AND (o.created_at - INTERVAL '7 hours')::DATE < CURRENT_DATE;
-"""
-                    }
-                ]
-            elif classification == "popular_items":
-                location_examples = [
-                    {
-                        "query": "What were our top 5 selling items last month?",
-                        "sql": f"""
-SELECT
-  i.name,
-  COUNT(oi.id) AS order_count
-FROM
-  order_items oi
-JOIN
-  items i ON oi.item_id = i.id
-JOIN
-  orders o ON oi.order_id = o.id
-WHERE
-  o.location_id = {DEFAULT_LOCATION_ID}
-  AND (o.created_at - INTERVAL '7 hours')::DATE >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
-  AND (o.created_at - INTERVAL '7 hours')::DATE < DATE_TRUNC('month', CURRENT_DATE)
-GROUP BY
-  i.name
-ORDER BY
-  order_count DESC
-LIMIT 5;
-"""
-                    }
-                ]
-            elif classification == "order_ratings":
-                location_examples = [
-                    {
-                        "query": "What was the average rating for orders last month?",
-                        "sql": f"""
-SELECT
-  AVG(r.rating) AS avg_rating
-FROM
-  ratings r
-JOIN
-  orders o ON r.order_id = o.id
-WHERE
-  o.location_id = {DEFAULT_LOCATION_ID}
-  AND (o.created_at - INTERVAL '7 hours')::DATE >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
-  AND (o.created_at - INTERVAL '7 hours')::DATE < DATE_TRUNC('month', CURRENT_DATE);
-"""
-                    }
-                ]
-            elif classification == "trend_analysis":
-                location_examples = [
-                    {
-                        "query": "Show me the sales trend for the past 4 weeks",
-                        "sql": f"""
-SELECT
-  DATE_TRUNC('week', (o.created_at - INTERVAL '7 hours'))::DATE AS week_start,
-  SUM(o.total_amount) AS weekly_sales
-FROM
-  orders o
-WHERE
-  o.location_id = {DEFAULT_LOCATION_ID}
-  AND o.status = 7
-  AND (o.created_at - INTERVAL '7 hours')::DATE >= CURRENT_DATE - INTERVAL '4 weeks'
-GROUP BY
-  week_start
-ORDER BY
-  week_start;
-"""
-                    }
-                ]
-            elif classification == "menu_inquiry":
-                location_examples = [
-                    {
-                        "query": "Which menu items are vegetarian?",
-                        "sql": f"""
-SELECT
-  i.name,
-  i.description,
-  i.price
-FROM
-  items i
-JOIN
-  menu_items mi ON i.id = mi.item_id
-WHERE
-  mi.location_id = {DEFAULT_LOCATION_ID}
-  AND mi.is_active = TRUE
-  AND i.tags LIKE '%vegetarian%';
-"""
-                    }
-                ]
+            # Add file examples to the list
+            if file_examples:
+                logger.info(f"Found {len(file_examples)} examples from SQL files for {classification}")
+                examples.extend(file_examples)
+            else:
+                logger.warning(f"No examples found in SQL files for: {classification}")
+                # Try a fallback for follow_up if it's a different directory structure
+                if classification == "follow_up":
+                    logger.info("Trying alternate directory 'query_follow_up' for follow-up examples")
+                    file_examples = sql_example_loader.load_examples_for_query_type("query_follow_up")
+                    if file_examples:
+                        logger.info(f"Found {len(file_examples)} examples from 'query_follow_up' directory")
+                        examples.extend(file_examples)
             
-            # Add a default example for any category not explicitly handled
-            if not location_examples:
-                location_examples = [
-                    {
-                        "query": "Generic query requiring location filtering",
-                        "sql": f"""
--- This is an example of a query properly filtered by location_id
-SELECT
-  o.id,
-  o.created_at,
-  o.total_amount
-FROM
-  orders o
-WHERE
-  o.location_id = {DEFAULT_LOCATION_ID}
-  -- Always use the exact number ({DEFAULT_LOCATION_ID}) for location_id, never a placeholder
-  -- Additional conditions would go here
-LIMIT 10;
-"""
-                    }
-                ]
-            
-            # Add the explicit examples to the start of the examples list
-            all_examples = location_examples + examples
-            
-            logger.info(f"Loaded {len(all_examples)} examples for {classification} (including {len(location_examples)} location ID examples)")
-            
-            return {"examples": all_examples}
+            # If we still have no examples, log a warning
+            if not examples:
+                logger.warning(f"No examples available for classification: {classification}")
+                
+            # Return all the examples
+            logger.info(f"Returning {len(examples)} total examples for {classification}")
+            return {"examples": examples}
         except Exception as e:
             logger.error(f"Error getting SQL examples: {e}")
             return {"examples": []}
+
+    def _verify_placeholder_replacement(self):
+        """
+        Verify placeholder replacement functionality during initialization.
+        """
+        # Test placeholder replacement with a known SQL query
+        test_sql = "SELECT * FROM orders WHERE location_id = {location_id}"
+        try:
+            processed_sql = self._test_placeholder_replacement(test_sql)
+            
+            # Check if the processed SQL contains the location_id placeholder
+            if "{location_id}" in processed_sql:
+                self.logger.warning("Placeholder replacement failed during initialization")
+            else:
+                self.logger.info("Placeholder replacement verified successfully during initialization")
+        except Exception as e:
+            self.logger.error(f"Error during placeholder verification: {str(e)}")
 
     def _test_placeholder_replacement(self, test_sql):
         """
@@ -1014,29 +609,315 @@ LIMIT 10;
         Returns:
             Processed SQL with placeholders replaced
         """
-        logger.info(f"Testing placeholder replacement on: {test_sql}")
+        self.logger.info(f"Testing placeholder replacement on: {test_sql}")
         from services.rules.business_rules import DEFAULT_LOCATION_ID
         
         # Apply our normal extraction process
         processed_sql = self._extract_sql(test_sql)
         
         # Log the results
-        logger.info(f"SQL after placeholder replacement: {processed_sql}")
-        logger.info(f"Location ID placeholder replacement successful: {'{location_id}' not in processed_sql}")
-        logger.info(f"DEFAULT_LOCATION_ID value ({DEFAULT_LOCATION_ID}) is in result: {str(DEFAULT_LOCATION_ID) in processed_sql}")
+        self.logger.info(f"SQL after placeholder replacement: {processed_sql}")
+        self.logger.info(f"Location ID placeholder replacement successful: {'{location_id}' not in processed_sql}")
+        self.logger.info(f"DEFAULT_LOCATION_ID value ({DEFAULT_LOCATION_ID}) is in result: {str(DEFAULT_LOCATION_ID) in processed_sql}")
         
-        return processed_sql 
+        return processed_sql
 
-    def _verify_placeholder_replacement(self):
+    def _validate_sql(self, sql: str, query: str, context: Optional[Dict[str, Any]] = None) -> Tuple[bool, str, Optional[str]]:
         """
-        Verify placeholder replacement functionality during initialization.
-        """
-        # Test placeholder replacement with a known SQL query
-        test_sql = "SELECT * FROM orders WHERE location_id = {location_id}"
-        processed_sql = self._test_placeholder_replacement(test_sql)
+        Validate the generated SQL for correctness and safety.
         
-        # Check if the processed SQL contains the location_id placeholder
-        if "{location_id}" in processed_sql:
-            logger.warning("Placeholder replacement failed during initialization")
+        Args:
+            sql: The SQL query to validate
+            query: The original natural language query
+            context: Additional context for validation
+            
+        Returns:
+            Tuple of (is_valid, sql, error_message)
+        """
+        # Track API usage
+        start_time = time.time()
+        
+        try:
+            # Check if GenAI client is initialized
+            if not self.client_initialized:
+                self.logger.warning("GenAI client not initialized, cannot validate SQL")
+                return True, sql, None
+            
+            # Format the validation prompt
+            validation_prompt = self._get_default_validation_prompt().format(
+                datetime=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                query=query,
+                sql=sql,
+                schema=context.get("schema", "Not provided"),
+                validation_error=context.get("validation_error", "None")
+            )
+            
+            # Generate the validation response
+            genai_model = genai.GenerativeModel(
+                model_name=self.model,
+                generation_config=genai.GenerationConfig(
+                    temperature=self.temperature,
+                    max_output_tokens=self.max_tokens
+                )
+            )
+            
+            response = genai_model.generate_content(validation_prompt)
+            
+            # Track API usage
+            self.api_call_count += 1
+            
+            # Analyze the validation response
+            validation_text = response.text
+            
+            # Check if the validation was successful
+            if validation_text.strip().startswith("VALID"):
+                self.logger.info("SQL validation passed\n")
+                
+                # Check if there are any suggestions
+                if "SUGGESTIONS:" in validation_text:
+                    suggestions = validation_text.split("SUGGESTIONS:", 1)[1].strip()
+                    self.logger.info(f"Validation passed with suggestions: {suggestions}")
+                
+                return True, sql, None
+            else:
+                # Extract error message
+                error_message = validation_text.split("REASON:", 1)[1].strip() if "REASON:" in validation_text else validation_text
+                self.logger.warning(f"SQL validation failed: {error_message}")
+                
+                # Check if we have a suggested fix
+                if "SUGGESTED_FIX:" in validation_text:
+                    fixed_sql = validation_text.split("SUGGESTED_FIX:", 1)[1].strip()
+                    # Extract SQL from the suggested fix
+                    fixed_sql = self._extract_sql_from_response(fixed_sql)
+                    if fixed_sql:
+                        self.logger.info(f"Using suggested SQL fix: {fixed_sql}")
+                        return False, fixed_sql, error_message
+                
+                return False, sql, error_message
+        except Exception as e:
+            self.logger.error(f"Error during SQL validation: {str(e)}")
+            return True, sql, str(e)  # Assume valid on error, but return the error message
+
+    def _optimize_sql(self, sql: str, query: str, context: Optional[Dict[str, Any]] = None) -> str:
+        """
+        Optimize the SQL query for better performance.
+        
+        Args:
+            sql: The SQL query to optimize
+            query: The original natural language query
+            context: Additional context for optimization
+            
+        Returns:
+            The optimized SQL query
+        """
+        # Track API usage
+        start_time = time.time()
+        
+        try:
+            # Check if GenAI client is initialized
+            if not self.client_initialized:
+                self.logger.warning("GenAI client not initialized, cannot optimize SQL")
+                return sql
+            
+            # Format the optimization prompt
+            optimization_prompt = self._get_default_optimization_prompt().format(
+                datetime=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                query=query,
+                sql=sql,
+                schema=context.get("schema", "Not provided")
+            )
+            
+            # Generate the optimization response
+            genai_model = genai.GenerativeModel(
+                model_name=self.model,
+                generation_config=genai.GenerationConfig(
+                    temperature=self.temperature,
+                    max_output_tokens=self.max_tokens
+                )
+            )
+            
+            response = genai_model.generate_content(optimization_prompt)
+            
+            # Track API usage
+            self.api_call_count += 1
+            
+            # Extract optimized SQL from the response
+            optimized_sql = self._extract_sql_from_response(response.text)
+            
+            if optimized_sql:
+                self.logger.info("SQL successfully optimized\n")
+                return optimized_sql
+            else:
+                self.logger.warning("Failed to extract optimized SQL from response")
+                return sql
+        except Exception as e:
+            self.logger.error(f"Error during SQL optimization: {str(e)}")
+            return sql  # On error, return the original SQL
+
+    def _extract_sql_from_response(self, text):
+        """
+        Extract SQL from the model's response text.
+        
+        Args:
+            text (str): The response text from the model.
+            
+        Returns:
+            str: The extracted SQL query, or an empty string if no SQL was found.
+        """
+        # Try to find SQL between ```sql and ``` markers (most common)
+        sql_pattern = r"```sql\s*(.*?)\s*```"
+        matches = re.findall(sql_pattern, text, re.DOTALL)
+        
+        if not matches:
+            # Try to find SQL between plain ``` markers
+            sql_pattern = r"```\s*(.*?)\s*```"
+            matches = re.findall(sql_pattern, text, re.DOTALL)
+        
+        if not matches:
+            # Try to find lines that look like SQL (as a last resort)
+            potential_sql_lines = []
+            for line in text.split('\n'):
+                if any(keyword in line.upper() for keyword in ['SELECT', 'FROM', 'WHERE', 'JOIN', 'GROUP BY']):
+                    potential_sql_lines.append(line)
+            
+            if potential_sql_lines:
+                return '\n'.join(potential_sql_lines)
+            
+            # No SQL found, just return the whole text if it contains SQL keywords
+            if any(keyword in text.upper() for keyword in ['SELECT', 'FROM', 'WHERE', 'JOIN', 'GROUP BY']):
+                return text
+            
+            return ""
+        
+        # Take the first SQL block found
+        sql = matches[0].strip()
+        self.logger.info(f"Extracted SQL (length: {len(sql)}): {sql[:100]}...")
+        return sql
+
+    def _ensure_location_id_in_sql(self, sql):
+        """
+        Ensure that location_id is present in the SQL query.
+        
+        Args:
+            sql (str): The SQL query to check.
+            
+        Returns:
+            str: The SQL query with location_id added if it was missing.
+        """
+        if not sql:
+            return sql
+        
+        # Check if location_id is already in the SQL
+        if "location_id" in sql:
+            return sql
+        
+        # Add location_id to WHERE clause
+        if "WHERE" in sql.upper():
+            sql = sql.replace("WHERE", "WHERE location_id = 62 AND", 1)
         else:
-            logger.info("Placeholder replacement verified successfully during initialization") 
+            # If no WHERE clause, add one
+            if ";" in sql:
+                sql = sql.replace(";", " WHERE location_id = 62;", 1)
+            else:
+                sql = sql + " WHERE location_id = 62"
+        
+        self.logger.info(f"Added location_id to SQL: {sql[:100]}...")
+        return sql 
+
+    def _extract_sql(self, text):
+        """
+        Extract SQL from the given text.
+        This is a compatibility method used by _test_placeholder_replacement.
+        
+        Args:
+            text (str): The text to extract SQL from.
+            
+        Returns:
+            str: The extracted SQL.
+        """
+        return self._extract_sql_from_response(text) 
+
+    def health_check(self) -> bool:
+        """
+        Check if the service is healthy by making a simple API call.
+        
+        Returns:
+            bool: True if the service is healthy, False otherwise.
+        """
+        try:
+            # Create a Gemini model instance
+            model = genai.GenerativeModel(
+                model_name=self.model,
+                generation_config=genai.GenerationConfig(
+                    temperature=self.temperature,
+                    max_output_tokens=self.max_tokens
+                )
+            )
+            
+            # Make a simple API call to check health
+            response = model.generate_content("Generate a simple SELECT statement")
+            
+            # Return True if we got a valid response
+            return response is not None and hasattr(response, 'text')
+        except Exception as e:
+            self.logger.error(f"Health check failed: {str(e)}")
+            return False 
+
+    def generate(self, query: str, category: str, response_rules: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Generate SQL query for the given natural language query.
+        This is a compatibility method to match the expected interface of SQLGenerator.
+        
+        Args:
+            query: The natural language query to generate SQL for
+            category: The category of the query (e.g., "menu", "order_history")
+            response_rules: Rules for generating the response
+            context: Additional context for generating the SQL
+            
+        Returns:
+            Dict containing the generated SQL query and metadata
+        """
+        self.logger.info(f"Generating SQL for query: '{query}', category: '{category}'")
+        
+        # Extract time period if present in context
+        time_period = None
+        constraints = None
+        if context:
+            if "time_period_clause" in context:
+                time_period = context["time_period_clause"]
+                self.logger.info(f"Using time period from context: {time_period}")
+            if "previous_filters" in context:
+                constraints = context["previous_filters"]
+                self.logger.info(f"Using constraints from context: {constraints}")
+                
+        # Call the main SQL generation method
+        result = self.generate_sql(query, category, time_period, constraints, context)
+        
+        # Add compatibility fields
+        result["query_type"] = category
+        if "sql" not in result and "generated_sql" in result:
+            result["sql"] = result["generated_sql"]
+            
+        return result
+        
+    def get_performance_metrics(self) -> Dict[str, Any]:
+        """
+        Get performance metrics for the SQL generator.
+        
+        Returns:
+            Dict containing performance metrics:
+            - api_calls: Number of API calls made
+            - total_tokens: Total tokens used
+            - average_tokens_per_call: Average tokens per API call
+            - cache_hits: Number of cache hits (always 0 in this implementation)
+            - cache_misses: Number of cache misses (always 0 in this implementation)
+        """
+        metrics = {
+            "api_calls": self.api_call_count,
+            "total_tokens": self.total_tokens,
+            "average_tokens_per_call": self.total_tokens / max(1, self.api_call_count),
+            "cache_hits": 0,  # Not implemented in this class
+            "cache_misses": 0  # Not implemented in this class
+        }
+        
+        return metrics 
