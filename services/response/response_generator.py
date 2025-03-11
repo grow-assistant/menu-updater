@@ -1031,14 +1031,13 @@ in a professional and helpful manner."""
             verbal_text = self._generate_verbal_text(query, category, response_rules, query_results, context)
             
             if not verbal_text:
+                # Keeping warning but removing content details
                 logger.warning("No verbal text was generated to convert to speech")
                 return None
                 
-            # Log verbal text without including full content in logs
-            log_text = verbal_text[:100] + "..." if len(verbal_text) > 100 else verbal_text
-            logger.info(f"Verbal text generated: '{log_text}' ({len(verbal_text)} chars)")
+            # Remove logging of verbal text content
             
-            # Generate audio with ElevenLabs with detailed logging
+            # Generate audio with ElevenLabs
             audio_data = self._elevenlabs_tts(verbal_text)
             
             if audio_data:
@@ -1054,7 +1053,7 @@ in a professional and helpful manner."""
     def _generate_verbal_text(self, query: str, category: str, response_rules: Dict[str, Any],
                            query_results: Optional[List[Dict[str, Any]]], context: Dict[str, Any]) -> Optional[str]:
         """Generate a concise verbal text for TTS conversion"""
-        logger.info(f"Starting _generate_verbal_text for query: {query[:50]}...")
+        # Remove logging of query content
         
         try:
             # First check if OpenAI client is available
@@ -1086,7 +1085,7 @@ in a professional and helpful manner."""
                 if query_results:
                     prompt += f"\n\nRelevant data: {str(query_results)[:500]}"
                     
-                logger.info(f"Verbal prompt: {prompt[:100]}...")
+                # Remove logging of prompt content
                 
                 try:
                     # Get response using model
@@ -1112,7 +1111,8 @@ in a professional and helpful manner."""
                         sentences = verbal_text.split('. ')
                         verbal_text = '. '.join(sentences[:self.max_verbal_sentences]) + ('.' if not sentences[0].endswith('.') else '')
                     
-                    logger.info(f"Successfully generated verbal text: {verbal_text[:50]}...")
+                    # Remove logging of verbal text content
+                    logger.info("Successfully generated verbal text")
                     return verbal_text
                     
                 except Exception as e:
@@ -1136,7 +1136,8 @@ in a professional and helpful manner."""
                     sentences = response_text.split('. ')
                     verbal_text = '. '.join(sentences[:self.max_verbal_sentences]) + ('.' if not sentences[0].endswith('.') else '')
                     
-                    logger.info(f"Successfully extracted verbal text from base response: {verbal_text[:50]}...")
+                    # Remove logging of verbal text content
+                    logger.info("Successfully extracted verbal text from base response")
                     return verbal_text
                     
                 except Exception as e:
@@ -1164,7 +1165,8 @@ in a professional and helpful manner."""
         
         Returns a dictionary with both response types.
         """
-        logger.info(f"Starting generate_with_verbal for query: {query[:50]}...")
+        # Remove logging of query content
+        logger.info("Starting generate_with_verbal")
         
         text_response = {}
         verbal_audio = None
@@ -1190,7 +1192,8 @@ in a professional and helpful manner."""
                 context
             )
             
-            logger.info(f"Text response generated successfully: {len(text_response.get('response', '')) if text_response else 0} characters")
+            # Remove logging of response content details
+            logger.info("Text response generated successfully")
             
             # Restore original persona for text
             if self.text_persona:
@@ -1222,7 +1225,7 @@ in a professional and helpful manner."""
                         # Direct approach with minimal dependencies
                         if self.client:
                             prompt = f"Create a very brief verbal response (1-2 sentences) for: '{query}'"
-                            logger.info(f"Using direct prompt: {prompt}")
+                            # Remove logging of prompt content
                             
                             response = self.client.chat.completions.create(
                                 model=self.verbal_model,
@@ -1233,18 +1236,20 @@ in a professional and helpful manner."""
                             
                             if response and response.choices:
                                 verbal_text = response.choices[0].message.content
-                                logger.info(f"Direct verbal text generation succeeded: {verbal_text[:50]}...")
+                                # Remove logging of response content
+                                logger.info("Direct verbal text generation succeeded")
                     except Exception as e:
                         logger.error(f"Direct verbal text generation failed: {str(e)}")
                 
                 if verbal_text:
-                    logger.info(f"Generated verbal text ({len(verbal_text)} chars)")
+                    # Remove logging of verbal text content
+                    logger.info("Generated verbal text")
                     try:
                         # Generate TTS only once
                         logger.info("Attempting to generate verbal audio...")
                         verbal_audio = self._elevenlabs_tts(verbal_text)
                         if verbal_audio:
-                            # Only log that audio was generated, not the size or content
+                            # Only log that audio was generated, without content/size details
                             logger.info("Successfully generated verbal audio")
                         else:
                             logger.error("Failed to generate verbal audio from ElevenLabs TTS")
@@ -1267,7 +1272,7 @@ in a professional and helpful manner."""
             if verbal_audio:
                 text_response["verbal_audio"] = verbal_audio
                 text_response["verbal_text"] = verbal_text
-                # Only log that audio was added, not the audio data itself
+                # Only log that audio was added, without mentioning the audio data itself
                 logger.info("Added verbal audio to response")
             else:
                 if verbal_text:
@@ -1349,7 +1354,7 @@ in a professional and helpful manner."""
                 logger.error("ElevenLabs client not initialized. Cannot generate TTS.")
                 return None
                 
-            # Log that we're attempting TTS generation    
+            # Log attempt without text content details
             logger.info("Attempting to generate TTS audio")
             
             # Import elevenlabs with enhanced error handling
@@ -1393,7 +1398,7 @@ in a professional and helpful manner."""
             
             # Prepare parameters for ElevenLabs API call
             elevenlabs_params = {
-                "text": text,
+                "text": text,  # Don't log the actual text content
                 "voice": voice_id,
                 "model": "eleven_multilingual_v2"
             }
@@ -1431,7 +1436,7 @@ in a professional and helpful manner."""
                 end_time = time.time()
                 
                 if audio_data:
-                    # Only log success, not the audio data details
+                    # Only log success without audio data details or size
                     logger.info(f"Successfully generated audio in {end_time - start_time:.2f}s")
                     return audio_data
                 else:
@@ -1448,7 +1453,7 @@ in a professional and helpful manner."""
                 return None
                 
         except Exception as e:
-            # Log the failed API call with detailed error information
+            # Log the failed API call without detailed error information
             logger.error(f"Error calling ElevenLabs API: {str(e)}")
             import traceback
             logger.error(f"Stack trace: {traceback.format_exc()}")

@@ -382,8 +382,8 @@ class OpenAISQLGenerator:
                     time.sleep(delay)
                     
                     # Try with a different model if available
-                    if retry_count == 1 and model != "gpt-4o":
-                        model = "gpt-4o"  # Use a more powerful model for the next attempt
+                    if retry_count == 1 and model != "gpt-4o-mini":
+                        model = "gpt-4o-mini"  # Use a more powerful model for the next attempt
                         logger.info(f"Switching to more powerful model for retry: {model}")
                 else:
                     logger.error(f"Failed to generate SQL after {max_retries+1} attempts. Last error: {str(e)}")

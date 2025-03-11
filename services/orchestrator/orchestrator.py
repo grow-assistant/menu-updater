@@ -540,7 +540,8 @@ class OrchestratorService:
                 
                 # Check if we need a verbal response
                 if not fast_mode:
-                    self.logger.info(f"Generating text and verbal response for query: '{query}'")
+                    # Remove detailed query content from log
+                    self.logger.info("Generating text and verbal response")
                     response_data = self.response_generator.generate_with_verbal(
                         query, 
                         category, 
@@ -552,12 +553,13 @@ class OrchestratorService:
                     # Get verbal audio data from response
                     if response_data and "verbal_audio" in response_data:
                         verbal_audio = response_data["verbal_audio"]
-                        self.logger.info("Verbal audio received from response generator")
+                        # Remove detailed logging about verbal audio
                     elif response_data and "verbal_data" in response_data:  # For backward compatibility
                         verbal_audio = response_data["verbal_data"]
-                        self.logger.info("Verbal audio received as 'verbal_data'")
+                        # Remove detailed logging about verbal audio
                 else:
-                    self.logger.info(f"Generating text-only response for query: '{query}'")
+                    # Remove detailed query content from log
+                    self.logger.info("Generating text-only response")
                     response_data = self.response_generator.generate(
                         query, 
                         category, 
