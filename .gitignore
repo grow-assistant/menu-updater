@@ -1,4 +1,4 @@
-# Python
+# Python bytecode files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -24,7 +24,8 @@ MANIFEST
 # C extensions
 *.so
 
-# PyInstaller
+# Distribution / packaging
+PyInstaller
 *.manifest
 *.spec
 
@@ -46,6 +47,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+pytest.ini
 
 # Translations
 *.mo
@@ -101,6 +103,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.env.*
+*.env
 
 # Celery
 celerybeat-schedule
@@ -137,14 +141,19 @@ output_files/
 pdf_files/
 seed_files/
 
-# Logs directory (based on your codebase)
+# Logs directory
 logs/
 logs
 
-# Environment files
-.env
-.env.*
-*.env
-
-# Pytest configuration
-pytest.ini
+# Specific pycache files
+frontend/__pycache__/
+services/__pycache__/
+services/classification/__pycache__/
+services/execution/__pycache__/
+services/orchestrator/__pycache__/
+services/response/__pycache__/
+services/rules/__pycache__/
+services/sql_generator/__pycache__/
+services/utils/__pycache__/
+tests/integration/queries/order_history/__pycache__/
+tests/unit/__pycache__/
