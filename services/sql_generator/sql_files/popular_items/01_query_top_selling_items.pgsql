@@ -1,4 +1,3 @@
--- Query top selling menu items
 SELECT i.id, i.name, i.price, c.name AS category, 
        COUNT(oi.order_id) AS order_count,
        SUM(oi.quantity) AS total_quantity,

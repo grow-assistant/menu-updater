@@ -1,7 +1,3 @@
--- Verify price updates (verify_price_updated)
--- This query checks if a price update was successful 
-
--- Verify the current price of an item
 SELECT i.id, i.name, i.price, c.name as category, m.name as menu
 FROM items i
 JOIN categories c ON i.category_id = c.id
@@ -10,7 +6,6 @@ WHERE i.name ILIKE '%[ITEM_NAME]%'
   AND m.location_id = [LOCATION_ID]
 ORDER BY i.name;
 
--- Check price update history (if available)
 SELECT 
     i.name as item_name,
     ph.old_price,

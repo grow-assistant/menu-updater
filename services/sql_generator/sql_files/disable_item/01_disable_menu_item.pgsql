@@ -1,4 +1,3 @@
--- Disable a menu item
 UPDATE items
 SET disabled = TRUE,
     updated_at = NOW()

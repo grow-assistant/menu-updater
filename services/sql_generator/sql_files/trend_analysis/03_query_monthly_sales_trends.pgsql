@@ -1,4 +1,3 @@
--- Query revenue by menu category comparing last month to prior month
 SELECT 
     c.name AS category,
     SUM(CASE 

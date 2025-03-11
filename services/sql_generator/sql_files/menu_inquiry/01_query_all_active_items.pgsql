@@ -1,4 +1,3 @@
--- Query all active menu items for a specific location
 SELECT i.id, i.name, i.description, i.price, c.name AS category
 FROM items i
 JOIN categories c ON i.category_id = c.id

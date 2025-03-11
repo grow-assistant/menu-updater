@@ -1,6 +1,3 @@
--- Customer order frequency analysis (customer_order_frequency)
--- Identifies frequency patterns in customer ordering behavior
-
 WITH customer_orders AS (
     SELECT
         o.customer_id,
@@ -59,9 +56,7 @@ SELECT
         WHEN avg_days_between_orders <= 30 THEN 'Monthly Customer'
         ELSE 'Occasional Customer'
     END AS frequency_segment,
-    -- Days since last order
     EXTRACT(DAY FROM (CURRENT_TIMESTAMP - last_updated_at))::integer AS days_since_last_order,
-    -- At risk flag (if last order was more than 2x their average interval)
     CASE 
         WHEN EXTRACT(DAY FROM (CURRENT_TIMESTAMP - last_updated_at))::integer > 
              (avg_days_between_orders * 2) 

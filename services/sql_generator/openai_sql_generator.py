@@ -78,6 +78,12 @@ class OpenAISQLGenerator:
         6. Do not include any explanations outside of comments within the SQL.
         7. Only return the SQL query, nothing else.
         
+        CRITICAL REQUIREMENTS:
+        1. FORBIDDEN: DO NOT USE o.order_date - this column does not exist in the database!
+        2. The orders table does NOT have an 'order_date' column. ALWAYS use (o.updated_at - INTERVAL '7 hours')::date for date filtering.
+        3. NEVER reference o.order_date as it does not exist and will cause database errors!
+        4. Every query MUST include proper location filtering via the o.location_id field.
+
         Database Schema:
         {schema}
         
@@ -119,9 +125,28 @@ class OpenAISQLGenerator:
         
         # Process rules if provided
         if rules:
-            rules_str = "Rules:\n"
-            for rule_name, rule_description in rules.items():
-                rules_str += f"- {rule_name}: {rule_description}\n"
+            # First add critical requirements if they exist
+            if "critical_requirements" in rules:
+                rules_str = "CRITICAL REQUIREMENTS:\n"
+                for rule_name, rule_description in rules["critical_requirements"].items():
+                    rules_str += f"- !!! {rule_name}: {rule_description} !!!\n"
+                rules_str += "\n"
+            
+            # Add other rule categories
+            rules_str += "Rules:\n"
+            for category, category_rules in rules.items():
+                if category == "critical_requirements":
+                    # Already handled above
+                    continue
+                    
+                if isinstance(category_rules, dict):
+                    # Handle nested rule categories
+                    rules_str += f"\n{category.upper()} RULES:\n"
+                    for rule_name, rule_description in category_rules.items():
+                        rules_str += f"- {rule_name}: {rule_description}\n"
+                else:
+                    # Handle flat rules
+                    rules_str += f"- {category}: {category_rules}\n"
         
         return rules_str
     
@@ -152,218 +177,241 @@ class OpenAISQLGenerator:
     
     def _build_prompt(self, query: str, examples: List[Dict[str, Any]], context: Dict[str, Any]) -> str:
         """
-        Build a prompt for generating SQL from a natural language query.
+        Build the prompt for the OpenAI API request.
         
         Args:
-            query: The natural language query
-            examples: List of example queries and SQL
-            context: Additional context like schema, rules, etc.
+            query: User's natural language query
+            examples: List of examples for few-shot learning
+            context: Additional context for the query
             
         Returns:
             Formatted prompt string
         """
-        # Start with the template
-        prompt = self.prompt_template
-        
-        # Get rules service for schema information
-        rules_service = ServiceRegistry.get_service("rules")
-        
-        # Get schema information if available
-        schema_str = ""
-        if "query_type" in context:
-            query_type = context["query_type"]
-            schema = rules_service.get_schema_for_type(query_type)
-            
-            if schema:
-                schema_str = self._format_schema(schema)
-        
-        # Get rules if available
-        rules_str = ""
-        if "rules" in context:
-            rules_str = self._format_rules(context["rules"])
-        
-        # Get patterns if available
-        patterns_str = ""
-        if "query_patterns" in context:
-            patterns_str = self._format_patterns(context["query_patterns"])
-            
-        # Format examples if available
-        examples_str = self._format_examples(examples)
-        
-        # Add previous SQL queries as context if available
-        previous_sql_str = ""
-        if "previous_sql" in context and context["previous_sql"]:
-            previous_sql = context["previous_sql"]
-            previous_sql_str = "\nPrevious Related SQL Queries (for context):\n"
-            
-            for i, sql_entry in enumerate(reversed(previous_sql), 1):
-                previous_sql_str += f"Previous Query {i}:\n"
-                previous_sql_str += f"User Asked: {sql_entry.get('query', 'Unknown')}\n"
-                previous_sql_str += f"SQL Generated: {sql_entry.get('sql', 'Unknown')}\n\n"
+        # Get services via registry to avoid circular imports
+        try:
+            # Try to get the rules service
+            rules_service = ServiceRegistry.get_service("rules")
+            if rules_service:
+                # Get rules for the category
+                category = context.get("category", "")
+                rules = rules_service.get_rules_for_category(category) if category else {}
+            else:
+                rules = {}
+                logger.warning("Rules service not found in registry, no rules will be applied")
                 
-            previous_sql_str += """
-IMPORTANT CONTEXT MAINTENANCE INSTRUCTIONS:
-1. If the current question contains terms like "those", "these", or otherwise refers to previous results, it's a follow-up query.
-2. For follow-up queries, ALWAYS maintain the same filtering conditions (WHERE clauses) from the most recent relevant query.
-3. Pay special attention to date filters, status filters, and location filters - these should be preserved exactly.
-4. Example: If previous query filtered "orders on 2/21/2025 with status 7", and current query asks "who placed those orders", 
-   your new query MUST include "WHERE (o.updated_at - INTERVAL '7 hours')::date = '2025-02-21' AND o.status = 7".
-5. Never drop important filters when answering follow-up questions - context continuity is critical.
-"""
+        except Exception as e:
+            rules = {}
+            logger.error(f"Error getting rules: {str(e)}")
         
-        # Replace the placeholders
-        prompt = prompt.replace("{schema}", schema_str)
-        prompt = prompt.replace("{rules}", rules_str)
-        prompt = prompt.replace("{patterns}", patterns_str)
-        prompt = prompt.replace("{examples}", examples_str)
-        prompt = prompt.replace("{query}", query)
+        # Construct schema information
+        schema_info = context.get("schema", "")
         
-        # Add previous SQL context to the end of the prompt
-        if previous_sql_str:
-            prompt += "\n" + previous_sql_str
+        # Format examples
+        examples_text = ""
+        if examples:
+            for i, example in enumerate(examples):
+                examples_text += f"Example {i+1}:\n"
+                examples_text += f"Question: {example.get('query', '')}\n"
+                examples_text += f"SQL: {example.get('sql', '')}\n\n"
+        
+        # Count examples for logging
+        examples_count = len(examples) if examples else 0
+        logger.info(f"Building prompt with {examples_count} examples for category: {context.get('category', 'unknown')}")
+        
+        # Log first example for debugging if available
+        if examples_count > 0 and self.enable_detailed_logging:
+            logger.debug(f"First example: Question: {examples[0].get('query', '')[:50]}...")
+            logger.debug(f"First example: SQL: {examples[0].get('sql', '')[:50]}...")
+        
+        # Format rules
+        rules_text = ""
+        if rules:
+            rules_text = "Query Rules:\n"
+            for rule in rules:
+                rules_text += f"- {rule}\n"
+        
+        # Extract any time period information
+        time_period = context.get("time_period", "")
+        if time_period:
+            logger.info(f"Adding time period to prompt: {time_period}")
+            rules_text += f"\nTime Period: {time_period}\n"
+        
+        # Format any SQL patterns
+        patterns_text = context.get("patterns", "")
+        
+        # Substitute into the prompt template
+        prompt = self.prompt_template.format(
+            schema=schema_info,
+            rules=rules_text,
+            patterns=patterns_text,
+            examples=examples_text,
+            query=query
+        )
+        
+        # Log detailed logging if enabled
+        if self.enable_detailed_logging:
+            logger.debug(f"Generated prompt (excerpt): {prompt[:500]}...")
         
         return prompt
-    
+
     def generate_sql(self, query: str, examples: List[Dict[str, Any]], context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Generate SQL from the user query using OpenAI.
+        Generate SQL from natural language using OpenAI.
         
         Args:
-            query: The user's query text
-            examples: List of relevant SQL examples
-            context: Additional context information
+            query: Natural language query
+            examples: List of examples for few-shot learning
+            context: Additional context for query
             
         Returns:
-            Dictionary containing the generated SQL and metadata
+            Dictionary with generated SQL and metadata
         """
         start_time = time.time()
-        query_type = context.get('query_type', 'unknown')
+        self.api_call_count += 1
         
-        # Check if we have a cached prompt for this query type
-        cache_key = f"{query_type}_{hash(str(examples))}"
-        current_time = time.time()
+        # Build the prompt
+        logger.info(f"Building SQL generation prompt with {len(examples)} examples and context for {context.get('category', 'unknown')}")
+        prompt = self._build_prompt(query, examples, context)
         
-        # Build or use cached prompt
-        if (cache_key in self.prompt_cache and 
-            current_time - self.prompt_cache_timestamps.get(cache_key, 0) < self.prompt_cache_ttl):
-            # Use cached prompt
-            prompt = self.prompt_cache[cache_key].replace("{{QUERY}}", query)
-            logger.debug(f"Using cached prompt template for {query_type}")
-        else:
-            # Build new prompt
-            prompt = self._build_prompt(query, examples, context)
-            
-            # Cache the prompt with a placeholder for the query
-            cacheable_prompt = prompt.replace(query, "{{QUERY}}")
-            self.prompt_cache[cache_key] = cacheable_prompt
-            self.prompt_cache_timestamps[cache_key] = current_time
+        # Try to get a cached response
+        cache_key = f"{query}_{context.get('category', '')}"
+        if cache_key in self.prompt_cache:
+            cache_time = self.prompt_cache_timestamps.get(cache_key, 0)
+            if time.time() - cache_time < self.prompt_cache_ttl:
+                logger.info(f"Using cached SQL for query: {query}")
+                return self.prompt_cache[cache_key]
         
-        logger.info(f"Built SQL generation prompt with {len(examples)} examples and context for {query_type}")
+        # Set up parameters for the API call
+        model = context.get("model", self.model)
+        max_tokens = context.get("max_tokens", self.max_tokens)
+        temperature = context.get("temperature", self.temperature)
         
-        # Initialize log_file regardless of detailed logging setting
-        session_id = str(uuid.uuid4())[:8]
-        log_dir = os.path.join("logs", "ai_prompts")
-        os.makedirs(log_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, f"openai_sql_{session_id}.log")
-        
-        # Create a detailed log file for this prompt if detailed logging is enabled
-        if self.enable_detailed_logging:
-            with open(log_file, "w", encoding="utf-8") as f:
-                f.write(f"TIMESTAMP: {datetime.now().isoformat()}\n")
-                f.write(f"QUERY: {query}\n")
-                f.write(f"CATEGORY: {query_type}\n")
-                f.write("\n----- FULL PROMPT TO OPENAI -----\n\n")
-                f.write(prompt)
-                f.write("\n\n")
-            
-            # Log prompt location
-            logger.info(f"Full prompt logged to: {log_file}")
-        
-        # Track generation attempts
-        attempts = 0
-        sql = ""
-        raw_response = ""
-        
-        # Set up retry logic in case of failures
-        max_attempts = 3
-        
-        while attempts < max_attempts:
-            attempts += 1
-            
+        # Exponential backoff for retries
+        max_retries = self.max_retries
+        retry_count = 0
+        last_error = None
+
+        while retry_count <= max_retries:
             try:
-                logger.info(f"Generating SQL with model: {self.model}, attempt: {attempts}/{max_attempts}")
+                logger.info(f"Generating SQL with model: {model}, attempt: {retry_count+1}/{max_retries+1}")
                 
-                # Call OpenAI API
-                api_call_start = time.time()
+                # Log the model and parameters being used
+                if self.enable_detailed_logging:
+                    logger.debug(f"OpenAI parameters: model={model}, temperature={temperature}, max_tokens={max_tokens}")
                 
+                # Make the API call
                 response = self.client.chat.completions.create(
-                    model=self.model,
+                    model=model,
                     messages=[
-                        {"role": "system", "content": "You are a PostgreSQL expert that translates natural language questions into SQL queries."},
+                        {"role": "system", "content": "You are a PostgreSQL expert that translates natural language to SQL."},
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens
+                    temperature=temperature,
+                    max_tokens=max_tokens
                 )
                 
-                # Update metrics
-                self.api_call_count += 1
-                api_call_duration = time.time() - api_call_start
-                self.total_latency += api_call_duration
-                # Get token usage from the response
-                self.total_tokens += response.usage.total_tokens
+                # Extract the SQL from the response
+                response_text = response.choices[0].message.content
+                sql = self._extract_sql(response_text)
                 
-                raw_response = response.choices[0].message.content
-                
-                # Log the raw response if detailed logging is enabled
-                if self.enable_detailed_logging:
-                    with open(log_file, "a", encoding="utf-8") as f:
-                        f.write("----- RAW OPENAI RESPONSE -----\n\n")
-                        f.write(raw_response)
-                        f.write("\n\n")
-                
-                # Extract SQL from the response
-                sql = self._extract_sql(raw_response)
-                
-                # If SQL was successfully extracted, break the retry loop
-                if sql:
-                    break
+                # If no SQL was extracted, try to fix it
+                if not sql:
+                    logger.warning(f"No SQL found in response, attempting to extract from full response")
+                    sql = response_text.strip()
                     
-                # If no SQL was extracted, log and retry
-                logger.warning(f"Failed to extract SQL from response. Attempt {attempts}/{max_attempts}")
-                self.retry_count += 1
+                    # If the response doesn't start with SELECT, INSERT, UPDATE, DELETE, WITH, try to find SQL
+                    if not any(sql.upper().startswith(keyword) for keyword in ["SELECT", "INSERT", "UPDATE", "DELETE", "WITH"]):
+                        # Try to find SQL-like content
+                        sql_matches = re.findall(r'(SELECT|INSERT|UPDATE|DELETE|WITH)[\s\S]+?;', sql, re.IGNORECASE)
+                        if sql_matches:
+                            sql = sql_matches[0]
+                        else:
+                            # If still no SQL found, raise an error to trigger retry
+                            raise ValueError("No SQL statement found in response")
+                
+                # Calculate token usage and latency
+                usage = response.usage
+                completion_tokens = usage.completion_tokens if usage else 0
+                prompt_tokens = usage.prompt_tokens if usage else 0
+                total_tokens = usage.total_tokens if usage else 0
+                
+                self.total_tokens += total_tokens
+                
+                end_time = time.time()
+                latency = end_time - start_time
+                self.total_latency += latency
+                
+                # Cache the result
+                result = {
+                    "sql": sql,
+                    "model": model,
+                    "tokens": {
+                        "prompt": prompt_tokens,
+                        "completion": completion_tokens,
+                        "total": total_tokens
+                    },
+                    "latency": latency,
+                    "metadata": {
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                        "model": model,
+                        "examples_used": len(examples)
+                    }
+                }
+                
+                # Store in cache
+                self.prompt_cache[cache_key] = result
+                self.prompt_cache_timestamps[cache_key] = time.time()
+                
+                # Log success
+                logger.info(f"Successfully generated SQL query in {latency:.2f} seconds")
+                if self.enable_detailed_logging:
+                    logger.debug(f"Generated SQL: {sql[:100]}...")
+                
+                return result
                 
             except Exception as e:
-                error_msg = f"Error generating SQL: {str(e)}"
-                logger.error(error_msg)
-                
-                # Log the error if detailed logging is enabled
-                if self.enable_detailed_logging:
-                    with open(log_file, "a", encoding="utf-8") as f:
-                        f.write("----- ERROR -----\n\n")
-                        f.write(error_msg)
-                        f.write("\n\n")
-                
-                # Sleep briefly before retry
-                time.sleep(0.5)
+                retry_count += 1
                 self.retry_count += 1
+                last_error = str(e)
+                
+                # Log error with different levels based on retry count
+                if retry_count <= max_retries:
+                    delay = 2 ** retry_count  # Exponential backoff
+                    logger.warning(f"Error generating SQL (attempt {retry_count}/{max_retries+1}): {str(e)}. Retrying in {delay} seconds...")
+                    time.sleep(delay)
+                    
+                    # Try with a different model if available
+                    if retry_count == 1 and model != "gpt-4o":
+                        model = "gpt-4o"  # Use a more powerful model for the next attempt
+                        logger.info(f"Switching to more powerful model for retry: {model}")
+                else:
+                    logger.error(f"Failed to generate SQL after {max_retries+1} attempts. Last error: {str(e)}")
         
-        # Final result construction - ensure we always return a valid dict
-        result = {
-            "success": bool(sql),  # Success is True if SQL is not empty
-            "query_time": time.time() - start_time,
-            "model": self.model,
-            "attempts": attempts + 1
+        # If we get here, all retries failed
+        end_time = time.time()
+        latency = end_time - start_time
+        
+        error_result = {
+            "sql": "",
+            "error": last_error,
+            "model": model,
+            "tokens": {
+                "prompt": 0,
+                "completion": 0,
+                "total": 0
+            },
+            "latency": latency,
+            "metadata": {
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "model": model,
+                "examples_used": len(examples),
+                "retry_count": retry_count
+            }
         }
         
-        if sql:
-            result["query"] = sql
-            result["query_type"] = "SELECT"  # Default to SELECT, can be refined further
-        else:
-            result["error"] = f"Failed to generate SQL after {attempts+1} attempts"
-            result["raw_response"] = raw_response[:500] if len(raw_response) > 500 else raw_response
-            
-        return result
+        return error_result
     
     def _extract_sql(self, text: str) -> str:
         """
@@ -454,7 +502,8 @@ IMPORTANT CONTEXT MAINTENANCE INSTRUCTIONS:
         logger.debug(f"Generate called with query: '{query}', category: '{category}'")
         
         # Extract examples from rules_and_examples
-        examples = rules_and_examples.get("examples", [])
+        examples = rules_and_examples.get("sql_examples", rules_and_examples.get("examples", []))
+        logger.info(f"Found {len(examples)} examples for category '{category}'")
         
         # Create context dictionary from category and rules
         context = {

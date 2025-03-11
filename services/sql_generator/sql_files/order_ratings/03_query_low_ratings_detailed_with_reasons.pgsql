@@ -1,5 +1,3 @@
--- Query low rated items (less than 5 rating) with detailed order and rating information
--- Using DISTINCT ON to eliminate duplicates based on feedback_id
 SELECT DISTINCT ON (f.id)
     l.name as location_name,
     o.id AS order_id,

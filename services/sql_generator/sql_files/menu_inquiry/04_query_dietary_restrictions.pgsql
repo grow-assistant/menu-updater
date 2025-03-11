@@ -1,6 +1,3 @@
--- Query items with specific dietary restrictions (dietary_restrictions)
--- Finds items matching dietary keywords in their descriptions since item_tags table doesn't exist
-
 SELECT 
     i.id, 
     i.name AS item_name, 
@@ -14,7 +11,6 @@ SELECT
         WHEN i.description ILIKE '%dairy-free%' OR i.description ILIKE '%dairy free%' THEN 'Dairy-Free'
         ELSE 'No dietary tag found'
     END AS primary_dietary_tag,
-    -- Create an array of applicable tags for each item
     ARRAY_REMOVE(ARRAY[
         CASE WHEN i.description ILIKE '%vegetarian%' THEN 'Vegetarian' ELSE NULL END,
         CASE WHEN i.description ILIKE '%vegan%' THEN 'Vegan' ELSE NULL END,

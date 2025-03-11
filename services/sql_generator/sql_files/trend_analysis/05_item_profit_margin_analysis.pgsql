@@ -1,13 +1,8 @@
--- Item profit margin analysis (profit_margin_analysis)
--- Analyzes menu items by their profit margin and sales volume
-
 WITH item_costs AS (
-    -- Simulated item costs (in real system, would pull from inventory/cost tables)
     SELECT 
         i.id AS item_id,
         i.name AS item_name,
         i.price AS selling_price,
-        -- Simulate cost as 30-40% of selling price based on item_id
         ROUND(i.price * (0.3 + (i.id % 10) * 0.01), 2) AS cost_price
     FROM 
         items i
@@ -20,7 +15,6 @@ WITH item_costs AS (
         AND i.disabled = FALSE
 ),
 item_sales AS (
-    -- Calculate sales volume and revenue by item
     SELECT 
         i.id AS item_id,
         COUNT(oi.id) AS order_count,
@@ -43,7 +37,6 @@ item_sales AS (
     GROUP BY 
         i.id
 )
--- Join the data and calculate margins
 SELECT 
     ic.item_id,
     ic.item_name,

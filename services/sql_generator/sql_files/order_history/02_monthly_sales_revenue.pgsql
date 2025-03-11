@@ -1,4 +1,3 @@
--- Total sales revenue for the past month
 SELECT COALESCE(SUM(total), 0) as total_revenue
 FROM orders
 WHERE location_id = 62

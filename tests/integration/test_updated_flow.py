@@ -100,7 +100,7 @@ class TestUpdatedServiceFlow:
         mock_sql_generator = MagicMock()
         mock_sql_generator.generate.return_value = {
             "success": True,
-            "sql": "SELECT * FROM orders WHERE order_date > CURRENT_DATE - INTERVAL '7 days'",
+            "sql": "SELECT * FROM orders WHERE updated_at > CURRENT_DATE - INTERVAL '7 days'",
             "query_type": "SELECT"
         }
         
@@ -190,7 +190,7 @@ class TestUpdatedServiceFlow:
         mock_sql_generator = MagicMock()
         mock_sql_generator.generate.return_value = {
             "success": True,
-            "sql": "SELECT * FROM orders WHERE order_date > CURRENT_DATE - INTERVAL '30 days'",
+            "sql": "SELECT * FROM orders WHERE updated_at > CURRENT_DATE - INTERVAL '30 days'",
             "query_type": "SELECT"
         }
         
@@ -288,7 +288,7 @@ class TestUpdatedServiceFlow:
                     # Second call succeeds
                     return {
                         "success": True,
-                        "sql": "SELECT * FROM orders WHERE order_date > CURRENT_DATE - INTERVAL '30 days'",
+                        "sql": "SELECT * FROM orders WHERE updated_at > CURRENT_DATE - INTERVAL '30 days'",
                         "query_type": "SELECT"
                     }
         
@@ -380,7 +380,7 @@ class TestUpdatedServiceFlow:
                 {"date": "2022-01-01", "total": 100},
                 {"date": "2022-06-15", "total": 200}
             ],
-            "sql": "SELECT * FROM orders WHERE order_date >= DATE_TRUNC('year', CURRENT_DATE - INTERVAL '1 year')",
+            "sql": "SELECT * FROM orders WHERE updated_at >= DATE_TRUNC('year', CURRENT_DATE - INTERVAL '1 year')",
             "query_type": "data_query"
         }
 
@@ -392,7 +392,7 @@ class TestUpdatedServiceFlow:
                 {"date": "2023-05-01", "total": 300},
                 {"date": "2023-05-15", "total": 400}
             ],
-            "sql": "SELECT * FROM orders WHERE order_date >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')",
+            "sql": "SELECT * FROM orders WHERE updated_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')",
             "query_type": "data_query",
             "correction_applied": True,
             "correction_target": "time_period"

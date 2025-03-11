@@ -1,0 +1,6 @@
+[
+  {
+    "query": "Delete option items then options",
+    "sql": "DO $$\nDECLARE\n    v_location_id INT := 16;\n    v_item_name VARCHAR := 'Quesadilla';\n    v_option_name VARCHAR := 'Meat Temperature';\n    --v_option_item_name VARCHAR := 'Poached';\nBEGIN\n    -- Delete option items first\n    DELETE FROM option_items \n    WHERE id IN (\n        SELECT \n            DISTINCT oi.id AS option_item_id\n        FROM locations l \n        INNER JOIN menus m ON m.location_id = l.id\n        INNER JOIN categories c ON c.menu_id = m.id\n        INNER JOIN items i ON i.category_id = c.id\n        INNER JOIN options o ON o.item_id = i.id\n        INNER JOIN option_items oi ON oi.option_id = o.id\n        WHERE l.id = v_location_id\n        AND i.name = v_item_name\n        AND o.name = v_option_name\n    );\n\n    -- Then delete the options\n    DELETE FROM options \n    WHERE id IN (\n        SELECT \n            DISTINCT o.id AS option_id\n        FROM locations l \n        INNER JOIN menus m ON m.location_id = l.id\n        INNER JOIN categories c ON c.menu_id = m.id\n        INNER JOIN items i ON i.category_id = c.id\n        INNER JOIN options o ON o.item_id = i.id\n        WHERE l.id = v_location_id\n        AND i.name = v_item_name\n        AND o.name = v_option_name\n    );\nEND $$;"
+  }
+]

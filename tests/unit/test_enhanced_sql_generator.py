@@ -228,7 +228,7 @@ class TestEnhancedSQLGenerator:
         # No need to mock the API for this test as we'll just check the SQL
         
         # SQL without location_id
-        sql = "SELECT * FROM orders WHERE order_date > '2023-01-01'"
+        sql = "SELECT * FROM orders WHERE updated_at > '2023-01-01'"
         query = "Show me orders from this year"
         
         # Location ID to use
@@ -247,7 +247,7 @@ class TestEnhancedSQLGenerator:
     def test_validate_sql_with_location_id(self, sql_generator):
         """Test that _validate_sql accepts SQL with proper location_id filtering."""
         # SQL already has location_id
-        sql = "SELECT * FROM orders WHERE location_id = 42 AND order_date > '2023-01-01'"
+        sql = "SELECT * FROM orders WHERE location_id = 42 AND updated_at > '2023-01-01'"
         query = "Show me orders from this year for store 42"
         
         # Mock the validation response to avoid API call

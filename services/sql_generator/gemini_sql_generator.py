@@ -26,6 +26,7 @@ class GeminiSQLGenerator:
         self.temperature = config["api"]["gemini"].get("temperature", 0.2)
         self.max_tokens = config["api"]["gemini"].get("max_tokens", 1024)
         genai.configure(api_key=api_key)
+        self.client_initialized = True  # FIX: Set client_initialized to True after configuring the API
         
         # Initialize logger
         self.logger = logger
@@ -62,7 +63,6 @@ class GeminiSQLGenerator:
         self._verify_placeholder_replacement()
         
         self.db_service = db_service
-        self.client_initialized = False
         self.max_retries = config.get("services", {}).get("sql_generator", {}).get("max_retries", 3)
         
         # Only perform placeholder verification if not explicitly skipped

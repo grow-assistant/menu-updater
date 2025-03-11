@@ -432,7 +432,7 @@ class SQLGenerationService:
         Columns:
         - order_id (INTEGER): Primary key for orders
         - customer_id (INTEGER): Foreign key to customers table
-        - order_date (DATE): Date when order was placed
+        - updated_at (DATE): Date when order was placed
         - completion_date (DATE): Date when order was completed
         - status (TEXT): Order status (pending, completed, cancelled)
         - total_amount (DECIMAL): Total order amount

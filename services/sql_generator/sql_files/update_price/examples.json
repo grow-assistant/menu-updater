@@ -1,0 +1,14 @@
+[
+  {
+    "query": "Update specific item price",
+    "sql": "BEGIN;\n\nSELECT id, name, price \nFROM items \nWHERE name ILIKE '%Quesadilla%'\n  AND id IN (\n    SELECT i.id\n    FROM items i\n    JOIN categories c ON i.category_id = c.id\n    JOIN menus m ON c.menu_id = m.id\n    WHERE m.location_id = 16\n  );\n\nUPDATE items\nSET price = 7.00\nWHERE name ILIKE '%Quesadilla%'\n  AND id IN (\n    SELECT i.id\n    FROM items i\n    JOIN categories c ON i.category_id = c.id\n    JOIN menus m ON c.menu_id = m.id\n    WHERE m.location_id = 16\n  );\n\nCOMMIT;"
+  },
+  {
+    "query": "Verify price updated",
+    "sql": "SELECT i.id, i.name, i.price, c.name as category, m.name as menu\nFROM items i\nJOIN categories c ON i.category_id = c.id\nJOIN menus m ON c.menu_id = m.id\nWHERE i.name ILIKE '%[ITEM_NAME]%'\n  AND m.location_id = [LOCATION_ID]\nORDER BY i.name;\n\nSELECT \n    i.name as item_name,\n    ph.old_price,\n    ph.new_price,\n    ph.updated_at,\n    ph.updated_by\nFROM items i\nLEFT JOIN price_history ph ON i.id = ph.item_id\nWHERE i.name ILIKE '%[ITEM_NAME]%'\n  AND i.id IN (\n    SELECT i.id\n    FROM items i\n    JOIN categories c ON i.category_id = c.id\n    JOIN menus m ON c.menu_id = m.id\n    WHERE m.location_id = [LOCATION_ID]\n  )\nORDER BY ph.updated_at DESC\nLIMIT 5;"
+  },
+  {
+    "query": "Update price percentage increase",
+    "sql": "BEGIN;\n\nWITH item_to_update AS (\n    SELECT i.id, i.name, i.price as old_price, \n           ROUND(i.price * 1.10, 2) as new_price\n    FROM items i\n    JOIN categories c ON i.category_id = c.id\n    JOIN menus m ON c.menu_id = m.id\n    WHERE m.location_id = [LOCATION_ID]\n      AND c.name ILIKE '%[CATEGORY_NAME]%'\n)\n\nSELECT id, name, old_price, new_price,\n       new_price - old_price as price_difference,\n       ROUND((new_price - old_price) / old_price * 100, 1) as percent_increase\nFROM item_to_update;\n\nSET price = item_to_update.new_price,\n    updated_at = NOW()\nFROM item_to_update\nWHERE items.id = item_to_update.id;\n\nSELECT i.id, i.name, i.price, c.name as category\nFROM items i\nJOIN categories c ON i.category_id = c.id\nJOIN menus m ON c.menu_id = m.id\nWHERE m.location_id = [LOCATION_ID]\n  AND c.name ILIKE '%[CATEGORY_NAME]%'\nORDER BY i.name;\n\nCOMMIT;"
+  }
+]

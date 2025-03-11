@@ -1,5 +1,3 @@
--- Which customer spent the most last month?
--- This query finds the customer who spent the most money in the previous month
 
 SELECT
   u.first_name || ' ' || u.last_name AS customer_name,
@@ -7,7 +5,7 @@ SELECT
 FROM
   orders o
 JOIN
-  users u ON o.customer_id = u.id  -- Important: orders uses customer_id (not user_id)
+  users u ON o.customer_id = u.id
 WHERE
   o.location_id = 62
   AND o.status = 7

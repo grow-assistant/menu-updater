@@ -1043,12 +1043,12 @@ class QueryProcessor:
             
             # Add time filter if available
             if time_range and "start_date" in time_range and "end_date" in time_range:
-                sql += " WHERE order_date >= :start_date AND order_date <= :end_date"
+                sql += " WHERE updated_at >= :start_date AND updated_at <= :end_date"
                 params["start_date"] = time_range["start_date"]
                 params["end_date"] = time_range["end_date"]
             else:
                 # Default time filter if no dates specified
-                sql += " WHERE order_date >= DATE('now', '-7 day')"
+                sql += " WHERE updated_at >= DATE('now', '-7 day')"
                 
             # Add limit for safety
             sql += " LIMIT 100"

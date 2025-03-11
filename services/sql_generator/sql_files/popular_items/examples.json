@@ -1,0 +1,6 @@
+[
+  {
+    "query": "Query top selling items",
+    "sql": "SELECT i.id, i.name, i.price, c.name AS category, \n       COUNT(oi.order_id) AS order_count,\n       SUM(oi.quantity) AS total_quantity,\n       SUM(i.price * oi.quantity) AS total_revenue\nFROM items i\nJOIN order_items oi ON i.id = oi.item_id\nJOIN orders o ON oi.order_id = o.id\nJOIN categories c ON i.category_id = c.id\nJOIN menus m ON c.menu_id = m.id\nWHERE m.location_id = 62\n  AND (o.updated_at - INTERVAL '7 hours') >= (CURRENT_DATE - INTERVAL '30 days')\n  AND o.status = 7\n  AND i.price > 0\nGROUP BY i.id, i.name, i.price, c.name\nORDER BY total_quantity DESC\nLIMIT 10;"
+  }
+]

@@ -1,6 +1,3 @@
--- Ratings trend analysis over time (ratings_trend_analysis)
--- Examines how ratings have changed over time, by month and item category
-
 WITH monthly_ratings AS (
     SELECT
         DATE_TRUNC('month', r.created_at) AS month,

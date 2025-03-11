@@ -1,8 +1,4 @@
--- Query popular items with their most common options (popular_items_with_options)
--- Shows top-selling menu items along with their most frequently selected options
-
 WITH popular_items AS (
-    -- Get most popular items in last 90 days
     SELECT 
         i.id AS item_id,
         i.name AS item_name,
@@ -29,7 +25,6 @@ WITH popular_items AS (
     LIMIT 10
 ),
 popular_options AS (
-    -- Get popular options for each item
     SELECT 
         pi.item_id,
         opt.id AS option_id,
@@ -49,7 +44,6 @@ popular_options AS (
     GROUP BY 
         pi.item_id, opt.id, opt.name, oi_opt.name
 )
--- Combine to show items with their popular options
 SELECT 
     pi.item_name,
     pi.quantity_sold,

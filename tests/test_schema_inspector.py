@@ -40,7 +40,7 @@ class TestSchemaInspector(unittest.TestCase):
             Column('id', Integer, primary_key=True),
             Column('user_id', Integer, ForeignKey('users.id'), nullable=False),
             Column('amount', Integer, nullable=False),
-            Column('order_date', String(50))  # Using string for date to avoid SQLite limitations
+            Column('updated_at', String(50))  # Using string for date to avoid SQLite limitations
         )
         
         # Order items table with foreign key to orders
@@ -69,9 +69,9 @@ class TestSchemaInspector(unittest.TestCase):
             
             # Insert orders
             conn.execute(orders.insert().values([
-                {"id": 1, "user_id": 1, "amount": 100, "order_date": "2023-02-01"},
-                {"id": 2, "user_id": 1, "amount": 200, "order_date": "2023-02-15"},
-                {"id": 3, "user_id": 2, "amount": 150, "order_date": "2023-03-01"}
+                {"id": 1, "user_id": 1, "amount": 100, "updated_at": "2023-02-01"},
+                {"id": 2, "user_id": 1, "amount": 200, "updated_at": "2023-02-15"},
+                {"id": 3, "user_id": 2, "amount": 150, "updated_at": "2023-03-01"}
             ]))
             
             # Insert order items
@@ -289,7 +289,7 @@ class TestSchemaInspector(unittest.TestCase):
         # Find tables with date columns
         tables_with_date = self.inspector.get_tables_by_column_pattern("date")
         
-        # Only orders has order_date column
+        # Only orders has updated_at column
         table_names = [table["table_name"] for table in tables_with_date]
         self.assertIn("orders", table_names)
         self.assertNotIn("order_items", table_names)

@@ -24,9 +24,8 @@ class RulesService:
             config: Configuration for the rules service
         """
         self.config = config
-        self.rules_path = config.get("services", {}).get("rules", {}).get("rules_path", "./resources/rules")
+        self.rules_path = config.get("services", {}).get("rules", {}).get("rules_path", "./services/rules")
         self.resources_dir = config["services"]["rules"].get("resources_dir", "resources")
-        
         # Set up SQL files path - pointing to existing sql_generator module
         self.sql_files_path = config["services"]["rules"].get("sql_files_path", "services/sql_generator/sql_files")
         
@@ -267,25 +266,28 @@ class RulesService:
             
             # Load all SQL files in the directory
             patterns = {}
-            for sql_file in pattern_dir.glob("*.pgsql"):
-                try:
-                    with open(sql_file, "r", encoding="utf-8") as f:
-                        content = f.read()
-                        # Remove SQL comments at the beginning if present
-                        lines = content.splitlines()
-                        if lines and lines[0].strip().startswith("--"):
-                            content = "\n".join(lines[1:])
-                        # Use the filename without extension as the pattern key
-                        pattern_key = sql_file.stem
-                        patterns[pattern_key] = content.strip()
-                except Exception as e:
-                    logger.error(f"Error loading SQL pattern from {sql_file}: {str(e)}")
+            # Note: Previously loaded individual .pgsql files, but this has been disabled
+            # to ensure consistency with only loading SQL examples from examples.json files
+            logger.info(f"Skipping loading individual .pgsql files from {pattern_dir}. "
+                      "Only using examples.json files per updated requirements.")
             
-            # Return the patterns with empty rules and schema
-            return {"rules": {}, "schema": {}, "patterns": patterns}
+            # Load schema information
+            schema_file = os.path.join(pattern_dir, "schema.json")
+            if os.path.exists(schema_file):
+                try:
+                    with open(schema_file, "r") as f:
+                        schema = json.load(f)
+                except Exception as e:
+                    logger.error(f"Error loading schema file {schema_file}: {str(e)}")
+                    schema = {}
+            else:
+                schema = {}
+            
+            # Return the patterns with empty rules and populated schema
+            return {"rules": {}, "schema": schema, "patterns": patterns}
             
         except Exception as e:
-            logger.error(f"Error loading SQL patterns for {pattern_type}: {str(e)}")
+            logger.error(f"Error loading SQL patterns: {str(e)}")
             return {"rules": {}, "schema": {}, "patterns": {}}
     
     def get_schema_for_type(self, pattern_type: str) -> Dict[str, Any]:
@@ -388,12 +390,13 @@ class RulesService:
         
         return patterns
     
-    def load_all_sql_files_from_directory(self, directory: str) -> Dict[str, str]:
+    def load_all_sql_files_from_directory(self, directory: str, default_patterns: Dict[str, str] = None) -> Dict[str, str]:
         """
         Load all SQL files from a directory without hard-coding file names.
         
         Args:
             directory: Name of the directory to load SQL files from
+            default_patterns: Optional default patterns to use if no files are found
             
         Returns:
             Dictionary mapping file names (without extension) to SQL content
@@ -407,41 +410,15 @@ class RulesService:
             logger.warning(f"SQL directory {directory_path} not found.")
             return patterns
             
-        # Load all .pgsql and .sql files
-        for file_path in directory_path.glob('*.pgsql'):
-            try:
-                with open(file_path, 'r') as f:
-                    content = f.read().strip()
-                    # Remove comment header line if present
-                    lines = content.splitlines()
-                    clean_content = content
-                    if lines and lines[0].strip().startswith('--'):
-                        clean_content = '\n'.join(lines[1:]).strip()
-                    # Use the filename without extension as the pattern key
-                    pattern_key = file_path.stem
-                    patterns[pattern_key] = clean_content
-                    logger.debug(f"Loaded SQL pattern '{pattern_key}' from {file_path}")
-            except Exception as e:
-                logger.error(f"Error loading SQL file {file_path}: {str(e)}")
-                
-        # Also look for .sql files
-        for file_path in directory_path.glob('*.sql'):
-            try:
-                with open(file_path, 'r') as f:
-                    content = f.read().strip()
-                    # Remove comment header line if present
-                    lines = content.splitlines()
-                    clean_content = content
-                    if lines and lines[0].strip().startswith('--'):
-                        clean_content = '\n'.join(lines[1:]).strip()
-                    # Use the filename without extension as the pattern key
-                    pattern_key = file_path.stem
-                    patterns[pattern_key] = clean_content
-                    logger.debug(f"Loaded SQL pattern '{pattern_key}' from {file_path}")
-            except Exception as e:
-                logger.error(f"Error loading SQL file {file_path}: {str(e)}")
+        # Previously loaded .pgsql and .sql files, but this has been disabled
+        # to ensure consistency with only loading SQL examples from examples.json files
+        logger.info(f"Skipping loading individual .pgsql and .sql files from {directory_path}. "
+                   "Only using examples.json files per updated requirements.")
         
-        logger.info(f"Loaded {len(patterns)} SQL patterns from directory: {directory}")
+        # If default patterns are provided, use them
+        if default_patterns:
+            patterns.update(default_patterns)
+        
         return patterns
     
     def replace_placeholders(self, patterns: Dict[str, str], replacements: Dict[str, Any]) -> Dict[str, str]:
@@ -545,21 +522,23 @@ class RulesService:
     def get_sql_examples(self, classification):
         """Get SQL examples for the given classification."""
         try:
-            # Get SQL patterns from the rules directory
-            patterns = self.get_sql_patterns(classification)
-            
-            # Get additional examples from the rules module
+            # Get examples from the rules module
+            examples = []
             module_name = f"{classification}_rules"
             if module_name in self.query_rules_modules:
                 module = self.query_rules_modules[module_name]
                 if hasattr(module, 'get_sql_examples'):
-                    additional_examples = module.get_sql_examples()
-                    if additional_examples:
-                        patterns.extend(additional_examples)
+                    logger.info(f"Getting SQL examples from {module_name}.get_sql_examples()")
+                    examples = module.get_sql_examples()
+                    if examples:
+                        logger.info(f"Found {len(examples)} examples from {module_name}.get_sql_examples()")
+                        return examples
             
-            return patterns
+            # No examples from module, log a warning
+            logger.warning(f"No SQL examples found for classification: {classification}")
+            return []
         except Exception as e:
-            self.logger.error(f"Error getting SQL examples for {classification}: {e}")
+            logger.error(f"Error getting SQL examples for {classification}: {e}")
             return []
     
     def get_rules(self, category: str, query: str = None) -> Dict[str, Any]:

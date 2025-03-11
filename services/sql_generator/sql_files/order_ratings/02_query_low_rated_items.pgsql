@@ -1,4 +1,3 @@
--- Query low rated items (less than 5 rating)
 SELECT 
     i.id, 
     i.name, 

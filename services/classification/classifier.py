@@ -260,7 +260,7 @@ class ClassificationService:
                 "parameters": {
                     "time_period": "2025-02-21"
                 },
-                "time_period_clause": "WHERE order_date::date = '2025-02-21'",
+                "time_period_clause": "WHERE updated_at::date = '2025-02-21'",
                 "classification_method": "mock_test"
             }
         elif "last week" in query_lower:
@@ -272,7 +272,7 @@ class ClassificationService:
                 "parameters": {
                     "time_period": "last week"
                 },
-                "time_period_clause": "WHERE order_date >= CURRENT_DATE - INTERVAL '1 week'",
+                "time_period_clause": "WHERE updated_at >= CURRENT_DATE - INTERVAL '1 week'",
                 "classification_method": "mock_test"
             }
         elif "last month" in query_lower:
@@ -284,7 +284,7 @@ class ClassificationService:
                 "parameters": {
                     "time_period": "last month"
                 },
-                "time_period_clause": "WHERE order_date >= CURRENT_DATE - INTERVAL '1 month'",
+                "time_period_clause": "WHERE updated_at >= CURRENT_DATE - INTERVAL '1 month'",
                 "classification_method": "mock_test"
             }
         elif "january" in query_lower or "jan" in query_lower:
@@ -317,7 +317,7 @@ class ClassificationService:
                 "parameters": {
                     "time_period": "holiday season"
                 },
-                "time_period_clause": "WHERE order_date BETWEEN '2024-11-25' AND '2025-01-01'",
+                "time_period_clause": "WHERE updated_at BETWEEN '2024-11-25' AND '2025-01-01'",
                 "classification_method": "mock_test"
             }
         elif "past 3 months" in query_lower:
@@ -329,7 +329,7 @@ class ClassificationService:
                 "parameters": {
                     "time_period": "past 3 months"
                 },
-                "time_period_clause": "WHERE order_date >= CURRENT_DATE - INTERVAL '3 months'",
+                "time_period_clause": "WHERE updated_at >= CURRENT_DATE - INTERVAL '3 months'",
                 "classification_method": "mock_test"
             }
         

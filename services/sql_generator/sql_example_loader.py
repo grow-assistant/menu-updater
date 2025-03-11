@@ -29,6 +29,12 @@ class SQLExampleLoader:
         self.examples_dir = examples_dir
         self._examples_cache: Dict[str, List[Dict[str, str]]] = {}
         logger.info(f"SQLExampleLoader initialized with examples directory: {examples_dir}")
+        # Verify the directory exists
+        if not os.path.exists(examples_dir):
+            logger.warning(f"Examples directory does not exist: {examples_dir}")
+        else:
+            # Log available directories for debugging
+            logger.info(f"Available query types: {', '.join(os.listdir(examples_dir))}")
     
     def load_examples_for_query_type(self, query_type: str) -> List[Dict[str, str]]:
         """
@@ -57,32 +63,53 @@ class SQLExampleLoader:
         examples = []
         
         # Log what files exist in the directory
-        logger.info(f"Files in {query_examples_dir}: {os.listdir(query_examples_dir) if os.path.exists(query_examples_dir) else 'directory not found'}")
+        all_files = os.listdir(query_examples_dir) if os.path.exists(query_examples_dir) else []
+        logger.info(f"Files in {query_examples_dir}: {all_files}")
         
-        # Look for JSON files containing examples
-        for filename in os.listdir(query_examples_dir):
-            if filename.endswith('.json'):
-                file_path = os.path.join(query_examples_dir, filename)
-                logger.info(f"Processing JSON example file: {file_path}")
-                try:
-                    with open(file_path, 'r') as f:
-                        file_examples = json.load(f)
-                        
-                    # Validate the examples format
-                    for example in file_examples:
-                        if 'query' in example and 'sql' in example:
-                            examples.append(example)
-                            logger.debug(f"Added example query: {example['query'][:30]}...")
-                        else:
-                            logger.warning(f"Invalid example in {file_path}: {example}")
-                            
-                except Exception as e:
-                    logger.error(f"Error loading examples from {file_path}: {str(e)}")
+        # Flag to check if examples.json was found
+        examples_json_found = False
+        
+        # Look for examples.json file first
+        examples_json_path = os.path.join(query_examples_dir, "examples.json")
+        if os.path.exists(examples_json_path):
+            examples_json_found = True
+            logger.info(f"Found examples.json at {examples_json_path}")
+            try:
+                with open(examples_json_path, 'r') as f:
+                    file_examples = json.load(f)
+                
+                # Validate the examples format
+                valid_examples = 0
+                for example in file_examples:
+                    if 'query' in example and 'sql' in example:
+                        examples.append(example)
+                        valid_examples += 1
+                    else:
+                        logger.warning(f"Invalid example in {examples_json_path}: missing 'query' or 'sql' field")
+                
+                logger.info(f"Loaded {valid_examples} valid examples from examples.json for {query_type}")
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON parsing error in {examples_json_path}: {str(e)}")
+            except Exception as e:
+                logger.error(f"Error loading examples from {examples_json_path}: {str(e)}")
+        
+        # If no examples.json or no valid examples, try individual SQL files
+        if not examples_json_found or not examples:
+            logger.warning(f"No examples.json found or no valid examples for {query_type}. " 
+                          f"Per updated requirements, only loading from examples.json is supported.")
+            # Note: We used to fall back to individual SQL files, but this has been disabled
+            # to ensure consistency with the RulesManager approach.
         
         # Cache the examples
         self._examples_cache[query_type] = examples
         
-        logger.info(f"Loaded {len(examples)} examples for query type: {query_type}")
+        logger.info(f"Loaded a total of {len(examples)} examples for query type: {query_type}")
+        
+        # Print first example for debugging if available
+        if examples and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"First example query: {examples[0]['query']}")
+            logger.debug(f"First example SQL: {examples[0]['sql'][:100]}...")
+        
         return examples
     
     def get_formatted_examples(self, query_type: str) -> str:
@@ -98,6 +125,7 @@ class SQLExampleLoader:
         examples = self.load_examples_for_query_type(query_type)
         
         if not examples:
+            logger.warning(f"No examples available for query type: {query_type}")
             return "No examples available."
         
         # Format examples for inclusion in the prompt
@@ -107,6 +135,7 @@ class SQLExampleLoader:
             formatted_examples += f"Question: {example['query']}\n"
             formatted_examples += f"SQL: {example['sql']}\n\n"
         
+        logger.info(f"Formatted {len(examples)} examples for query type: {query_type}")
         return formatted_examples
     
     def clear_cache(self) -> None:

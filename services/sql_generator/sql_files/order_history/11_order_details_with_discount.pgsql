@@ -1,4 +1,3 @@
--- Order details with correct discount handling
 SELECT
     l.id,
     l.name as location_name,

@@ -1,4 +1,3 @@
--- Query revenue by menu category
 SELECT c.name AS category,
        COUNT(DISTINCT o.id) AS order_count,
        SUM(oi.quantity * i.price) AS total_revenue,

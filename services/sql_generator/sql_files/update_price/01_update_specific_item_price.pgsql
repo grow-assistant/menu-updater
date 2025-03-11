@@ -1,7 +1,5 @@
--- Update a specific menu item price (update_item_price)
 BEGIN;
 
--- First verify the current price
 SELECT id, name, price 
 FROM items 
 WHERE name ILIKE '%Quesadilla%'
@@ -13,7 +11,6 @@ WHERE name ILIKE '%Quesadilla%'
     WHERE m.location_id = 16
   );
 
--- Update the price  
 UPDATE items
 SET price = 7.00
 WHERE name ILIKE '%Quesadilla%'

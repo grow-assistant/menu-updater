@@ -1,4 +1,3 @@
--- Query item ratings and reviews
 SELECT 
     i.id, 
     i.name, 

@@ -1,4 +1,3 @@
--- Query menu items by category
 SELECT i.id, i.name, i.description, i.price, i.disabled
 FROM items i
 JOIN categories c ON i.category_id = c.id

@@ -1,8 +1,4 @@
--- Order item combination analysis (item_combination_analysis)
--- Identifies which menu items are frequently ordered together
-
 WITH order_items_list AS (
-    -- Get all order item pairs
     SELECT
         o.id AS order_id,
         o.updated_at AS updated_at,
@@ -30,10 +26,9 @@ WITH order_items_list AS (
         o.location_id = 62
         AND o.status = 7
         AND o.updated_at >= CURRENT_DATE - INTERVAL '90 days'
-        AND i1.id < i2.id  -- Avoid duplicate pairs and self-pairs
+        AND i1.id < i2.id
 ),
 item_stats AS (
-    -- Get individual item frequencies
     SELECT
         i.id AS item_id,
         i.name AS item_name,
@@ -55,7 +50,6 @@ item_stats AS (
     GROUP BY
         i.id, i.name
 )
--- Calculate co-occurrence metrics
 SELECT
     oil.item1_name,
     oil.item2_name,

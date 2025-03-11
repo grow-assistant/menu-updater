@@ -1,4 +1,3 @@
--- Percentage of orders from repeat customers
 WITH customer_orders AS (
     SELECT customer_id, COUNT(*) as order_count
     FROM orders

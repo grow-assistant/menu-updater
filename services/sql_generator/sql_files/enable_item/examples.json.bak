@@ -1,0 +1,6 @@
+[
+  {
+    "query": "Disable a menu item (enable menu item)",
+    "sql": "-- Disable a menu item\nUPDATE items\nSET disabled = FALSE,\n    updated_at = NOW()\nWHERE name like '%Quesadilla%'\n  AND id IN (\n    SELECT i.id\n    FROM items i\n    JOIN categories c ON i.category_id = c.id\n    JOIN menus m ON c.menu_id = m.id\n    WHERE m.location_id = 16\n  );"
+  }
+]

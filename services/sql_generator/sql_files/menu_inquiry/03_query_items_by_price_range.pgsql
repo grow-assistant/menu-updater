@@ -1,4 +1,3 @@
--- Query menu items within a specific price range
 SELECT c.name AS category, i.name, i.description, i.price
 FROM items i
 JOIN categories c ON i.category_id = c.id

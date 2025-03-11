@@ -15,7 +15,12 @@ class RulesManager:
         self.rules = self._load_rules()
         
     def _load_rules(self) -> Dict[str, Any]:
-        """Load all rules and examples from the data directory."""
+        """
+        Load all rules and examples from the data directory.
+        
+        This method strictly loads SQL examples only from examples.json files,
+        not from individual .pgsql or .sql files.
+        """
         rules = {}
         
         # Load SQL examples
@@ -27,7 +32,7 @@ class RulesManager:
                     "response_rules": {}
                 }
                 
-                # Load SQL examples
+                # Load SQL examples only from JSON files, not from PostgreSQL files
                 examples_file = os.path.join(category_path, "examples.json")
                 if os.path.exists(examples_file):
                     with open(examples_file, "r") as f:

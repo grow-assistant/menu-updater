@@ -78,7 +78,7 @@ class TestFollowupQueries:
                 "category": "order_history",
                 "response": f"There were {order_count} orders completed on {date}.",
                 "query_results": [{"count": order_count, "date": date}],
-                "time_period": f"WHERE order_date::date = '{date}'",
+                "time_period": f"WHERE updated_at::date = '{date}'",
                 "constraints": {"status": "completed"},
                 "additional_context": {"order_count": order_count, "date": date}
             }
@@ -92,7 +92,7 @@ class TestFollowupQueries:
                     {"first_name": name.split()[0], "last_name": name.split()[1]} 
                     for name in customers
                 ],
-                "time_period": f"WHERE order_date::date = '{date}'",
+                "time_period": f"WHERE updated_at::date = '{date}'",
                 "constraints": {"status": "completed"}
             }
         else:

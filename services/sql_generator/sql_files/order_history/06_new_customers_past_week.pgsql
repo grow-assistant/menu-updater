@@ -1,4 +1,3 @@
--- New customers acquired in the last week
 WITH first_orders AS (
     SELECT customer_id, MIN((updated_at - INTERVAL '7 hours')::date) as first_updated_at
     FROM orders

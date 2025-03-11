@@ -1,4 +1,3 @@
--- Canceled orders in the past month
 SELECT COUNT(*) as canceled_orders
 FROM orders
 WHERE location_id = 62

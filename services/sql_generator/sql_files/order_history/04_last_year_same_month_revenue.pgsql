@@ -1,4 +1,3 @@
--- Same month last year's sales revenue
 SELECT COALESCE(SUM(total), 0) as last_year_same_month_revenue
 FROM orders
 WHERE location_id = 62

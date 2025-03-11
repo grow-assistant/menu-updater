@@ -1,4 +1,3 @@
--- Median time between first and second order (days)
 WITH first_two_orders AS (
   SELECT customer_id, created_at,
          ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY created_at) AS order_num

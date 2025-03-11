@@ -1,0 +1,22 @@
+[
+  {
+    "query": "Query all active items",
+    "sql": "SELECT i.id, i.name, i.description, i.price, c.name AS category\nFROM items i\nJOIN categories c ON i.category_id = c.id\nJOIN menus m ON c.menu_id = m.id\nWHERE i.disabled = FALSE\n  AND m.location_id = 62\nORDER BY c.name, i.name;"
+  },
+  {
+    "query": "Query items by category",
+    "sql": "SELECT i.id, i.name, i.description, i.price, i.disabled\nFROM items i\nJOIN categories c ON i.category_id = c.id\nJOIN menus m ON c.menu_id = m.id\nWHERE c.name = 'Starters'\n  AND m.location_id = 16\nORDER BY i.name;"
+  },
+  {
+    "query": "Query items by price range",
+    "sql": "SELECT c.name AS category, i.name, i.description, i.price\nFROM items i\nJOIN categories c ON i.category_id = c.id\nJOIN menus m ON c.menu_id = m.id\nWHERE i.price BETWEEN 5.00 AND 10.00\n  AND i.disabled = FALSE\n  AND m.location_id = 16\nORDER BY i.price, i.name;"
+  },
+  {
+    "query": "Query dietary restrictions",
+    "sql": "SELECT \n    i.id, \n    i.name AS item_name, \n    i.description,\n    i.price, \n    c.name AS category,\n    CASE\n        WHEN i.description ILIKE '%vegetarian%' THEN 'Vegetarian'\n        WHEN i.description ILIKE '%vegan%' THEN 'Vegan'\n        WHEN i.description ILIKE '%gluten-free%' OR i.description ILIKE '%gluten free%' THEN 'Gluten-Free'\n        WHEN i.description ILIKE '%dairy-free%' OR i.description ILIKE '%dairy free%' THEN 'Dairy-Free'\n        ELSE 'No dietary tag found'\n    END AS primary_dietary_tag,\n    ARRAY_REMOVE(ARRAY[\n        CASE WHEN i.description ILIKE '%vegetarian%' THEN 'Vegetarian' ELSE NULL END,\n        CASE WHEN i.description ILIKE '%vegan%' THEN 'Vegan' ELSE NULL END,\n        CASE WHEN i.description ILIKE '%gluten-free%' OR i.description ILIKE '%gluten free%' THEN 'Gluten-Free' ELSE NULL END,\n        CASE WHEN i.description ILIKE '%dairy-free%' OR i.description ILIKE '%dairy free%' THEN 'Dairy-Free' ELSE NULL END,\n        CASE WHEN i.description ILIKE '%nut-free%' OR i.description ILIKE '%nut free%' THEN 'Nut-Free' ELSE NULL END\n    ], NULL) AS dietary_tags\nFROM \n    items i\nJOIN \n    categories c ON i.category_id = c.id\nJOIN \n    menus m ON c.menu_id = m.id\nWHERE \n    m.location_id = 62\n    AND i.disabled = FALSE\n    AND (\n        i.description ILIKE '%vegetarian%' \n        OR i.description ILIKE '%vegan%' \n        OR i.description ILIKE '%gluten-free%'\n        OR i.description ILIKE '%gluten free%'\n        OR i.description ILIKE '%dairy-free%'\n        OR i.description ILIKE '%dairy free%'\n    )\nORDER BY \n    c.name, i.name;"
+  },
+  {
+    "query": "Query popular items with options",
+    "sql": "WITH popular_items AS (\n    SELECT \n        i.id AS item_id,\n        i.name AS item_name,\n        COUNT(DISTINCT o.id) AS order_count,\n        SUM(oi.quantity) AS quantity_sold\n    FROM \n        items i\n    JOIN \n        order_items oi ON i.id = oi.item_id\n    JOIN \n        orders o ON oi.order_id = o.id\n    JOIN \n        categories c ON i.category_id = c.id\n    JOIN \n        menus m ON c.menu_id = m.id\n    WHERE \n        m.location_id = 62\n        AND o.status = 7\n        AND o.created_at >= CURRENT_DATE - INTERVAL '90 days'\n    GROUP BY \n        i.id, i.name\n    ORDER BY \n        quantity_sold DESC\n    LIMIT 10\n),\npopular_options AS (\n    SELECT \n        pi.item_id,\n        opt.id AS option_id,\n        opt.name AS option_name,\n        oi_opt.name AS option_item_name,\n        COUNT(*) AS option_count\n    FROM \n        popular_items pi\n    JOIN \n        order_items oi ON pi.item_id = oi.item_id\n    JOIN \n        order_option_items ooi ON oi.id = ooi.order_item_id\n    JOIN \n        option_items oi_opt ON ooi.option_item_id = oi_opt.id\n    JOIN \n        options opt ON oi_opt.option_id = opt.id\n    GROUP BY \n        pi.item_id, opt.id, opt.name, oi_opt.name\n)\nSELECT \n    pi.item_name,\n    pi.quantity_sold,\n    i.price AS item_price,\n    c.name AS category,\n    string_agg(\n        po.option_name || ': ' || po.option_item_name || ' (' || po.option_count || ' times)', \n        '; '\n        ORDER BY po.option_name, po.option_item_name\n    ) AS popular_options\nFROM \n    popular_items pi\nJOIN \n    items i ON pi.item_id = i.id\nJOIN \n    categories c ON i.category_id = c.id\nLEFT JOIN \n    popular_options po ON pi.item_id = po.item_id\nGROUP BY \n    pi.item_name, pi.quantity_sold, i.price, c.name\nORDER BY \n    pi.quantity_sold DESC;"
+  }
+]

@@ -414,8 +414,8 @@ class TestQueryProcessor(unittest.TestCase):
         # Assert
         self.assertIn("SELECT * FROM orders", sql)
         self.assertIn("WHERE", sql)
-        self.assertIn("order_date >= :start_date", sql)
-        self.assertIn("order_date <= :end_date", sql)
+        self.assertIn("updated_at >= :start_date", sql)
+        self.assertIn("updated_at <= :end_date", sql)
         self.assertEqual(params["start_date"], "2023-08-01")
         self.assertEqual(params["end_date"], "2023-08-07")
     

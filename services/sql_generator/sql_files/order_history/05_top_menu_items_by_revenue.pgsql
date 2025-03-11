@@ -1,4 +1,3 @@
--- Top 5 menu items by revenue in the past quarter
 SELECT i.name as menu_item, COUNT(oi.id) as order_count,
        COALESCE(SUM(i.price * oi.quantity), 0) as revenue
 FROM orders o
