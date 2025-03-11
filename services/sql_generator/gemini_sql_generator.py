@@ -509,14 +509,22 @@ CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
             return {"sql": "", "success": False, "error": str(e)}
 
     def _get_sql_examples(self, classification):
-        """Get SQL examples for the given classification from the rules service."""
+        """
+        Get SQL examples for a specific classification from the rules service.
+        
+        Args:
+            classification: Query classification
+            
+        Returns:
+            Dict containing SQL examples
+        """
         try:
             # Import the actual location ID value
             from services.rules.business_rules import DEFAULT_LOCATION_ID
             from services.sql_generator.sql_example_loader import sql_example_loader
             
-            # Get the rules service from the service registry
-            rules_service = ServiceRegistry.get_service('rules')
+            # Get rules service from registry
+            rules_service = ServiceRegistry.get_service("rules")
             if not rules_service:
                 logger.warning("Rules service not available, proceeding without examples")
                 return {"examples": []}
@@ -525,11 +533,28 @@ CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
             logger.info(f"Getting SQL examples for classification: {classification}")
             examples = rules_service.get_sql_examples(classification)
             
+            # Initialize examples list
+            example_list = []
+            
+            # Handle examples from rules service 
             if not examples:
                 logger.warning(f"No SQL examples found from rules service for classification: {classification}")
-                examples = []
             else:
-                logger.info(f"Found {len(examples)} examples from rules service for {classification}")
+                # Convert examples to list if it's a dictionary
+                if isinstance(examples, dict):
+                    if "examples" in examples:
+                        example_list = examples["examples"]
+                    elif "sql_examples" in examples:
+                        example_list = examples["sql_examples"]
+                    else:
+                        # Handle dictionary but no recognizable format
+                        logger.warning(f"Examples in unknown dictionary format: {list(examples.keys())}")
+                elif isinstance(examples, list):
+                    example_list = examples
+                else:
+                    logger.warning(f"Examples in unexpected format: {type(examples)}")
+                
+                logger.info(f"Found {len(example_list)} examples from rules service for {classification}")
             
             # Get examples directly from SQL files - this is more maintainable than hardcoding examples
             logger.info(f"Loading examples from SQL example loader for: {classification}")
@@ -538,7 +563,7 @@ CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
             # Add file examples to the list
             if file_examples:
                 logger.info(f"Found {len(file_examples)} examples from SQL files for {classification}")
-                examples.extend(file_examples)
+                example_list.extend(file_examples)
             else:
                 logger.warning(f"No examples found in SQL files for: {classification}")
                 # Try a fallback for follow_up if it's a different directory structure
@@ -547,15 +572,15 @@ CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
                     file_examples = sql_example_loader.load_examples_for_query_type("query_follow_up")
                     if file_examples:
                         logger.info(f"Found {len(file_examples)} examples from 'query_follow_up' directory")
-                        examples.extend(file_examples)
+                        example_list.extend(file_examples)
             
             # If we still have no examples, log a warning
-            if not examples:
+            if not example_list:
                 logger.warning(f"No examples available for classification: {classification}")
                 
             # Return all the examples
-            logger.info(f"Returning {len(examples)} total examples for {classification}")
-            return {"examples": examples}
+            logger.info(f"Returning {len(example_list)} total examples for {classification}")
+            return {"examples": example_list}
         except Exception as e:
             logger.error(f"Error getting SQL examples: {e}")
             return {"examples": []}

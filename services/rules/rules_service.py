@@ -166,7 +166,7 @@ class RulesService:
                     if module_name in sys.modules:
                         module = sys.modules[module_name]
                     else:
-                        module = importlib.import_module(f"services.rules.{module_name}")
+                        module = importlib.import_module(f"services.rules.query_rules.{module_name}")
                     
                     self.query_rules_modules[module_name] = module
                     self.logger.info(f"Loaded query rules module: {module_name}")
