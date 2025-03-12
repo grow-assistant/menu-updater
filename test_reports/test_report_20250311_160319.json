@@ -1,0 +1,36 @@
+{
+  "timestamp": "2025-03-11T16:03:19.018398",
+  "total_scenarios": 7,
+  "successful_scenarios": 0,
+  "failed_scenarios": 7,
+  "error_scenarios": 0,
+  "success_rate": 0.0,
+  "total_interactions": 27,
+  "multi_turn_conversations": 7,
+  "avg_turns_per_scenario": 3.857142857142857,
+  "total_response_time": 0.20974326133728027,
+  "average_response_time": 0.007768268938417788,
+  "min_response_time": 0.0018310546875,
+  "max_response_time": 0.023722410202026367,
+  "fallback_responses": 0,
+  "fallback_rate": 0.0,
+  "total_success_conditions": 9,
+  "met_success_conditions": 0,
+  "success_condition_rate": 0.0,
+  "total_validations": 27,
+  "validation_failures": 0,
+  "validation_success_rate": 100.0,
+  "detected_issues": [
+    "Empty response returned"
+  ],
+  "category_stats": {
+    "other": {
+      "count": 7,
+      "success": 0,
+      "failed": 7,
+      "error": 0,
+      "total_time": 33.08063507080078,
+      "avg_time": 4.725805010114398
+    }
+  }
+}

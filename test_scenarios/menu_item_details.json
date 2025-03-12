@@ -1,0 +1,42 @@
+{
+  "name": "menu_item_details",
+  "category": "menu_query",
+  "description": "Detailed questions about specific menu items",
+  "priority": "high",
+  "tags": [
+    "menu",
+    "details",
+    "ingredients",
+    "preparation"
+  ],
+  "context": {
+    "user_persona": "health_conscious",
+    "restaurant_context": "Customer with dietary concerns asking about ingredients"
+  },
+  "initial_query_hints": [
+    "What's in your lasagna?",
+    "How is the chicken prepared?",
+    "Are there nuts in the desserts?"
+  ],
+  "expected_entities": [
+    "menu_item",
+    "ingredients",
+    "preparation_method"
+  ],
+  "success_conditions": [
+    {
+      "type": "response_contains",
+      "phrase": "ingredients include"
+    }
+  ],
+  "max_turns": 4,
+  "termination_phrases": [],
+  "validation_requirements": {
+    "database_validation": true,
+    "sentiment_analysis": false,
+    "response_time_threshold": 5.0
+  },
+  "created_at": "2025-03-11T16:01:25.283751",
+  "last_modified": "2025-03-11T16:01:25.283751",
+  "test_history": []
+}

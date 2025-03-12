@@ -12,7 +12,7 @@ from typing import Dict, List, Any, Optional
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from .database_validator import DatabaseValidator
+from database_validator import DatabaseValidator
 
 logger = logging.getLogger(__name__)
 

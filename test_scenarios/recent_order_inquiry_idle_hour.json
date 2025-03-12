@@ -1,0 +1,47 @@
+{
+  "name": "order_history_inquiry",
+  "category": "order_history",
+  "description": "Questions about orders on a specific date",
+  "priority": "high",
+  "tags": [
+    "order",
+    "history",
+    "analytics",
+    "date_specific"
+  ],
+  "context": {
+    "user_persona": "restaurant_staff",
+    "restaurant_context": "Staff member checking order history for a specific date",
+    "session_state": {
+      "staff_id": 12,
+      "has_admin_access": true,
+      "target_date": "2025-02-21"
+    }
+  },
+  "initial_query_hints": [
+    "How many orders did we complete on February 21st, 2025?",
+    "Who placed orders on February 21st?", 
+    "What was the total for each order on February 21st?"
+  ],
+  "expected_entities": [
+    "order_count",
+    "customer_names",
+    "order_totals",
+    "order_date"
+  ],
+  "success_conditions": [
+    {
+      "type": "response_contains",
+      "phrase": "orders on February 21st"
+    }
+  ],
+  "validation_requirements": {
+    "database_validation": true,
+    "date_validation": true
+  },
+  "max_turns": 3,
+  "termination_phrases": [],
+  "created_at": "2025-03-11T16:01:25.285394",
+  "last_modified": "2025-03-11T16:01:25.285394",
+  "test_history": []
+}

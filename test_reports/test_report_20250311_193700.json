@@ -1,0 +1,244 @@
+{
+  "timestamp": 1741747020.2285733,
+  "total_scenarios": 8,
+  "successful_scenarios": 8,
+  "failed_scenarios": 0,
+  "error_scenarios": 0,
+  "success_rate": 1.0,
+  "total_interactions": 8,
+  "total_time": 27.239197254180908,
+  "scenarios": [
+    {
+      "scenario": "ambiguous_request",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "I want something good.",
+          "response": "It sounds like you're in the mood for something enjoyable! Could you tell me a bit more about what you're looking for? Whether it's a recommendation for a book, a new recipe, or maybe a movie to watch, I'd be more than happy to help you find something great. Let me know a little more, and we'll find something just right for you!",
+          "response_time": 2.502800226211548,
+          "status": "success",
+          "category": "general",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741746992.9880226,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 2.504801034927368,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "basic_menu_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "What kind of food do you serve?",
+          "response": "It sounds like you're interested in exploring some tasty options! However, without specific details about the restaurant or place you're referring to, I can't provide an exact menu. Generally, many places offer a variety of cuisines such as Italian, Mexican, Asian, or American, featuring dishes like pasta, tacos, sushi, or burgers. If you have a particular restaurant in mind, checking their website or calling them directly could give you the best idea of what delicious offerings they have. If you're looking for recommendations or have a specific cuisine in mind, feel free to share more details!",
+          "response_time": 4.865442752838135,
+          "status": "success",
+          "category": "general",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741746995.4948218,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 4.868280410766602,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "menu_item_details",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "What's in your lasagna?",
+          "response": "It seems the data provided doesn't include lasagna or provide specific details about its ingredients. However, I can give you a general idea of what typically goes into a classic lasagna: layers of pasta sheets, seasoned ground beef or sausage, ricotta cheese, mozzarella cheese, Parmesan cheese, and a rich tomato sauce, all baked to perfection. If you have any questions about a specific lasagna recipe or need more details, feel free to ask!",
+          "response_time": 4.779223918914795,
+          "status": "success",
+          "category": "menu",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741747000.3651018,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 4.782562017440796,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "price_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "How much is the steak?",
+          "response": "Our prices range from $3.99 for French Fries to $12.99 for the Margherita Pizza. The Classic Burger is $10.99, the Garden Salad is $8.99, and the Veggie Burger is $11.99. Is there a specific item you'd like to know the price of?",
+          "response_time": 2.2185375690460205,
+          "status": "success",
+          "category": "menu",
+          "is_fallback": true
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741747005.1476638,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 2.2185375690460205,
+      "fallback_count": 1
+    },
+    {
+      "scenario": "progressive_order",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "Can I place an order for delivery?",
+          "response": "It appears that the system currently doesn't have information about placing an order for delivery. Please check if there are any specific requirements or contact our customer service team for assistance. They will be happy to help you with the ordering process.",
+          "response_time": 2.8443756103515625,
+          "status": "success",
+          "category": "action",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741747007.3662014,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 2.8515360355377197,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "recent_order_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "Can you tell me what I ordered last week?",
+          "response": "It looks like there were no orders placed by you last week. If you think this might be an error, please ensure that the account you're checking is the one you use for placing orders. If you have any other questions or need further assistance, feel free to ask!",
+          "response_time": 1.8567113876342773,
+          "status": "success",
+          "category": "order_history",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741747010.2352688,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 1.8567113876342773,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "order_history_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "What was the total for each order on February 21st?",
+          "response": "It looks like there were no orders placed on February 21st. If you have any more questions or need assistance with something else, feel free to ask!",
+          "response_time": 3.9868624210357666,
+          "status": "success",
+          "category": "order_history",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741747012.1077597,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 3.987868070602417,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "typo_handling",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "I want a hamburger with chesee.",
+          "response": "SQL_EXAMPLES:\n\nRESPONSE_RULES:\n\n---\n\nIt seems like there's a small typo in your request. If you're referring to placing an order or making a change in an order management system, please let me know what specific action you need assistance with, and I'll be happy to help confirm any changes or provide further guidance!",
+          "response_time": 4.118648052215576,
+          "status": "success",
+          "category": "action",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741747016.1040075,
+      "success_conditions_met": 3,
+      "success_conditions_total": 3,
+      "execution_time": 4.120699167251587,
+      "fallback_count": 0
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "scenario": "recent_order_inquiry",
+  "status": "success",
+  "interactions": [
+    {
+      "turn": 1,
+      "query": "What did I order last time?",
+      "response": "It looks like I wasn't able to find any recent orders under your account. This could be due to a few reasons, such as not having any completed orders recently or perhaps an issue with matching your account details. If you've ordered something recently and it's not showing up, please double-check your account information or let me know if there's anything else I can help you with!",
+      "response_time": 18.198875904083252,
+      "status": "success",
+      "category": "order_history",
+      "is_fallback": false
+    }
+  ],
+  "validation_results": [
+    {
+      "validation_results": [],
+      "accuracy_score": 0,
+      "valid": false,
+      "error": "No validatable facts found"
+    }
+  ],
+  "critiques": [],
+  "timestamp": 1741748131.8724678,
+  "success_conditions_met": 1,
+  "success_conditions_total": 1,
+  "execution_time": 18.198875904083252,
+  "fallback_count": 0
+}

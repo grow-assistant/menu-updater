@@ -10,6 +10,7 @@ from typing import Dict, Any, List, Optional, Tuple
 import uuid
 import os
 from datetime import datetime
+from dotenv import load_dotenv
 
 from services.rules.rules_service import RulesService
 from services.utils.service_registry import ServiceRegistry
@@ -24,7 +25,22 @@ class OpenAISQLGenerator:
         Args:
             config: Configuration dictionary
         """
-        self.client = OpenAI(api_key=config.get("api", {}).get("openai", {}).get("api_key"))
+        # Load environment variables from .env file
+        load_dotenv()
+        
+        # Get API key from config or environment
+        api_key = config.get("api", {}).get("openai", {}).get("api_key")
+        if not api_key:
+            api_key = os.environ.get("OPENAI_API_KEY")
+            if api_key:
+                logger.info("Using OpenAI API key from environment variable")
+            else:
+                logger.warning("No OpenAI API key found in config or environment variables")
+                
+        # Initialize OpenAI client with the API key
+        self.client = OpenAI(api_key=api_key)
+        
+        # Load other configuration parameters
         self.model = config.get("services", {}).get("sql_generator", {}).get("model", "gpt-4o-mini")
         self.temperature = config.get("services", {}).get("sql_generator", {}).get("temperature", 0.7)
         self.max_tokens = config.get("services", {}).get("sql_generator", {}).get("max_tokens", 2000)

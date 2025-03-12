@@ -1,8 +1,10 @@
 """
-Query-specific rules for the Swoop AI application.
+Query Rules Package
 
-This package contains rule sets for different types of queries.
+Contains rule modules for different query categories.
 """
+
+# This file ensures that the directory is recognized as a Python package
 
 import os
 from pathlib import Path

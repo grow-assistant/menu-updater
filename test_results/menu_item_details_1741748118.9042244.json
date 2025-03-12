@@ -1,0 +1,29 @@
+{
+  "scenario": "menu_item_details",
+  "status": "success",
+  "interactions": [
+    {
+      "turn": 1,
+      "query": "Are there nuts in the desserts?",
+      "response": "I'm sorry, but it looks like I don't have specific information about whether the desserts contain nuts. If you're concerned about allergies or dietary preferences, I recommend checking the ingredient list provided with each dessert or asking the staff directly for confirmation. They should be able to provide detailed information about any potential allergens in the desserts. Stay safe and enjoy your treat!",
+      "response_time": 2.0634849071502686,
+      "status": "success",
+      "category": "general",
+      "is_fallback": false
+    }
+  ],
+  "validation_results": [
+    {
+      "validation_results": [],
+      "accuracy_score": 0,
+      "valid": false,
+      "error": "No validatable facts found"
+    }
+  ],
+  "critiques": [],
+  "timestamp": 1741748116.8407395,
+  "success_conditions_met": 1,
+  "success_conditions_total": 1,
+  "execution_time": 2.0634849071502686,
+  "fallback_count": 0
+}

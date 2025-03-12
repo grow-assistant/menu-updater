@@ -1,0 +1,244 @@
+{
+  "timestamp": 1741747137.8402083,
+  "total_scenarios": 8,
+  "successful_scenarios": 8,
+  "failed_scenarios": 0,
+  "error_scenarios": 0,
+  "success_rate": 1.0,
+  "total_interactions": 8,
+  "total_time": 35.1985182762146,
+  "scenarios": [
+    {
+      "scenario": "ambiguous_request",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "I want something good.",
+          "response": "It sounds like you're looking for a recommendation or suggestion, but I'm not quite sure what you're interested in. Could you tell me a bit more about what you\u2019re in the mood for? Whether it's a book to read, a recipe to try, or maybe a new hobby, I'd love to help you find something enjoyable!",
+          "response_time": 2.7932567596435547,
+          "status": "success",
+          "category": "general",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741747102.64169,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 2.7953083515167236,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "basic_menu_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "Can I see your menu?",
+          "response": "Absolutely! Here's a selection from our menu that you might enjoy:\n\n**Cocktails**\n- **Mimosa**: Sparkling Wine, Orange Juice - $8.00\n- **Azelea**: Lemon juice, pineapple juice, vodka, and grenadine - $11.00\n- **John Daly**: Fresh Brewed Iced Tea, Lemonade, and Vodka - $12.00\n- **Moscow Mule**: Vodka, lime juice, mint, ginger beer - $11.00\n- **Paloma**: Tequila, Grapefruit Juice, Fresh Lime Juice, Agave Syrup, Club Soda - $11.00\n- **Screw Driver**: Vodka and Fresh Squeezed Orange Juice - $10.00\n\n**Beer & Seltzers**\n- **Stella Artois** - $5.00\n- **Heineken** - $5.00\n- **Corona Light** - $5.00\n- **Miller Lite** - $5.00\n- **Corona** - $5.00\n- **Michelob Ultra** - $5.00\n\n**Kids Menu**\n- **Cheese or Pepperoni Pizza**: Thin Hand Pressed Dough, Fire Baked with Plum Tomato Sauce - $6.99\n- **Spaghetti and Meatballs**: Spaghetti with Butter Sauce or Marinara - $6.99\n\n**Soups & Salads**\n- **All Saints Salad (gf, veg)**: Arcadian Spring Mix, Cucumber, Roma Tomato, Candied Nuts, Shaved Red Onion, Queso Fresco, All Saints Dressing - $14.00\n\nFeel free to ask if you have any questions or need recommendations!",
+          "response_time": 10.329052209854126,
+          "status": "success",
+          "category": "menu",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741747105.4391634,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 10.330058813095093,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "menu_item_details",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "Are there nuts in the desserts?",
+          "response": "It looks like I don't have specific information about the desserts you're inquiring about. However, if you're concerned about the presence of nuts due to allergies or dietary preferences, it's always best to check the ingredients list or ask the staff at the place you're dining. Many restaurants and packaged food items will clearly label allergens to keep you safe. If you have any specific dessert in mind, feel free to provide more details, and I'll do my best to help!",
+          "response_time": 2.800687789916992,
+          "status": "success",
+          "category": "general",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741747115.7692223,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 2.8168439865112305,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "price_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "How much is the steak?",
+          "response": "Our prices range from $3.99 for French Fries to $12.99 for the Margherita Pizza. The Classic Burger is $10.99, the Garden Salad is $8.99, and the Veggie Burger is $11.99. Is there a specific item you'd like to know the price of?",
+          "response_time": 2.0115866661071777,
+          "status": "success",
+          "category": "menu",
+          "is_fallback": true
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741747118.5892847,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 2.013568878173828,
+      "fallback_count": 1
+    },
+    {
+      "scenario": "progressive_order",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "Can I place an order for delivery?",
+          "response": "SQL_EXAMPLE_PLACE_ORDER:\n\n```\nINSERT INTO Orders (order_id, customer_id, order_date, delivery_address, status)\nVALUES (12345, 67890, '2023-10-15', '123 Main Street, Anytown, USA', 'Pending');\n```\n\nRESPONSE_RULES:\n\n- Confirm the placement of an order for delivery.\n- Include key details like order ID, delivery address, and status.\n- Make sure the message is professional and reassuring.\n\n---\n\nConfirmation Message:\n\nYour order has been successfully placed for delivery. Order ID: 12345, to be delivered to 123 Main Street, Anytown, USA. The current status is 'Pending'. We appreciate your business and are committed to ensuring a smooth delivery experience.",
+          "response_time": 4.25322699546814,
+          "status": "success",
+          "category": "action",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741747120.6162882,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 4.254698991775513,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "recent_order_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "When was my last order?",
+          "response": "It looks like I couldn't find any recent orders associated with your account. It's possible there might have been a small error in retrieving the data. If you think there should be an order, double-check the account details you're using. If you're still having trouble, feel free to reach out, and I'll be happy to help sort it out!",
+          "response_time": 3.9650723934173584,
+          "status": "success",
+          "category": "order_history",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741747124.8758261,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 3.97060489654541,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "order_history_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "How many orders did we complete on February 21st, 2025?",
+          "response": "It looks like there were no completed orders on February 21st, 2025, at this location. If you have any other questions or need further assistance, feel free to ask!",
+          "response_time": 3.0664896965026855,
+          "status": "success",
+          "category": "order_history",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741747128.8534365,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 3.0664896965026855,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "typo_handling",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "Do you have spegetti?",
+          "response": "Yes, we do have spaghetti on the menu! It's listed under the Kids Menu as \"Spaghetti and Meatballs.\" You can enjoy it with either a butter sauce or marinara for $6.99. If you have any more questions or need further assistance, feel free to ask! \ud83c\udf5d",
+          "response_time": 5.882033348083496,
+          "status": "success",
+          "category": "menu",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741747131.9368982,
+      "success_conditions_met": 3,
+      "success_conditions_total": 3,
+      "execution_time": 5.883032321929932,
+      "fallback_count": 0
+    }
+  ]
+}

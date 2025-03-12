@@ -1,0 +1,244 @@
+{
+  "timestamp": 1741746724.5334263,
+  "total_scenarios": 8,
+  "successful_scenarios": 8,
+  "failed_scenarios": 0,
+  "error_scenarios": 0,
+  "success_rate": 1.0,
+  "total_interactions": 8,
+  "total_time": 40.938385009765625,
+  "scenarios": [
+    {
+      "scenario": "ambiguous_request",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "I want something good.",
+          "response": "It sounds like you're in the mood for something enjoyable! Whether you're looking for a delicious meal, an engaging book, a relaxing activity, or perhaps a fun movie suggestion, I'm here to help. Let me know more about what you have in mind, and I can offer some great recommendations tailored just for you!",
+          "response_time": 3.0282208919525146,
+          "status": "success",
+          "category": "general",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741746683.5940337,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 3.0282208919525146,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "basic_menu_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "What do you have on the menu?",
+          "response": "Certainly! Here\u2019s a delightful overview of our menu to give you a taste of what we offer:\n\n### Cocktails\n- **Mimosa**  \n  *Sparkling Wine, Orange Juice*  \n  Price: $8.00\n\n- **Azelea**  \n  *Lemon juice, pineapple juice, vodka, and grenadine*  \n  Price: $11.00\n\n- **John Daly**  \n  *Fresh Brewed Iced Tea, Lemonade, and Vodka*  \n  Price: $12.00\n\n- **Moscow Mule**  \n  *Vodka, lime juice, mint, ginger beer*  \n  Price: $11.00\n\n- **Paloma**  \n  *Tequila, Grapefruit Juice, Fresh Lime Juice, Agave Syrup, Club Soda*  \n  Price: $11.00\n\n- **Screw Driver**  \n  *Vodka and Fresh Squeezed Orange Juice*  \n  Price: $10.00\n\n### Beer & Seltzers\n- **Stella Artois**  \n  Price: $5.00\n\n- **Heineken**  \n  Price: $5.00\n\n- **Corona Light**  \n  Price: $5.00\n\n- **Miller Lite**  \n  Price: $5.00\n\n- **Corona**  \n  Price: $5.00\n\n- **Michelob Ultra**  \n  Price: $5.00\n\n### Soups & Salads\n- **All Saints Salad (gf, veg)**  \n  *Arcadian Spring Mix, Cucumber, Roma Tomato, Candied Nuts, Shaved Red Onion, Queso Fresco, All Saints Dressing*  \n  Price: $14.00\n\n### Kids Menu\n- **Cheese or Pepperoni Pizza**  \n  *Thin Hand Pressed Dough, Fire Baked with Plum Tomato Sauce*  \n  Price: $6.99\n\n- **Spaghetti and Meatballs**  \n  *Spaghetti with Butter Sauce or Marinara*  \n  Price: $6.99\n\nWe hope you find something you love! If you have any questions or need recommendations, feel free to ask. Enjoy!",
+          "response_time": 11.101391077041626,
+          "status": "success",
+          "category": "menu",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741746686.634764,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 11.104949951171875,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "menu_item_details",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "How is the chicken prepared?",
+          "response": "It sounds like you're curious about how chicken is typically prepared! Chicken can be cooked in a variety of ways, each bringing out different flavors and textures. Here are a few popular methods:\n\n1. **Grilling**: This method imparts a smoky flavor and is great for both whole pieces and skewers. Marinating the chicken beforehand can enhance its taste.\n\n2. **Roasting**: Perfect for whole chickens, roasting in the oven allows the skin to crisp up beautifully while keeping the meat juicy.\n\n3. **Baking**: Similar to roasting but usually at a lower temperature, baking is great for casseroles or pieces like breasts and thighs.\n\n4. **Frying**: Whether deep-frying or pan-frying, this method creates a crispy, golden crust. Fried chicken is a beloved classic!\n\n5. **Boiling/Poaching**: This gentle cooking method is ideal for making soups or preparing chicken for shredding.\n\n6. **Stir-Frying**: Quick and flavorful, stir-frying involves cooking chicken pieces rapidly over high heat, often with vegetables and sauces.\n\nEach method can be seasoned and paired with different ingredients to create a rich array of dishes. Let me know if you have a specific recipe or style in mind!",
+          "response_time": 7.12238073348999,
+          "status": "success",
+          "category": "general",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741746697.7428348,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 7.126827955245972,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "price_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "Which entrees are under $20?",
+          "response": "From the menu data provided, it seems like you're looking for entrees priced under $20. While the data includes various categories, here are some options that might fit your needs:\n\n1. **All Saints Salad (gf, veg)** - $14.00\n   - Description: Arcadian Spring Mix, Cucumber, Roma Tomato, Candied Nuts, Shaved Red Onion, Queso Fresco, All Saints Dressing\n\nAlthough this is labeled under \"Soups & Salads,\" it could serve as a light entree. If you're considering items from other categories or need more suggestions, feel free to let me know!",
+          "response_time": 7.07755446434021,
+          "status": "success",
+          "category": "menu",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741746704.8736646,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 7.080063819885254,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "progressive_order",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "I want to start with an appetizer.",
+          "response": "Starting with an appetizer is always a great choice! If you're looking for some delicious options, consider trying something like crispy calamari, stuffed mushrooms, or a classic bruschetta. If you prefer something light and refreshing, a caprese salad or a bowl of gazpacho could be perfect. Feel free to let me know if you have any dietary preferences or if there's a specific cuisine you're interested in, and I can suggest more tailored options!",
+          "response_time": 4.04643440246582,
+          "status": "success",
+          "category": "general",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741746711.958693,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 4.050446271896362,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "recent_order_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "Can you tell me what I ordered last week?",
+          "response": "It looks like there were no orders placed last week using the information available. If you believe there might be an error or if you need help with something else, feel free to let me know!",
+          "response_time": 2.0720887184143066,
+          "status": "success",
+          "category": "order_history",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741746716.0121343,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 2.077085494995117,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "order_history_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "Who placed orders on February 21st?",
+          "response": "It looks like there were no completed orders placed on February 21st. If you have any other questions or need further assistance, feel free to ask!",
+          "response_time": 3.0262534618377686,
+          "status": "success",
+          "category": "order_history",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741746718.092673,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 3.0302608013153076,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "typo_handling",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "Do you have spegetti?",
+          "response": "Yes, it looks like there is spaghetti available on the menu! You can find \"Spaghetti and Meatballs\" listed under the Kids Menu. It comes with the option of Butter Sauce or Marinara and is priced at $6.99. If you're in the mood for a classic dish, this could be a delightful choice! \ud83c\udf5d",
+          "response_time": 3.4025440216064453,
+          "status": "success",
+          "category": "menu",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741746721.1239343,
+      "success_conditions_met": 3,
+      "success_conditions_total": 3,
+      "execution_time": 3.4070253372192383,
+      "fallback_count": 0
+    }
+  ]
+}

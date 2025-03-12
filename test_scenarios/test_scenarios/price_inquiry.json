@@ -1,0 +1,40 @@
+{
+  "name": "price_inquiry",
+  "category": "menu_query",
+  "description": "Questions about prices of items",
+  "priority": "medium",
+  "tags": [
+    "menu",
+    "price",
+    "cost"
+  ],
+  "context": {
+    "user_persona": "budget_conscious",
+    "restaurant_context": "Customer concerned about prices"
+  },
+  "initial_query_hints": [
+    "How much is the steak?",
+    "What's the price of the pasta?",
+    "Which entrees are under $20?"
+  ],
+  "expected_entities": [
+    "menu_item",
+    "price"
+  ],
+  "success_conditions": [
+    {
+      "type": "response_contains",
+      "phrase": "costs"
+    }
+  ],
+  "max_turns": 3,
+  "termination_phrases": [],
+  "validation_requirements": {
+    "database_validation": true,
+    "sentiment_analysis": false,
+    "response_time_threshold": 5.0
+  },
+  "created_at": "2025-03-11T10:35:01.523447",
+  "last_modified": "2025-03-11T10:35:01.523447",
+  "test_history": []
+}

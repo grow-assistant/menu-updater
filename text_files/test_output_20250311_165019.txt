@@ -1,0 +1,37 @@
+Loaded application configuration
+Created 3 example SQL files for testing (fallback mode)
+Database connection test successful
+Created RulesService with real implementation
+Registered RulesService in service registry
+Created FixedSQLExecutor
+Database connection test successful
+Created 3 example SQL files for testing (fallback mode)
+Created headless application
+Initialized database validator
+Created AI user simulator
+Loaded 7 test scenarios
+
+Running test scenarios...
+Running scenario 1/7: ambiguous_request
+  Status: failed
+  Error: No success conditions were met
+Running scenario 2/7: basic_menu_inquiry
+  Status: failed
+  Error: No success conditions were met
+Running scenario 3/7: menu_item_details
+  Status: failed
+  Error: No success conditions were met
+Running scenario 4/7: price_inquiry
+  Status: failed
+  Error: No success conditions were met
+Running scenario 5/7: progressive_order
+  Status: failed
+  Error: No success conditions were met
+Running scenario 6/7: recent_order_inquiry
+  Status: failed
+  Error: No success conditions were met
+Running scenario 7/7: typo_handling
+  Status: failed
+  Error: No success conditions were met
+
+Test Summary: 0 passed, 7 failed, 7 total

@@ -5,10 +5,12 @@ import logging
 import openai
 import json
 import time
+import os
 from typing import Dict, Any, List, Optional, Union
 import asyncio
 import re
 from openai import OpenAI
+from dotenv import load_dotenv
 
 from services.classification.prompt_builder import ClassificationPromptBuilder, classification_prompt_builder
 from services.utils.logging import log_openai_request, log_openai_response
@@ -24,12 +26,34 @@ class ClassificationService:
             config: Configuration parameters for the service
             ai_client: An optional AI client to use for API calls
         """
+        # Load environment variables from .env file
+        load_dotenv()
+        
         self.config = config or {}
         self.ai_client = ai_client
         
-        # OpenAI configuration (can be made more flexible)
-        self.api_key = self.config.get("api", {}).get("openai", {}).get("api_key")
-        self.model = self.config.get("api", {}).get("openai", {}).get("model", "gpt-4o-mini")
+        # OpenAI configuration - first try direct client, then config, then environment variable
+        if self.ai_client:
+            self.client = self.ai_client
+            logger.info("Using provided AI client for classification service")
+        else:
+            # Try to get API key from config or environment
+            self.api_key = self.config.get("api", {}).get("openai", {}).get("api_key")
+            
+            # If not in config, try environment variable
+            if not self.api_key:
+                self.api_key = os.environ.get("OPENAI_API_KEY")
+                
+            self.model = self.config.get("api", {}).get("openai", {}).get("model", "gpt-4o-mini")
+            
+            # Initialize OpenAI client if API key is provided
+            if self.api_key:
+                # Use the newer client-based approach
+                self.client = OpenAI(api_key=self.api_key)
+                logger.info("OpenAI client initialized for classification service with API key from config or environment")
+            else:
+                self.client = None
+                logger.warning("OpenAI API key not provided for classification service")
         
         # Initialize categories from the prompt builder
         self.prompt_builder = classification_prompt_builder
@@ -43,15 +67,6 @@ class ClassificationService:
         
         # Confidence threshold for reliable classification
         self.confidence_threshold = self.config.get("classification", {}).get("confidence_threshold", 0.7)
-        
-        # Initialize OpenAI client if API key is provided
-        if self.api_key:
-            # Use the newer client-based approach instead of setting API key directly
-            self.client = OpenAI(api_key=self.api_key)
-            logger.info("OpenAI client initialized for classification service")
-        else:
-            self.client = None
-            logger.warning("OpenAI API key not provided for classification service")
     
     def classify(self, query: str, cached_dates=None, use_cache=True) -> Dict[str, Any]:
         """

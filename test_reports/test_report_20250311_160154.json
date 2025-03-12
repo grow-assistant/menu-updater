@@ -1,0 +1,37 @@
+{
+  "timestamp": "2025-03-11T16:01:54.249339",
+  "total_scenarios": 7,
+  "successful_scenarios": 0,
+  "failed_scenarios": 7,
+  "error_scenarios": 0,
+  "success_rate": 0.0,
+  "total_interactions": 27,
+  "multi_turn_conversations": 7,
+  "avg_turns_per_scenario": 3.857142857142857,
+  "total_response_time": 0.06548309326171875,
+  "average_response_time": 0.002425299750434028,
+  "min_response_time": 0.0034613609313964844,
+  "max_response_time": 0.010619401931762695,
+  "fallback_responses": 0,
+  "fallback_rate": 0.0,
+  "total_success_conditions": 9,
+  "met_success_conditions": 0,
+  "success_condition_rate": 0.0,
+  "total_validations": 27,
+  "validation_failures": 0,
+  "validation_success_rate": 100.0,
+  "detected_issues": [
+    "Error: 'MockRulesService' object has no attribute 'get_rules'",
+    "Empty response returned"
+  ],
+  "category_stats": {
+    "other": {
+      "count": 7,
+      "success": 0,
+      "failed": 7,
+      "error": 0,
+      "total_time": 28.92030620574951,
+      "avg_time": 4.131472315107073
+    }
+  }
+}

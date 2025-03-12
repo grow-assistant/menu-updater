@@ -1,0 +1,29 @@
+{
+  "scenario": "typo_handling",
+  "status": "success",
+  "interactions": [
+    {
+      "turn": 1,
+      "query": "I want a hamburger with chesee.",
+      "response": "It looks like there was a small typo in your request. Did you mean \"cheese\"? If you're placing an order, please make sure to specify any preferences for your hamburger, such as the type of cheese or any additional toppings you might like. If you have any other questions or need further assistance, feel free to let me know!",
+      "response_time": 15.098949909210205,
+      "status": "success",
+      "category": "action",
+      "is_fallback": false
+    }
+  ],
+  "validation_results": [
+    {
+      "validation_results": [],
+      "accuracy_score": 0,
+      "valid": false,
+      "error": "No validatable facts found"
+    }
+  ],
+  "critiques": [],
+  "timestamp": 1741748153.8932607,
+  "success_conditions_met": 3,
+  "success_conditions_total": 3,
+  "execution_time": 15.100949048995972,
+  "fallback_count": 0
+}

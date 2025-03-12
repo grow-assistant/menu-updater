@@ -1,0 +1,38 @@
+{
+  "name": "ambiguous_request",
+  "category": "edge_cases",
+  "description": "Handling ambiguous or vague requests",
+  "priority": "high",
+  "tags": [
+    "edge",
+    "ambiguous",
+    "vague",
+    "clarification"
+  ],
+  "context": {
+    "user_persona": "indecisive_diner",
+    "restaurant_context": "Customer making unclear requests"
+  },
+  "initial_query_hints": [
+    "I want something good.",
+    "What's the thing everyone gets?",
+    "Give me the usual."
+  ],
+  "success_conditions": [
+    {
+      "type": "response_contains",
+      "phrase": "could you clarify"
+    }
+  ],
+  "max_turns": 4,
+  "expected_entities": [],
+  "termination_phrases": [],
+  "validation_requirements": {
+    "database_validation": true,
+    "sentiment_analysis": false,
+    "response_time_threshold": 5.0
+  },
+  "created_at": "2025-03-11T16:01:25.286400",
+  "last_modified": "2025-03-11T16:01:25.286400",
+  "test_history": []
+}
