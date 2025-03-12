@@ -403,164 +403,156 @@ class ResponseGenerator:
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Generate a response using OpenAI's GPT-4 based on the query and results.
+        Generate a response for the given query, category, and response rules.
         
         Args:
-            query: The user's query text
-            category: The query category
-            response_rules: Rules for response generation
-            query_results: Results from SQL query execution
-            context: Additional context information
+            query: The user's query
+            category: Category of the query (menu, order, etc.)
+            response_rules: Rules for the response
+            query_results: Results of the database query
+            context: Conversation context
             
         Returns:
-            Dictionary with response text and metadata
+            Response dictionary
         """
-        # Add detailed logging for API call tracking
-        api_call_id = str(uuid.uuid4())[:8]
-        logger.info(f"[API_CALL:{api_call_id}] Starting text response generation for query: '{query[:50]}...'")
-        logger.info(f"[API_CALL:{api_call_id}] Category: {category}, Model: {self.default_model}")
-        
-        # Check if response is in cache
-        cached_response = self._check_cache(query, category)
-        if cached_response and not context.get("skip_cache", False):
-            logger.info(f"[API_CALL:{api_call_id}] Using cached response")
+        # Check if we need to initialize the client
+        if not self.client and self.openai_api_key:
+            self.client = OpenAI(api_key=self.openai_api_key)
+
+        # Check cache first
+        cache_key = self._get_cache_key(query, category)
+        # Split the cache_key to extract category and query
+        if ":" in cache_key:
+            key_category, key_query = cache_key.split(":", 1)
+            cached_response = self._check_cache(key_query, key_category)
+        else:
+            # Fallback in case the cache_key doesn't have the expected format
+            cached_response = None
+        if cached_response:
+            logger.info(f"Using cached response for query: {query[:50]}...")
             return cached_response
         
-        # Extract personalization settings from context
-        personalization = self._extract_personalization_from_context(context)
-        if personalization:
-            logger.info(f"[API_CALL:{api_call_id}] Using personalized response settings: {personalization}")
-        
-        # Load the appropriate template for this category
-        template = self._load_template_for_category(category)
-        
-        # Format results for the prompt (can be quite large)
-        if query_results:
-            # Check if query_results is a list or a dict with 'results' key
-            if isinstance(query_results, dict) and 'results' in query_results:
-                formatted_results = query_results['results']
-            else:
-                # Format the results for rich response generation
-                formatted_results = self._format_rich_results(query_results, category)
-        else:
-            formatted_results = "No results found."
-
-        # Get timestamp for the response
-        timestamp = datetime.now().isoformat()
-        
-        # Get system message (with personalization if available)
-        persona = context.get("persona", self.current_persona)
-        system_message = self._build_system_message(category, persona, personalization)
-        
-        # Format rules into prompt
+        # Format the rules for display
         formatted_rules = self._format_rules(response_rules)
         
-        # Check if we should use summary mode
-        use_summary = False
-        summary_threshold = 1000  # Characters
-        if isinstance(formatted_results, str) and len(formatted_results) > summary_threshold:
-            use_summary = True
+        # Format the results - use custom formatter if available
+        formatted_results = self._format_rich_results(query_results, category) if query_results else "No results available"
         
-        # Get the response from OpenAI
+        # Check if the context has summary rather than raw data (for long results)
+        use_summary = context.get("use_summary", False) or (query_results and len(query_results) > 10)
+        
+        # Extract personalization from context
+        personalization = self._extract_personalization_from_context(context)
+        
+        # Determine persona - preference order:
+        # 1. Explicitly set in request context
+        # 2. Previously set through set_persona
+        # 3. Default from config (usually "casual")
+        persona = context.get("persona")
+        if not persona:
+            persona = getattr(self, "persona", "casual")
+        
+        # Build the system message with persona instructions
+        system_message = self._build_system_message(category, persona, personalization)
+        
+        # Build the full message array
+        messages = self._build_messages(
+            query=query,
+            category=category,
+            system_message=system_message,
+            formatted_rules=formatted_rules,
+            formatted_results=formatted_results,
+            use_summary=use_summary,
+            personalization=personalization
+        )
+        
+        # Generate the text response using OpenAI
+        start_time = time.time()
         try:
-            start_time = time.time()
-            
-            # Get the messages based on whether we need a summary
-            messages = self._build_messages(
-                query, 
-                category, 
-                system_message, 
-                formatted_rules, 
-                formatted_results, 
-                use_summary,
-                personalization
-            )
-            
-            # Log message sizes
-            message_sizes = [
-                f"{m['role']}: {len(str(m['content']))} chars"
-                for m in messages
-            ]
-            logger.debug(f"[API_CALL:{api_call_id}] Messages sizes: {', '.join(message_sizes)}")
+            # Log the request
+            logger.info(f"Sending request to OpenAI API for query: {query[:50]}...")
             
             # Make the API call
-            if not self.client:
-                # If OpenAI client not available, return a default response
-                logger.warning(f"[API_CALL:{api_call_id}] OpenAI client not available, returning default response")
-                response_text = f"I'd like to help with your query about {category}, but I'm currently unable to generate a full response."
-                api_response = None
-                success = False
-                error = "OpenAI client not available"
-            else:
-                # Normal API call
-                try:
-                    api_response = self.client.chat.completions.create(
-                        model=self.default_model,
-                        messages=messages,
-                        temperature=0.7,
-                        max_tokens=500,
-                        n=1,
-                        stop=None
-                    )
-                    response_text = api_response.choices[0].message.content.strip()
-                    success = True
-                    error = None
-                except Exception as e:
-                    logger.error(f"[API_CALL:{api_call_id}] OpenAI API call failed: {str(e)}")
-                    response_text = f"I'm sorry, I encountered an issue while generating a response about {category}. Please try again in a moment."
-                    api_response = None
-                    success = False
-                    error = str(e)
-            
-            end_time = time.time()
-            
-            # Log API call details
-            self._log_api_call(
-                "OpenAI", 
-                f"chat/completions/{self.default_model}", 
-                {"role": "system", "query": query}, 
-                start_time, 
-                end_time, 
-                success, 
-                None if api_response is None else "Response received", 
-                error
+            response = self.client.chat.completions.create(
+                model="gpt-4",  # Use GPT-4 for better quality
+                messages=messages,
+                temperature=0.2,  # Low temperature for more consistent responses
             )
             
-            # Post-process response if needed (e.g., extract structured data, format for rich media)
-            response_text = self._process_response_for_rich_media(response_text, category)
+            # Handle the response
+            response_text = response.choices[0].message.content
             
-            # Create the final response
-            response = {
-                "response": response_text,
-                "timestamp": timestamp,
+            # Process the response for rich media
+            processed_text = self._process_response_for_rich_media(response_text, category)
+            
+            # Build the result
+            result = {
+                "text": processed_text,
                 "category": category,
-                "model": self.default_model,
-                "api_call_id": api_call_id,
-                "processing_time": end_time - start_time
+                "role": "assistant",
+                "timestamp": datetime.now().isoformat()
             }
             
-            # Add personalization metadata
-            if personalization:
-                response["personalized"] = True
-                response["personalization_settings"] = {
-                    "detail_level": personalization.get("detail_level"),
-                    "tone": personalization.get("tone"),
-                    "expertise_level": personalization.get("expertise_level")
-                }
+            # Perform SQL validation to ensure response accuracy
+            try:
+                from services.utils.service_registry import ServiceRegistry
+                validator = ServiceRegistry.get("sql_validation")
+                if validator and query_results:
+                    sql_query = "SQL query executed for this response"  # This should be passed in from the orchestrator
+                    if context and "sql_query" in context:
+                        sql_query = context["sql_query"]
+                    
+                    validation_result = validator.validate_response(sql_query, query_results, processed_text)
+                    
+                    # Log validation result
+                    if validation_result["validation_status"]:
+                        logger.info(f"Response validation PASSED: {validation_result['validation_details']['match_percentage']:.2f}%")
+                    else:
+                        logger.warning(f"Response validation FAILED: {validation_result['validation_details']['match_percentage']:.2f}%")
+                    
+                    # Add validation result to response
+                    result["validation_result"] = validation_result
+            except Exception as e:
+                logger.error(f"Error during SQL validation: {str(e)}")
             
-            # Add to cache
-            self._update_cache(query, category, response)
+            # Log the API call
+            self._log_api_call(
+                api_name="openai",
+                endpoint="chat.completions",
+                params={"model": "gpt-4", "temperature": 0.2},
+                start_time=start_time,
+                end_time=time.time(),
+                success=True,
+                response_data={"content_length": len(processed_text)},
+            )
             
-            logger.info(f"[API_CALL:{api_call_id}] Generated response in {end_time - start_time:.2f}s")
-            return response
+            # Update the cache
+            self._update_cache(cache_key, result)
+            
+            return result
             
         except Exception as e:
-            logger.error(f"Error generating response for query '{query}': {str(e)}")
+            # Log the error
+            logger.error(f"Error generating response: {str(e)}")
+            
+            # Log the API call with error
+            self._log_api_call(
+                api_name="openai",
+                endpoint="chat.completions",
+                params={"model": "gpt-4", "temperature": 0.2},
+                start_time=start_time,
+                end_time=time.time(),
+                success=False,
+                error=str(e),
+            )
+            
+            # Return an error response
             return {
-                "response": f"I apologize, but I couldn't generate a response right now. Please try again.",
-                "timestamp": timestamp,
-                "category": category,
-                "error": str(e)
+                "text": f"I'm sorry, I wasn't able to generate a response. Please try again.",
+                "category": "error",
+                "role": "assistant",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
             }
     
     def _extract_personalization_from_context(self, context: Dict[str, Any]) -> Dict[str, Any]:

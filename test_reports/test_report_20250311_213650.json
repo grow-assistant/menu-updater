@@ -1,0 +1,244 @@
+{
+  "timestamp": 1741754210.008973,
+  "total_scenarios": 8,
+  "successful_scenarios": 8,
+  "failed_scenarios": 0,
+  "error_scenarios": 0,
+  "success_rate": 1.0,
+  "total_interactions": 8,
+  "total_time": 0.045226335525512695,
+  "scenarios": [
+    {
+      "scenario": "ambiguous_request",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "I want something good.",
+          "response": "I apologize, but I'm encountering a technical issue right now. Our team has been notified. Is there something else I can help you with?",
+          "response_time": 0.0,
+          "status": "success",
+          "category": "unknown",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741754209.9637465,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 0.0,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "basic_menu_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "Can I see your menu?",
+          "response": "I apologize, but I'm having trouble accessing our menu database at the moment. We offer a variety of dishes including appetizers, main courses, and desserts. Would you like me to tell you about our specials today instead?",
+          "response_time": 0.0020029544830322266,
+          "status": "success",
+          "category": "unknown",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741754209.9637465,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 0.012716531753540039,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "menu_item_details",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "What's in your lasagna?",
+          "response": "I apologize, but I'm encountering a technical issue right now. Our team has been notified. Is there something else I can help you with?",
+          "response_time": 0.0,
+          "status": "success",
+          "category": "unknown",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741754209.9785824,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 0.0010101795196533203,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "price_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "What's the price of the pasta?",
+          "response": "I apologize, but I'm encountering a technical issue right now. Our team has been notified. Is there something else I can help you with?",
+          "response_time": 0.0021371841430664062,
+          "status": "success",
+          "category": "unknown",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741754209.9852161,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 0.004160881042480469,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "progressive_order",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "Can I place an order for delivery?",
+          "response": "I apologize, but I'm having trouble accessing your order history at the moment. Could you provide more details about what you'd like to know about your previous orders?",
+          "response_time": 0.002217531204223633,
+          "status": "success",
+          "category": "unknown",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741754209.9883585,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 0.005363941192626953,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "recent_order_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "What did I order last time?",
+          "response": "I apologize, but I'm having trouble accessing your order history at the moment. Could you provide more details about what you'd like to know about your previous orders?",
+          "response_time": 0.0008020401000976562,
+          "status": "success",
+          "category": "unknown",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741754209.994722,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 0.0021953582763671875,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "order_history_inquiry",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "What was the total for each order on February 21st?",
+          "response": "I apologize, but I'm having trouble accessing your order history at the moment. Could you provide more details about what you'd like to know about your previous orders?",
+          "response_time": 0.006552457809448242,
+          "status": "success",
+          "category": "unknown",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741754209.9969172,
+      "success_conditions_met": 1,
+      "success_conditions_total": 1,
+      "execution_time": 0.007551908493041992,
+      "fallback_count": 0
+    },
+    {
+      "scenario": "typo_handling",
+      "status": "success",
+      "interactions": [
+        {
+          "turn": 1,
+          "query": "Is the chickn spicy?",
+          "response": "I apologize, but I'm encountering a technical issue right now. Our team has been notified. Is there something else I can help you with?",
+          "response_time": 0.0020885467529296875,
+          "status": "success",
+          "category": "unknown",
+          "is_fallback": false
+        }
+      ],
+      "validation_results": [
+        {
+          "validation_results": [],
+          "accuracy_score": 0,
+          "valid": false,
+          "error": "No validatable facts found"
+        }
+      ],
+      "critiques": [],
+      "timestamp": 1741754210.0054684,
+      "success_conditions_met": 3,
+      "success_conditions_total": 3,
+      "execution_time": 0.003504514694213867,
+      "fallback_count": 0
+    }
+  ]
+}

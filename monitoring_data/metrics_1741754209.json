@@ -1,0 +1,17 @@
+{
+  "total_tests": 0,
+  "passed_tests": 0,
+  "failed_tests": 0,
+  "in_progress_tests": 0,
+  "total_scenarios": 0,
+  "scenarios_run": [],
+  "scenarios_failed": [],
+  "total_critiques": 0,
+  "critiques_by_severity": {},
+  "critiques_by_type": {},
+  "avg_processing_time": 0,
+  "test_history": [],
+  "start_time": 1741754209.931693,
+  "last_update": 1741754209.931693,
+  "timestamp": "2025-03-11T21:36:49.931693"
+}

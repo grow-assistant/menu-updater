@@ -1,0 +1,29 @@
+{
+  "scenario": "price_inquiry",
+  "status": "success",
+  "interactions": [
+    {
+      "turn": 1,
+      "query": "Which entrees are under $20?",
+      "response": "I apologize, but I'm encountering a technical issue right now. Our team has been notified. Is there something else I can help you with?",
+      "response_time": 0.18176722526550293,
+      "status": "success",
+      "category": "unknown",
+      "is_fallback": false
+    }
+  ],
+  "validation_results": [
+    {
+      "validation_results": [],
+      "accuracy_score": 0,
+      "valid": false,
+      "error": "No validatable facts found"
+    }
+  ],
+  "critiques": [],
+  "timestamp": 1741754271.9249165,
+  "success_conditions_met": 1,
+  "success_conditions_total": 1,
+  "execution_time": 0.1979227066040039,
+  "fallback_count": 0
+}

@@ -1,35 +1,42 @@
 {
-  "name": "recent_order_inquiry",
+  "name": "order_date_inquiry",
   "category": "order_history",
-  "description": "Questions about a customer's recent order",
+  "description": "Questions about orders on a specific date",
   "priority": "high",
   "tags": [
     "order",
     "history",
-    "recent"
+    "date",
+    "analytics" 
   ],
   "context": {
-    "user_persona": "frequent_customer",
-    "restaurant_context": "Returning customer asking about their last order",
+    "user_persona": "manager",
+    "restaurant_context": "Manager checking order statistics",
     "session_state": {
-      "customer_id": 42,
-      "has_orders": true
+      "target_date": "2025-02-21",
+      "query_type": "multi_turn"
     }
   },
   "initial_query_hints": [
-    "What did I order last time?",
-    "When was my last order?",
-    "Can you tell me what I ordered last week?"
+    "How many orders were completed on 2/21/2025?",
+    "Who placed these orders?",
+    "What was the most popular item ordered that day?"
   ],
   "expected_entities": [
-    "order_id",
+    "order_count",
     "order_date",
+    "customer_ids",
+    "customer_names",
     "order_items"
   ],
   "success_conditions": [
     {
       "type": "response_contains",
-      "phrase": "your last order"
+      "phrase": "orders completed"
+    },
+    {
+      "type": "response_contains", 
+      "phrase": "placed by"
     }
   ],
   "validation_requirements": {

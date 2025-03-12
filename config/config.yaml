@@ -1,3 +1,73 @@
+application:
+  name: Restaurant Assistant
+  version: 1.0.0
+  environment: development
+  debug: false
+
+api:
+  openai:
+    api_key: ${OPENAI_API_KEY}
+    model: gpt-4
+  elevenlabs:
+    api_key: ${ELEVENLABS_API_KEY:}
+    voice_id: EXAVITQu4vr4xnSDxMaL
+    model: eleven_multilingual_v2
+
+database:
+  type: postgresql
+  connection_string: ${DB_CONNECTION_STRING:postgresql://postgres:postgres@localhost:5432/restaurant}
+  pool_size: 5
+  timeout: 30
+
+services:
+  response:
+    enabled: true
+    generator:
+      enabled: true
+      model: gpt-4
+      temperature: 0.7
+      max_tokens: 800
+      cache_enabled: true
+      cache_ttl: 3600
+      cache_size: 100
+      enable_rich_media: true
+      template_dir: resources/prompts/templates
+  
+  validation:
+    enabled: true
+    sql_validation:
+      enabled: true
+      match_threshold: 80
+      strict_mode: false
+
+  database:
+    enabled: true
+    connection_manager:
+      enabled: true
+      max_connections: 10
+      timeout: 30
+
+personas:
+  enabled: true
+  text_persona: professional
+  verbal_persona: casual
+  personas:
+    casual:
+      voice_id: EXAVITQu4vr4xnSDxMaL
+      description: Friendly, conversational, and casual
+    professional:
+      voice_id: TxGEqnHWrfWFTfGW9XjX
+      description: Polished, articulate, and business-like
+    friendly:
+      voice_id: pNInz6obpgDQGcFmaJgB
+      description: Warm, approachable, and personable
+
+logging:
+  level: INFO
+  file_path: logs/restaurant_assistant.log
+  max_size: 10485760  # 10MB
+  backup_count: 5
+
 database:
   host: ${DB_HOST:-127.0.0.1}
   port: ${DB_PORT:-5433}

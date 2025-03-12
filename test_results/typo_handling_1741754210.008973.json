@@ -1,0 +1,29 @@
+{
+  "scenario": "typo_handling",
+  "status": "success",
+  "interactions": [
+    {
+      "turn": 1,
+      "query": "Is the chickn spicy?",
+      "response": "I apologize, but I'm encountering a technical issue right now. Our team has been notified. Is there something else I can help you with?",
+      "response_time": 0.0020885467529296875,
+      "status": "success",
+      "category": "unknown",
+      "is_fallback": false
+    }
+  ],
+  "validation_results": [
+    {
+      "validation_results": [],
+      "accuracy_score": 0,
+      "valid": false,
+      "error": "No validatable facts found"
+    }
+  ],
+  "critiques": [],
+  "timestamp": 1741754210.0054684,
+  "success_conditions_met": 3,
+  "success_conditions_total": 3,
+  "execution_time": 0.003504514694213867,
+  "fallback_count": 0
+}

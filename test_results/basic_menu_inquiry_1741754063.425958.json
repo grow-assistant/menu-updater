@@ -1,0 +1,29 @@
+{
+  "scenario": "basic_menu_inquiry",
+  "status": "success",
+  "interactions": [
+    {
+      "turn": 1,
+      "query": "What kind of food do you serve?",
+      "response": "I'm sorry, but I encountered an error processing your request. Please try again later. (Error: process_query() takes 2 positional arguments but 4 were given)",
+      "response_time": 0.0010004043579101562,
+      "status": "success",
+      "category": "error",
+      "is_fallback": true
+    }
+  ],
+  "validation_results": [
+    {
+      "validation_results": [],
+      "accuracy_score": 0,
+      "valid": false,
+      "error": "No validatable facts found"
+    }
+  ],
+  "critiques": [],
+  "timestamp": 1741754063.4229705,
+  "success_conditions_met": 1,
+  "success_conditions_total": 1,
+  "execution_time": 0.003312349319458008,
+  "fallback_count": 1
+}

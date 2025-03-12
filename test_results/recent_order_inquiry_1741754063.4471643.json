@@ -1,0 +1,29 @@
+{
+  "scenario": "recent_order_inquiry",
+  "status": "success",
+  "interactions": [
+    {
+      "turn": 1,
+      "query": "Can you tell me what I ordered last week?",
+      "response": "I'm sorry, but I encountered an error processing your request. Please try again later. (Error: process_query() takes 2 positional arguments but 4 were given)",
+      "response_time": 0.0009996891021728516,
+      "status": "success",
+      "category": "error",
+      "is_fallback": true
+    }
+  ],
+  "validation_results": [
+    {
+      "validation_results": [],
+      "accuracy_score": 0,
+      "valid": false,
+      "error": "No validatable facts found"
+    }
+  ],
+  "critiques": [],
+  "timestamp": 1741754063.4432006,
+  "success_conditions_met": 1,
+  "success_conditions_total": 1,
+  "execution_time": 0.002697467803955078,
+  "fallback_count": 1
+}
