@@ -1,0 +1,40 @@
+{
+  "name": "ambiguous_request",
+  "category": "edge_cases",
+  "description": "Handling ambiguous or vague business inquiries",
+  "priority": "high",
+  "tags": [
+    "edge",
+    "ambiguous",
+    "vague",
+    "clarification"
+  ],
+  "context": {
+    "user_persona": "business_manager",
+    "business_context": "Manager asking a vague question about business performance"
+  },
+  "initial_query_hints": [
+    "How are we doing?",
+    "What's our status?",
+    "How's business?"
+  ],
+  "success_conditions": [
+    {
+      "type": "response_contains",
+      "phrase": "clarification"
+    }
+  ],
+  "max_turns": 3,
+  "expected_entities": [],
+  "termination_phrases": [],
+  "validation_requirements": {
+    "database_validation": true,
+    "sentiment_analysis": false,
+    "response_time_threshold": 0.5
+  },
+  "required_sql": "Query sales summaries, inventory status, and staff performance metrics",
+  "sql_validation": "Ensure clarification options directly correspond to existing data categories",
+  "created_at": "2025-03-12T09:00:00.000000",
+  "last_modified": "2025-03-12T09:00:00.000000",
+  "test_history": []
+} 

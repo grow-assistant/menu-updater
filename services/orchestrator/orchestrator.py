@@ -222,32 +222,22 @@ class OrchestratorService:
             if context is None:
                 context = {}
             
-            # Check if verbal response is requested
-            if context and context.get("enable_verbal", False):
-                self.logger.info(f"Verbal response requested, disabling fast_mode (original fast_mode={fast_mode})")
-                fast_mode = False
-                
-                # Check if ElevenLabs is initialized, and try to initialize it if not
-                if not self.elevenlabs_initialized:
-                    self.logger.warning("Verbal response requested but ElevenLabs not initialized, attempting to initialize")
-                    self.elevenlabs_initialized = self.initialize_elevenlabs_tts()
+            # Check if verbal response is requested - IMPORTANT FIX HERE
+            voice_enabled = False
+            if context and "enable_verbal" in context:
+                voice_enabled = bool(context.get("enable_verbal", False))
+                self.logger.info(f"Voice enabled from context: {voice_enabled}")
+                if voice_enabled:
+                    # Force fast_mode to False to enable verbal response
+                    fast_mode = False
+                    self.logger.info("Voice enabled, setting fast_mode to False")
+                    
+                    # Check if ElevenLabs is initialized, and try to initialize it if not
                     if not self.elevenlabs_initialized:
-                        self.logger.warning("Failed to initialize ElevenLabs, switching back to fast_mode (text-only response)")
-                        # If ElevenLabs couldn't be initialized, go back to text-only mode
-                        fast_mode = True
-                        context["enable_verbal"] = False
-                
-                # Perform a health check on the response generator
-                self.logger.info("Performing health check on response generator")
-                response_generator_health = False
-                try:
-                    if self.response_generator:
-                        response_generator_health = self.response_generator.health_check()
-                        self.logger.info(f"Response generator health check result: {response_generator_health}")
-                    else:
-                        self.logger.error("Response generator not available")
-                except Exception as e:
-                    self.logger.error(f"Error during response generator health check: {str(e)}")
+                        self.logger.warning("Verbal response requested but ElevenLabs not initialized, attempting to initialize")
+                        self.elevenlabs_initialized = self.initialize_elevenlabs_tts()
+                        if not self.elevenlabs_initialized:
+                            self.logger.warning("Failed to initialize ElevenLabs, audio may not be generated")
             
             context["fast_mode"] = fast_mode
             
@@ -748,14 +738,32 @@ class OrchestratorService:
             if verbal_audio:
                 result["verbal_audio"] = verbal_audio
                 result["verbal_text"] = verbal_text
+                self.logger.info(f"Added verbal audio to response, size: {len(verbal_audio)} bytes")
             else:
-                pass
+                self.logger.warning("No verbal audio available to add to the response")
+                # If no verbal audio but verbal text exists, attempt one more TTS generation
+                if verbal_text and self.elevenlabs_initialized:
+                    try:
+                        self.logger.info("Attempting last-chance TTS generation with existing verbal text")
+                        tts_result = self.get_tts_response(verbal_text)
+                        if tts_result and tts_result.get("success"):
+                            result["verbal_audio"] = tts_result.get("audio")
+                            self.logger.info(f"Last-chance TTS generated audio: {len(tts_result.get('audio'))} bytes")
+                        else:
+                            self.logger.error(f"Last-chance TTS failed: {tts_result.get('error') if tts_result else 'Unknown error'}")
+                    except Exception as e:
+                        self.logger.error(f"Error in last-chance TTS: {str(e)}")
             
             # Add a default response if none was generated but we have query results
             if result["response"] is None and query_results:
-                # Create a simple default response based on the query results
+                # Create a more detailed response that includes customer names
                 if category == "order_history" and len(query_results) > 0:
-                    count = query_results[0].get("order_count", 0)
+                    # Check if order_count exists in the first result
+                    if "order_count" in query_results[0]:
+                        count = query_results[0].get("order_count", 0)
+                    else:
+                        # If there's no order_count, use the length of query_results
+                        count = len(query_results)
                     
                     # Try to extract date from the query context
                     date_str = "2025-02-21"  # Default to the exact date string for better test compatibility
@@ -765,7 +773,17 @@ class OrchestratorService:
                         if date_match:
                             date_str = date_match.group(1)
                     
-                    result["response"] = f"I found {count} completed order(s) on {date_str}."
+                    # Create a more detailed response that includes customer names
+                    if count > 0 and "customer_name" in query_results[0]:
+                        customer_names = [result["customer_name"] for result in query_results[:count]]
+                        if len(customer_names) == 1:
+                            result["response"] = f"I found {count} completed order(s) on {date_str}: {customer_names[0]}."
+                        else:
+                            # Format as a comma-separated list with "and" before the last item
+                            names_formatted = ", ".join(customer_names[:-1]) + ", and " + customer_names[-1] if len(customer_names) > 1 else customer_names[0]
+                            result["response"] = f"I found {count} completed order(s) on {date_str}: {names_formatted}."
+                    else:
+                        result["response"] = f"I found {count} completed order(s) on {date_str}."
                 elif category == "popular_items" and len(query_results) > 0:
                     # Create a response for popular items queries
                     result["response"] = "Here are the popular items based on your query:\n\n"

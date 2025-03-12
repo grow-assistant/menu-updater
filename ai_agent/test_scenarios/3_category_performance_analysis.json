@@ -1,0 +1,49 @@
+{
+  "name": "category_performance_analysis",
+  "category": "business_analytics",
+  "description": "Analysis of performance for a specific menu category",
+  "priority": "high",
+  "tags": [
+    "performance",
+    "category",
+    "analytics",
+    "sales"
+  ],
+  "context": {
+    "user_persona": "business_analyst",
+    "business_context": "Analyst evaluating performance of a specific menu category"
+  },
+  "initial_query_hints": [
+    "How are our appetizers performing?",
+    "What's the performance of our dessert category?",
+    "How are entrees doing in terms of sales?"
+  ],
+  "expected_entities": [
+    "category_name",
+    "sales_metrics",
+    "profit_margins",
+    "performance_trends"
+  ],
+  "success_conditions": [
+    {
+      "type": "response_contains",
+      "phrase": "performance metrics"
+    },
+    {
+      "type": "response_contains",
+      "phrase": "trends"
+    }
+  ],
+  "max_turns": 3,
+  "termination_phrases": [],
+  "validation_requirements": {
+    "database_validation": true,
+    "sentiment_analysis": false,
+    "response_time_threshold": 0.6
+  },
+  "required_sql": "Query sales data and profit margins filtered by the selected category",
+  "sql_validation": "Performance metrics must match database calculations",
+  "created_at": "2025-03-12T09:02:00.000000",
+  "last_modified": "2025-03-12T09:02:00.000000",
+  "test_history": []
+} 

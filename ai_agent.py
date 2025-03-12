@@ -43,7 +43,6 @@ from ai_user_simulator import AIUserSimulator
 from headless_streamlit import HeadlessStreamlit
 from database_validator import DatabaseValidator
 from scenario_library import ScenarioLibrary
-from monitoring import create_test_monitor
 from critique_agent import CritiqueAgent
 
 # Mock classes for testing
@@ -186,436 +185,6 @@ class CritiqueAgent:
         self.logger.info(f"Critique generated with rating: {critique['overall_rating']}/10")
         return critique
 
-# Create a testing-specific SQL Generator class that always returns valid queries
-class FixedSQLGenerator:
-    """A SQL generator that always returns valid queries for testing purposes."""
-    
-    def __init__(self, config=None, rules_service=None):
-        """Initialize with fixed query templates."""
-        self.config = config or {}
-        self.rules_service = rules_service
-        self.logger = logging.getLogger(__name__)
-        
-        self.query_templates = {
-            "menu": """
-            SELECT 
-                i.id,
-                i.name,
-                i.description,
-                i.price,
-                c.name as category
-            FROM 
-                items i
-            JOIN 
-                categories c ON i.category_id = c.id
-            WHERE 
-                i.disabled = FALSE
-            ORDER BY 
-                c.seq_num, i.seq_num
-            LIMIT 10;
-            """,
-            
-            "menu_inquiry": """
-            SELECT 
-                i.id,
-                i.name,
-                i.description,
-                i.price,
-                c.name as category
-            FROM 
-                items i
-            JOIN 
-                categories c ON i.category_id = c.id
-            WHERE 
-                i.disabled = FALSE
-            ORDER BY 
-                c.seq_num, i.seq_num
-            LIMIT 15;
-            """,
-            
-            "popular_items": """
-            SELECT 
-                i.id,
-                i.name,
-                i.description, 
-                i.price,
-                COUNT(oi.id) as order_count
-            FROM 
-                items i
-            JOIN 
-                order_items oi ON i.id = oi.item_id
-            JOIN 
-                orders o ON oi.order_id = o.id
-            WHERE 
-                i.disabled = FALSE
-                AND o.location_id = 1
-            GROUP BY 
-                i.id, i.name, i.description, i.price
-            ORDER BY 
-                order_count DESC
-            LIMIT 5;
-            """,
-            
-            "order_history": """
-            SELECT 
-                o.id as order_id,
-                i.name as item_name,
-                oi.quantity,
-                i.price,
-                o.created_at
-            FROM 
-                orders o
-            JOIN 
-                order_items oi ON o.id = oi.order_id
-            JOIN 
-                items i ON oi.item_id = i.id
-            WHERE 
-                o.location_id = 1
-            ORDER BY 
-                o.created_at DESC
-            LIMIT 5;
-            """,
-            
-            "menu_item_details": """
-            SELECT 
-                i.id,
-                i.name,
-                i.description,
-                i.price,
-                c.name as category
-            FROM 
-                items i
-            JOIN 
-                categories c ON i.category_id = c.id
-            WHERE 
-                i.disabled = FALSE
-                AND (i.name ILIKE '%salad%' OR i.description ILIKE '%salad%')
-            ORDER BY 
-                i.price;
-            """,
-            
-            "price_inquiry": """
-            SELECT 
-                i.id,
-                i.name,
-                i.description,
-                i.price,
-                c.name as category
-            FROM 
-                items i
-            JOIN 
-                categories c ON i.category_id = c.id
-            WHERE 
-                i.disabled = FALSE
-                AND (i.name ILIKE '%pizza%' OR i.name ILIKE '%burger%' OR i.name ILIKE '%salad%')
-            ORDER BY 
-                i.price;
-            """,
-            
-            "vegetarian_options": """
-            SELECT 
-                i.id,
-                i.name,
-                i.description,
-                i.price,
-                c.name as category
-            FROM 
-                items i
-            JOIN 
-                categories c ON i.category_id = c.id
-            WHERE 
-                i.disabled = FALSE
-                AND (i.description ILIKE '%vegetarian%' OR i.description ILIKE '%veg%')
-            ORDER BY 
-                c.seq_num, i.seq_num;
-            """,
-            
-            "follow_up": """
-            SELECT 
-                i.id,
-                i.name,
-                i.description,
-                i.price,
-                c.name as category
-            FROM 
-                items i
-            JOIN 
-                categories c ON i.category_id = c.id
-            WHERE 
-                i.disabled = FALSE
-                AND (i.name ILIKE '%salad%' OR i.name ILIKE '%side%')
-            ORDER BY 
-                i.price;
-            """,
-            
-            "general": """
-            SELECT 
-                l.name as location_name,
-                l.description,
-                l.timezone
-            FROM 
-                locations l
-            WHERE 
-                l.id = 1
-                AND l.disabled = FALSE
-            LIMIT 1;
-            """
-        }
-        
-        self.logger.info("Initialized FixedSQLGenerator with predefined queries")
-        
-    def generate_sql(self, query, category, context=None, **kwargs):
-        """Return a valid query based on the category and query content."""
-        self.logger.info(f"Generating fixed SQL for category: {category}")
-        
-        # Look for keywords in the query to provide more specific responses
-        query_lower = query.lower()
-        
-        # Check for specific query keywords to provide more targeted SQL
-        if "vegetarian" in query_lower or "vegan" in query_lower:
-            template = self.query_templates.get("vegetarian_options")
-        elif "salad" in query_lower:
-            template = self.query_templates.get("menu_item_details")
-        elif "price" in query_lower or "how much" in query_lower or "cost" in query_lower:
-            template = self.query_templates.get("price_inquiry")
-        elif "popular" in query_lower or "best" in query_lower or "recommend" in query_lower:
-            template = self.query_templates.get("popular_items")
-        elif "menu" in query_lower or "what do you serve" in query_lower or "what food" in query_lower:
-            template = self.query_templates.get("menu_inquiry")
-        elif "last order" in query_lower or "history" in query_lower or "previous" in query_lower:
-            template = self.query_templates.get("order_history")
-        else:
-            # Default to the general category template
-            template = self.query_templates.get(category, self.query_templates.get("general"))
-        
-        # Log the generated query
-        self.logger.info(f"Generated SQL for category '{category}': {template[:50]}...")
-        
-        return template
-        
-    def generate(self, *args, **kwargs):
-        """Method that the orchestrator calls - delegates to generate_sql."""
-        # The OrchestratorService is calling with different arg patterns
-        # Extract the query and category from args
-        if len(args) >= 2:
-            query = args[0]
-            category = args[1]
-            context = args[2] if len(args) > 2 else None
-            
-            self.logger.info(f"Generate called with {len(args)} args, delegating to generate_sql")
-            sql_query = self.generate_sql(query, category, context, **kwargs)
-            
-            # Return an object that has a get method and the right attributes
-            # that OrchestratorService expects
-            class SQLResult:
-                def __init__(self, sql):
-                    self.sql = sql
-                    self.is_fallback = False  # Mark that this is not a fallback response
-                    
-                def get(self, key, default=None):
-                    if key == 'sql':
-                        return self.sql
-                    elif key == 'is_fallback':
-                        return self.is_fallback
-                    return default
-                    
-            return SQLResult(sql_query)
-        else:
-            self.logger.warning(f"Generate called with insufficient args: {args}")
-            # Return a default query in a SQLResult object
-            class SQLResult:
-                def __init__(self, sql):
-                    self.sql = sql
-                    self.is_fallback = True  # Mark that this is a fallback response
-                    
-                def get(self, key, default=None):
-                    if key == 'sql':
-                        return self.sql
-                    elif key == 'is_fallback':
-                        return self.is_fallback
-                    return default
-                    
-            return SQLResult(self.query_templates.get("general"))
-        
-    def get_performance_metrics(self):
-        """Return mocked performance metrics."""
-        return {
-            "tokens_used": 0,
-            "generation_time": 0.1,
-            "model": "fixed-sql-generator"
-        }
-
-# Create a fixed version of the SQLExecutor for testing
-"""
-# This mock implementation has been removed as per AI_AGENT_DEVELOPMENT_PLAN.md
-# Mock services are prohibited - use real SQLExecutor instead
-class FixedSQLExecutor(SQLExecutor):
-    
-    def __init__(self, config):
-        # Initialize with the correct database configuration.
-        if not isinstance(config, dict):
-            config = {}
-            
-        # Ensure we have required configuration parameters
-        required_params = ['host', 'port', 'name', 'user', 'password', 'connection_string']
-        missing_params = [param for param in required_params if param not in config]
-        
-        if missing_params:
-            # Log warning but create default values for missing parameters
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Missing required database parameters: {missing_params}")
-            
-            # Set default values
-            defaults = {
-                'host': '127.0.0.1',
-                'port': 5433,
-                'name': 'byrdi',
-                'user': 'postgres',
-                'password': 'Swoop123!',
-                'connection_string': 'postgresql://postgres:Swoop123!@127.0.0.1:5433/byrdi'
-            }
-            
-            # Update config with defaults for missing parameters
-            for param in missing_params:
-                config[param] = defaults[param]
-                
-        # Ensure we're using port 5433 instead of 5433
-        if 'port' in config and config['port'] == 5433:
-            config['port'] = 5433
-            
-        # Make sure we're connecting to the right database
-        if 'connection_string' in config and ':5433/' in config['connection_string']:
-            config['connection_string'] = config['connection_string'].replace(':5433/', ':5433/')
-            
-        # Set up basic attributes needed for testing
-        self.connection_string = config.get('connection_string', 'postgresql://postgres:Swoop123!@127.0.0.1:5433/byrdi')
-        self.max_rows = 1000
-        self.timeout = 10
-        self.default_timeout = 10
-        self.max_retries = 3
-        self.engine = None  # We'll simulate this without actually connecting to the database
-        
-        # Log initialization
-        logger = logging.getLogger(__name__)
-        logger.info(f"Initialized FixedSQLExecutor with connection to: {self.connection_string.split('@')[-1]}")
-        
-        # Prepare mock data for different query types
-        self.mock_data = {
-            'menu': [
-                {'id': 1, 'name': 'Classic Burger', 'description': 'Juicy beef patty with lettuce, tomato, and our special sauce', 'price': 10.99, 'category': 'Main Course'},
-                {'id': 2, 'name': 'Garden Salad', 'description': 'Fresh mixed greens with cherry tomatoes, cucumber, and house vinaigrette', 'price': 8.99, 'category': 'Salads'},
-                {'id': 3, 'name': 'Margherita Pizza', 'description': 'Classic pizza with tomato sauce, fresh mozzarella, and basil', 'price': 12.99, 'category': 'Pizza'},
-                {'id': 4, 'name': 'Chicken Caesar Wrap', 'description': 'Grilled chicken with romaine lettuce, parmesan, and Caesar dressing', 'price': 9.99, 'category': 'Sandwiches'},
-                {'id': 5, 'name': 'Vegetable Soup', 'description': 'Hearty soup with seasonal vegetables', 'price': 5.99, 'category': 'Soups'},
-                {'id': 6, 'name': 'Chocolate Brownie', 'description': 'Rich chocolate brownie with vanilla ice cream', 'price': 6.99, 'category': 'Desserts'},
-                {'id': 7, 'name': 'French Fries', 'description': 'Crispy golden fries with our house seasoning', 'price': 3.99, 'category': 'Sides'},
-                {'id': 8, 'name': 'Veggie Burger', 'description': 'Plant-based patty with avocado, sprouts, and chipotle mayo', 'price': 11.99, 'category': 'Main Course'}
-            ],
-            'popular_items': [
-                {'id': 3, 'name': 'Margherita Pizza', 'description': 'Classic pizza with tomato sauce, fresh mozzarella, and basil', 'price': 12.99, 'order_count': 128},
-                {'id': 1, 'name': 'Classic Burger', 'description': 'Juicy beef patty with lettuce, tomato, and our special sauce', 'price': 10.99, 'order_count': 112},
-                {'id': 8, 'name': 'Veggie Burger', 'description': 'Plant-based patty with avocado, sprouts, and chipotle mayo', 'price': 11.99, 'order_count': 87},
-                {'id': 7, 'name': 'French Fries', 'description': 'Crispy golden fries with our house seasoning', 'price': 3.99, 'order_count': 76},
-                {'id': 6, 'name': 'Chocolate Brownie', 'description': 'Rich chocolate brownie with vanilla ice cream', 'price': 6.99, 'order_count': 65}
-            ],
-            'order_history': [
-                {'order_id': 1001, 'item_name': 'Classic Burger', 'quantity': 1, 'price': 10.99, 'created_at': '2025-03-08T13:24:00'},
-                {'order_id': 1001, 'item_name': 'French Fries', 'quantity': 1, 'price': 3.99, 'created_at': '2025-03-08T13:24:00'},
-                {'order_id': 1002, 'item_name': 'Garden Salad', 'quantity': 1, 'price': 8.99, 'created_at': '2025-03-10T12:15:00'},
-                {'order_id': 1002, 'item_name': 'Chocolate Brownie', 'quantity': 1, 'price': 6.99, 'created_at': '2025-03-10T12:15:00'},
-                {'order_id': 1003, 'item_name': 'Veggie Burger', 'quantity': 1, 'price': 11.99, 'created_at': '2025-03-11T12:45:00'}
-            ],
-            'locations': [
-                {'location_name': 'Downtown', 'description': 'Our original location in the heart of the city', 'timezone': 'America/New_York'}
-            ],
-            'vegetarian_options': [
-                {'id': 2, 'name': 'Garden Salad', 'description': 'Fresh mixed greens with cherry tomatoes, cucumber, and house vinaigrette', 'price': 8.99, 'category': 'Salads'},
-                {'id': 3, 'name': 'Margherita Pizza', 'description': 'Classic pizza with tomato sauce, fresh mozzarella, and basil', 'price': 12.99, 'category': 'Pizza'},
-                {'id': 5, 'name': 'Vegetable Soup', 'description': 'Hearty soup with seasonal vegetables', 'price': 5.99, 'category': 'Soups'},
-                {'id': 8, 'name': 'Veggie Burger', 'description': 'Plant-based patty with avocado, sprouts, and chipotle mayo', 'price': 11.99, 'category': 'Main Course'}
-            ],
-            'salads': [
-                {'id': 2, 'name': 'Garden Salad', 'description': 'Fresh mixed greens with cherry tomatoes, cucumber, and house vinaigrette', 'price': 8.99, 'category': 'Salads'},
-                {'id': 9, 'name': 'Caesar Salad', 'description': 'Crisp romaine lettuce with Caesar dressing, croutons, and parmesan', 'price': 9.99, 'category': 'Salads'},
-                {'id': 10, 'name': 'Quinoa Salad', 'description': 'Quinoa with roasted vegetables, feta, and lemon vinaigrette', 'price': 10.99, 'category': 'Salads'}
-            ]
-        }
-    
-    def execute(self, query, params=None, timeout=None):
-        # Execute a query with fixed mocked responses for testing.
-        # Log the query 
-        logger = logging.getLogger(__name__)
-        logger.info(f"Executing query: {query[:50]}...")
-        
-        # For testing, return a mock successful result
-        if query == "SELECT 1 as test":
-            return {
-                'success': True,
-                'data': [{'test': 1}],
-                'columns': ['test'],
-                'error': None,
-                'execution_time': 0.01
-            }
-            
-        # Return mock data based on query content
-        if "menu" in query.lower() or "items" in query.lower():
-            return {
-                'success': True,
-                'data': self.mock_data['menu'],
-                'columns': ['id', 'name', 'description', 'price', 'category'],
-                'error': None,
-                'execution_time': 0.05
-            }
-        elif "order" in query.lower() and "history" in query.lower():
-            return {
-                'success': True,
-                'data': self.mock_data['order_history'],
-                'columns': ['order_id', 'item_name', 'quantity', 'price', 'created_at'],
-                'error': None,
-                'execution_time': 0.05
-            }
-        elif "popular" in query.lower():
-            return {
-                'success': True,
-                'data': self.mock_data['popular_items'],
-                'columns': ['id', 'name', 'description', 'price', 'order_count'],
-                'error': None,
-                'execution_time': 0.05
-            }
-        elif "vegetarian" in query.lower() or "vegan" in query.lower():
-            return {
-                'success': True,
-                'data': self.mock_data['vegetarian_options'],
-                'columns': ['id', 'name', 'description', 'price', 'category'],
-                'error': None,
-                'execution_time': 0.04
-            }
-        elif "salad" in query.lower():
-            return {
-                'success': True,
-                'data': self.mock_data['salads'],
-                'columns': ['id', 'name', 'description', 'price', 'category'],
-                'error': None,
-                'execution_time': 0.03
-            }
-        elif "location" in query.lower():
-            return {
-                'success': True,
-                'data': self.mock_data['locations'],
-                'columns': ['location_name', 'description', 'timezone'],
-                'error': None,
-                'execution_time': 0.02
-            }
-        else:
-            # Default response for any other query type - return menu items
-            return {
-                'success': True,
-                'data': self.mock_data['menu'],
-                'columns': ['id', 'name', 'description', 'price', 'category'],
-                'error': None,
-                'execution_time': 0.02
-            }
-"""
 
 # Import the real SQLExecutor
 from services.execution.sql_executor import SQLExecutor
@@ -793,12 +362,9 @@ def create_headless_app(config, logger):
                 sql_files_count += len([f for f in files if f.endswith('.sql')])
             logger.info(f"Found {sql_files_count} SQL files in the main project directory")
         else:
-            # Fallback to creating examples if main project files are not available
-            sql_examples_dir = os.path.join(PROJECT_ROOT, "services", "sql_generator", "sql_files")
-            os.makedirs(sql_examples_dir, exist_ok=True)
-            num_files = create_example_sql_files(sql_examples_dir, logger)
-            logger.info(f"Created {num_files} example SQL files for testing (fallback mode)")
-            print(f"Created {num_files} example SQL files for testing (fallback mode)")
+            # Use rules files directly instead of creating example SQL files
+            logger.info("Using rules-based SQL generation instead of example SQL files")
+            print("Using rules-based SQL generation instead of example SQL files")
     
     # Set up ServiceRegistry manually instead of relying on OrchestratorService.initialize
     from services.utils.service_registry import ServiceRegistry as SR
@@ -1020,9 +586,11 @@ def create_headless_app(config, logger):
         # Restore the original init for future instances
         OrchestratorService.__init__ = original_init
         
-        # Replace the SQL generator with our fixed implementation for testing
-        fixed_sql_generator = FixedSQLGenerator(config)
-        orchestrator.sql_generator = fixed_sql_generator
+        # Replace the mock SQL generator with a real implementation from SQLGeneratorFactory
+        from services.sql_generator.sql_generator_factory import SQLGeneratorFactory
+        real_sql_generator = SQLGeneratorFactory.create_sql_generator(config)
+        orchestrator.sql_generator = real_sql_generator
+        logger.info("Using REAL SQL Generator implementation - mock services are prohibited")
         
         # Replace the SQL executor with our REAL implementation
         if hasattr(orchestrator, 'sql_executor'):
@@ -1037,7 +605,11 @@ def create_headless_app(config, logger):
             real_sql_executor = SQLExecutor(real_config)
             orchestrator.sql_executor = real_sql_executor
             logger.info("Using REAL SQLExecutor implementation - mock services are prohibited")
-            
+        
+        # Log the SQL generator replacement
+        logger.info("Using REAL SQL Generator implementation for testing - mock services are prohibited")
+        
+
         # Create a wrapper that enhances the app with additional capabilities
         enhanced_app = EnhancedApp(orchestrator, logger)
         return enhanced_app
@@ -1491,186 +1063,6 @@ def generate_report(results, logger):
         
     return report
 
-def create_example_sql_files(directory, logger):
-    """Create example SQL files for testing only if they don't already exist."""
-    os.makedirs(directory, exist_ok=True)
-    
-    # Check if directory already contains SQL files
-    existing_files = [f for f in os.listdir(directory) if f.endswith('.sql')]
-    if existing_files:
-        logger.info(f"Found {len(existing_files)} existing SQL files in {directory}, skipping creation of example files")
-        return len(existing_files)
-    
-    # Also check subdirectories for SQL files
-    for root, dirs, files in os.walk(directory):
-        sql_files = [f for f in files if f.endswith('.sql')]
-        if sql_files:
-            logger.info(f"Found {len(sql_files)} existing SQL files in subdirectories of {directory}, skipping creation")
-            return len(sql_files)
-    
-    # If no existing files were found, create example files
-    logger.info(f"No existing SQL files found in {directory}, creating example files")
-    
-    example_sql = {
-        "menu_inquiry.sql": """
-        -- Query: What items do you have on the menu?
-        -- Category: menu_inquiry
-        SELECT i.name, i.description, i.price, c.name as category
-        FROM items i
-        JOIN categories c ON i.category_id = c.id
-        WHERE i.disabled = FALSE
-        ORDER BY c.seq_num, i.seq_num;
-        """,
-        
-        "popular_items.sql": """
-        -- Query: What are your most popular items?
-        -- Category: popular_items
-        SELECT i.name, i.description, i.price, COUNT(oi.id) as order_count
-        FROM items i
-        JOIN order_items oi ON i.id = oi.item_id
-        JOIN orders o ON oi.order_id = o.id
-        WHERE i.disabled = FALSE
-        GROUP BY i.id, i.name, i.description, i.price
-        ORDER BY order_count DESC
-        LIMIT 5;
-        """,
-        
-        "order_history.sql": """
-        -- Query: What did I order last time?
-        -- Category: order_history
-        SELECT i.name, oi.quantity, i.price, o.created_at
-        FROM orders o
-        JOIN order_items oi ON o.id = oi.order_id
-        JOIN items i ON oi.item_id = i.id
-        WHERE o.customer_id = 123 -- This would be replaced with the actual user_id
-        ORDER BY o.created_at DESC
-        LIMIT 10;
-        """
-    }
-    
-    # Write example SQL files
-    for filename, content in example_sql.items():
-        with open(os.path.join(directory, filename), 'w') as f:
-            f.write(content)
-    
-    return len(example_sql)
-
-def patch_orchestrator(orchestrator):
-    """Apply patches to the orchestrator for better test handling."""
-    original_process_query = orchestrator.process_query
-    logger = logging.getLogger(__name__)
-    
-    def patched_process_query(query, context=None, fast_mode=True):
-        """Patched version of process_query to handle empty results."""
-        if context is None:
-            context = {}
-        
-        try:
-            # Call the original method - note that original_process_query may have 2 or 3 parameters
-            # Need to handle both cases
-            try:
-                result = original_process_query(query, context, fast_mode)
-            except TypeError:
-                # If original only takes two arguments, call with two
-                result = original_process_query(query, context)
-            
-            # Check if we need to generate a fallback response
-            if result and result.get("response") is None and result.get("query_results") is None:
-                logger.warning("Query results were None or empty, generating fallback response")
-                
-                # Generate a more detailed fallback response based on the query
-                query_lower = query.lower()
-                category = result.get("category", "general")
-                
-                if "menu" in query_lower or "food" in query_lower or "eat" in query_lower or "serve" in query_lower:
-                    fallback_response = "We have a variety of menu items including Classic Burger, Garden Salad, Margherita Pizza, Chicken Caesar Wrap, Vegetable Soup, Chocolate Brownie, French Fries, and Veggie Burger. Our most popular item is the Margherita Pizza. Would you like to know more about any specific item?"
-                elif "order" in query_lower or "history" in query_lower or "previous" in query_lower:
-                    fallback_response = "I can see your recent orders. The most recent one includes a Classic Burger and French Fries from March 8th, 2025. Before that, you ordered a Garden Salad and Chocolate Brownie on March 10th, 2025. Would you like to see more details about these orders?"
-                elif "vegetarian" in query_lower or "vegan" in query_lower:
-                    fallback_response = "Yes, we have several vegetarian options! The Garden Salad, Vegetable Soup, and Veggie Burger are all vegetarian. The Veggie Burger is particularly popular, featuring a plant-based patty with avocado, sprouts, and chipotle mayo for $11.99."
-                elif "price" in query_lower or "cost" in query_lower or "how much" in query_lower:
-                    fallback_response = "Our prices range from $3.99 for French Fries to $12.99 for the Margherita Pizza. The Classic Burger is $10.99, the Garden Salad is $8.99, and the Veggie Burger is $11.99. Is there a specific item you'd like to know the price of?"
-                elif "location" in query_lower or "address" in query_lower or "where" in query_lower:
-                    fallback_response = "Our Downtown location is open daily from 11am to 10pm. It's located in the heart of the city and offers both indoor and outdoor seating. Would you like directions or more information about our location?"
-                else:
-                    fallback_response = "I'd be happy to help you with that. Please let me know if you have any specific questions about our menu, prices, locations, or previous orders."
-                
-                # Create a processed query result with better data
-                sql_query = None
-                if hasattr(orchestrator, 'sql_generator') and orchestrator.sql_generator:
-                    # Try to generate a query
-                    if category == "menu":
-                        sql_query = """
-                        SELECT 
-                            i.id,
-                            i.name,
-                            i.description,
-                            i.price,
-                            c.name as category
-                        FROM 
-                            items i
-                        JOIN 
-                            categories c ON i.category_id = c.id
-                        WHERE 
-                            i.disabled = FALSE
-                        ORDER BY 
-                            c.seq_num, i.seq_num
-                        LIMIT 10;
-                        """
-                    elif category == "order_history":
-                        sql_query = """
-                        SELECT 
-                            o.id as order_id,
-                            i.name as item_name,
-                            oi.quantity,
-                            i.price,
-                            o.created_at
-                        FROM 
-                            orders o
-                        JOIN 
-                            order_items oi ON o.id = oi.order_id
-                        JOIN 
-                            items i ON oi.item_id = i.id
-                        WHERE 
-                            o.location_id = 1
-                        ORDER BY 
-                            o.created_at DESC
-                        LIMIT 5;
-                        """
-                
-                # Execute the query with our FixedSQLExecutor to get realistic data
-                query_results = None
-                if hasattr(orchestrator, 'sql_executor') and orchestrator.sql_executor and sql_query:
-                    query_results = orchestrator.sql_executor.execute(sql_query)
-                
-                # Update the result with our fallback response
-                result["response"] = fallback_response
-                result["query_results"] = query_results
-                result["is_fallback"] = True
-            
-            return result
-        except Exception as e:
-            logger.error(f"Error in patched process_query: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            
-            # Return a minimal valid result
-            return {
-                "query_id": str(uuid.uuid4()),
-                "query": query,
-                "category": "error",
-                "response": f"I'm sorry, but I encountered an error processing your request. Please try again later. (Error: {str(e)})",
-                "response_model": None,
-                "execution_time": 0.1,
-                "timestamp": datetime.datetime.now().isoformat(),
-                "has_verbal": False,
-                "is_fallback": True,
-                "error": str(e)
-            }
-    
-    # Replace the method with our patched version
-    orchestrator.process_query = patched_process_query
-    return orchestrator
 
 def run_scenarios(orchestrator, args, logger, output_file):
     """Run test scenarios with the given orchestrator."""
@@ -1710,9 +1102,7 @@ def run_scenarios(orchestrator, args, logger, output_file):
     user_simulator = AIUserSimulator()
     logger.info("Created AI user simulator")
     
-    # Create test monitor
-    test_monitor = create_test_monitor()
-    
+
     # Create database validator for fact-checking responses
     try:
         db_validator = DatabaseValidator(os.environ.get("DB_CONNECTION_STRING"))
@@ -2073,9 +1463,9 @@ def main():
         if existing_files >= 3:
             logger.info(f"Found {existing_files} existing SQL files in {sql_examples_dir}, skipping creation of example files")
         else:
-            num_files = create_example_sql_files(sql_examples_dir, logger)
-            logger.info(f"Created {num_files} example SQL files for testing (fallback mode)")
-            print(f"Created {num_files} example SQL files for testing (fallback mode)")
+            # Instead of creating example SQL files, use rules-based generation
+            logger.info("Using rules-based SQL generation instead of example SQL files")
+            print("Using rules-based SQL generation instead of example SQL files")
         
         # Create a proper database configuration if not present
         if 'database' not in config:
@@ -2242,10 +1632,7 @@ def main():
             logger.info("Using REAL SQLExecutor implementation - mock services are prohibited")
         
         # Log the SQL generator replacement
-        logger.info("Replaced default SQL generator with FixedSQLGenerator for testing")
-        
-        # Apply our patch to handle empty query results
-        orchestrator = patch_orchestrator(orchestrator)
+        logger.info("Using REAL SQL Generator implementation for testing - mock services are prohibited")
         
         # Run test scenarios
         run_scenarios(orchestrator, args, logger, output_file)

@@ -446,10 +446,10 @@ def run_app():
     # Initialize session state
     SessionManager.initialize_session()
     
-    # Ensure voice_enabled is initialized
+    # Ensure voice_enabled is initialized and set to True by default
     if "voice_enabled" not in st.session_state:
-        # Get configuration from config instance
-        st.session_state["voice_enabled"] = config.get("application.enable_verbal", True)
+        # Default to True rather than using config
+        st.session_state["voice_enabled"] = True
     
     # Initialize the orchestrator if not already in session state
     if "orchestrator" not in st.session_state:
@@ -491,16 +491,51 @@ def run_app():
             # Play verbal response if available
             if result.get("verbal_audio"):
                 import base64
-                # Removed logging about verbal audio
-                audio_base64 = base64.b64encode(result["verbal_audio"]).decode()
-                audio_html = f"""
-                    <audio autoplay="true" style="display:block; margin-top:10px;">
-                        <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
-                        Your browser does not support the audio element.
-                    </audio>
-                """
-                st.markdown(audio_html, unsafe_allow_html=True)
-                st.info("🔊 Verbal response is playing...")
+                import io
+                try:
+                    audio_bytes = result["verbal_audio"]
+                    audio_size = len(audio_bytes) if audio_bytes else 0
+                    st.info(f"🔊 Verbal response is ready to play ({audio_size} bytes)")
+                    
+                    # Encode and create HTML audio element with more robust attributes
+                    audio_base64 = base64.b64encode(audio_bytes).decode()
+                    audio_html = f"""
+                        <audio autoplay="true" controls="true" preload="auto" style="display:block; margin-top:10px; width:100%;">
+                            <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+                            Your browser does not support the audio element.
+                        </audio>
+                        <script>
+                            // Simple script to ensure audio plays
+                            document.addEventListener('DOMContentLoaded', function() {{
+                                setTimeout(function() {{
+                                    var audio = document.querySelector('audio');
+                                    if (audio) {{
+                                        audio.play().catch(function(e) {{
+                                            console.error('Audio playback failed:', e);
+                                        }});
+                                    }}
+                                }}, 500);
+                            }});
+                        </script>
+                    """
+                    st.markdown(audio_html, unsafe_allow_html=True)
+                    
+                    # Also use the native Streamlit audio component as a fallback
+                    audio_bytes_io = io.BytesIO(audio_bytes)
+                    audio_bytes_io.seek(0)
+                    st.audio(audio_bytes_io, format="audio/mp3")
+                    
+                    st.success("🔊 Verbal response is playing...")
+                except Exception as e:
+                    st.error(f"Error playing audio: {str(e)}")
+            elif "has_verbal" in result and result["has_verbal"]:
+                st.warning("🔊 Verbal response was generated but couldn't be played in the browser.")
+            else:
+                # Clear information about why verbal response isn't available
+                if not st.session_state["voice_enabled"]:
+                    st.info("ℹ️ Voice responses are currently disabled. Enable them in Voice Settings in the sidebar.")
+                else:
+                    st.info("ℹ️ No verbal response was generated for this query.")
             
             # Optionally show SQL and results in an expandable section
             if result.get("sql_query"):

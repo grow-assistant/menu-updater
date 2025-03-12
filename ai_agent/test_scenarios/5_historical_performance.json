@@ -1,0 +1,44 @@
+{
+  "name": "historical_performance",
+  "category": "business_analytics",
+  "description": "Analysis of historical business performance",
+  "priority": "high",
+  "tags": [
+    "historical",
+    "analytics",
+    "busiest",
+    "performance"
+  ],
+  "context": {
+    "user_persona": "business_owner",
+    "business_context": "Owner looking for insights on past performance"
+  },
+  "initial_query_hints": [
+    "What were our busiest days last month?",
+    "When were our peak sales periods in the last quarter?",
+    "What days had the highest sales volume recently?"
+  ],
+  "expected_entities": [
+    "dates",
+    "sales_figures",
+    "rankings"
+  ],
+  "success_conditions": [
+    {
+      "type": "response_contains",
+      "phrase": "your busiest days were"
+    }
+  ],
+  "max_turns": 3,
+  "termination_phrases": [],
+  "validation_requirements": {
+    "database_validation": true,
+    "sentiment_analysis": false,
+    "response_time_threshold": 0.7
+  },
+  "required_sql": "Query daily sales history for the specified period",
+  "sql_validation": "Dates and sales figures must exactly match database records",
+  "created_at": "2025-03-12T09:04:00.000000",
+  "last_modified": "2025-03-12T09:04:00.000000",
+  "test_history": []
+} 

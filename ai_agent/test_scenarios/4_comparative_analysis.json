@@ -1,0 +1,54 @@
+{
+  "name": "comparative_analysis",
+  "category": "business_analytics",
+  "description": "Comparing business metrics between time periods with follow-up breakdown",
+  "priority": "high",
+  "tags": [
+    "comparative",
+    "multi-turn",
+    "analytics",
+    "breakdown"
+  ],
+  "context": {
+    "user_persona": "business_manager",
+    "business_context": "Manager comparing performance across time periods"
+  },
+  "initial_query_hints": [
+    "Compare dinner sales this week versus last week",
+    "How do lunch sales this month compare to last month?",
+    "Compare revenue from weekends to weekdays"
+  ],
+  "follow_up_query_hints": [
+    "Break it down by category",
+    "Can you show me by item type?",
+    "Split that by menu section"
+  ],
+  "expected_entities": [
+    "time_periods",
+    "sales_data",
+    "percentage_changes",
+    "categories"
+  ],
+  "success_conditions": [
+    {
+      "type": "response_contains",
+      "phrase": "compared"
+    },
+    {
+      "type": "response_contains",
+      "phrase": "percentage"
+    }
+  ],
+  "max_turns": 4,
+  "termination_phrases": [],
+  "validation_requirements": {
+    "database_validation": true,
+    "sentiment_analysis": false,
+    "response_time_threshold": 1.0
+  },
+  "required_sql": "Query sales data for the two periods, then group results by category",
+  "sql_validation": "Percentage changes must accurately reflect database calculations",
+  "created_at": "2025-03-12T09:03:00.000000",
+  "last_modified": "2025-03-12T09:03:00.000000",
+  "test_history": []
+} 
