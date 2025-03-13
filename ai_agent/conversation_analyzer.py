@@ -15,7 +15,7 @@ import numpy as np
 from openai import OpenAI
 from dotenv import load_dotenv
 
-from .database_validator import DatabaseValidator
+from ai_agent.database_validator import DatabaseValidator
 
 logger = logging.getLogger(__name__)
 
@@ -314,7 +314,7 @@ as numeric keys and 'clarity_explanation', etc. for explanations."""
         
         try:
             response = self.openai_client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -363,7 +363,7 @@ Format your response as JSON with 'polarity', 'emotion', 'intensity', and 'key_p
 
         try:
             response = self.openai_client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Analyze the sentiment of this text: {text}"}
@@ -448,7 +448,7 @@ Format your response as a JSON array of issues. If no issues are found, return a
 
         try:
             ai_response = self.openai_client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -503,7 +503,7 @@ Format your response as JSON with the dimension names as keys and scores as valu
             user_prompt = f"Evaluate this conversation:\n\n{formatted_history}\n\nProvide your ratings in valid JSON format."
 
             response = self.openai_client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}

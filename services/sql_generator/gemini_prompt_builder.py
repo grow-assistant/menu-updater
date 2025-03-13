@@ -9,7 +9,7 @@ import logging
 from typing import Dict, List, Any, Optional
 
 from services.rules.rules_manager import RulesManager
-from services.sql_generator.sql_example_loader import sql_example_loader
+from services.sql_generator.sql_example_loader import SQLExampleLoader
 
 # Get the logger that was configured in utils/logging.py
 logger = logging.getLogger("swoop_ai")
@@ -25,6 +25,7 @@ class GeminiPromptBuilder:
     def __init__(self):
         """Initialize the Gemini Prompt Builder."""
         self.rules_manager = None  # Will be initialized when needed
+        self.example_loader = SQLExampleLoader()  # Create an instance of SQLExampleLoader
     
     def build_prompt(
         self, 
@@ -47,7 +48,7 @@ class GeminiPromptBuilder:
         rules = self.rules_manager.get_rules_for_query_type(query_type)
         
         # Get SQL examples for this query type
-        examples = sql_example_loader.get_formatted_examples(query_type)
+        examples = self.example_loader.get_formatted_examples(query_type)
         
         # Extract SQL schema information if available in the rules
         schema_info = ""

@@ -26,7 +26,7 @@ def mock_config():
         "api": {
             "openai": {
                 "api_key": "test_openai_key",
-                "model": "gpt-4o"
+                "model": "gpt-4o-mini"
             }
         },
         "database": {

@@ -40,4 +40,39 @@ rules:
   security:
     - "Validate all user input"
     - "Sanitize SQL queries to prevent injection"
-    - "Log access to sensitive information" 
+    - "Log access to sensitive information"
+
+# System-level rules for query processing
+rules:
+  - name: default_location
+    description: Default location for queries
+    condition: location_id is None
+    action: set_value
+    parameters:
+      field: location_id
+      value: 62
+
+  - name: default_status
+    description: Default status for order queries
+    condition: category == "order_history" and status is None
+    action: set_value
+    parameters:
+      field: status
+      value: 7
+
+  - name: time_zone_adjustment
+    description: Apply timezone adjustment for queries
+    condition: always
+    action: apply_function
+    parameters:
+      function: adjust_timestamp
+      arguments:
+        hours: -7
+
+  - name: default_limit
+    description: Default limit for query results
+    condition: limit is None
+    action: set_value
+    parameters:
+      field: limit
+      value: 50 

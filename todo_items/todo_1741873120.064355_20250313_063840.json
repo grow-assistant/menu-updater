@@ -1,0 +1,112 @@
+[
+  {
+    "id": "12d055d6-4c1b-4a65-a060-fc1d1252fe8b",
+    "title": "Fix response accuracy issue",
+    "description": "\n# Response Accuracy Issue\n\n## Issue Details\nThe response contains information that does not match the SQL results.\n\n### Response Fragment with Issue\n```\n\n```\n\n### Reason for Mismatch\nValue not mentioned in response\n\n### Expected Values from SQL Data\n- unknown_field: Could not determine expected value\n\n## SQL Query\n```sql\nSELECT\n    o.id AS order_id,\n    u.first_name || ' ' || u.last_name AS customer_name,\n    o.total AS order_total,\n    to_char((o.updated_at - INTERVAL '7 hours'), 'YYYY-MM-DD HH24:MI:SS') AS updated_at,\n    o.status AS order_status,\n    i.name AS item_name,\n    oi.quantity AS item_quantity,\n    (i.price * oi.quantity) AS item_total\nFROM \n    orders o\nJOIN \n    users u ON o.customer_id = u.id\nJOIN \n    order_items oi ON o.id = oi.order_id\nJOIN \n    items i ON oi.item_id = i.id\nWHERE \n    o.location_id = 62\n    AND o.status = 7\n    AND (o.updated_at - INTERVAL '7 hours')::date = TO_DATE('2/21/2025', 'MM/DD/YYYY')\nORDER BY \n    o.updated_at;\n```\n\n## SQL Results (Sample)\n```json\n[\n  {\n    \"order_id\": 31533,\n    \"customer_name\": \"MATT AGOSTO\",\n    \"order_total\": \"$22.66\",\n    \"updated_at\": \"2025-02-21 02:57:04\",\n    \"order_status\": 7,\n    \"item_name\": \"Fruit Platter\",\n    \"item_quantity\": 1,\n    \"item_total\": 19.0\n  },\n  {\n    \"order_id\": 31778,\n    \"customer_name\": \"Alex Solis II\",\n    \"order_total\": \"$118.06\",\n    \"updated_at\": \"2025-02-21 07:47:31\",\n    \"order_status\": 7,\n    \"item_name\": \"Mardi Gras Shrimp Boil\",\n    \"item_quantity\": 1,\n    \"item_total\": 32.0\n  }\n]\n```\n\n## Full Response Text\n```\nOn February 21st, three customers placed orders:\n\n1. Matt Agosto placed an order (Order ID: 31533) for a Fruit Platter. The total for this order was $22.66.\n\n2. Alex Solis II placed an order (Order ID: 31778) with multiple items:\n   - Mardi Gras Shrimp Boil (1)\n   - Crisp French Fries (3)\n   - IHCC 8oz Burger (2)\n   - Petite Burger (1)\n   - Rotini Pasta (1)\n   - Chicken Tenders (1)\n   The total for this order was $118.06.\n\n3. Michael Russell placed an order (Order ID: 31782) for a Petite Burger. The total for this order was $112.10.\n\nPlease note that this is a summary of 10 out of 18 total results.\n```\n\n## Remediation Steps\n1. Analyze the mismatch between the response and SQL results\n2. Update the response generation logic to ensure data accuracy\n3. Add specific checks for this type of data in the validation service\n4. Verify the fix with the SQL validation service\n",
+    "severity": "MEDIUM",
+    "status": "OPEN",
+    "created_at": "2025-03-13T06:38:40.064355",
+    "validation_id": "1741873120.064355",
+    "sql_query": "SELECT\n    o.id AS order_id,\n    u.first_name || ' ' || u.last_name AS customer_name,\n    o.total AS order_total,\n    to_char((o.updated_at - INTERVAL '7 hours'), 'YYYY-MM-DD HH24:MI:SS') AS updated_at,\n    o.status AS order_status,\n    i.name AS item_name,\n    oi.quantity AS item_quantity,\n    (i.price * oi.quantity) AS item_total\nFROM \n    orders o\nJOIN \n    users u ON o.customer_id = u.id\nJOIN \n    order_items oi ON o.id = oi.order_id\nJOIN \n    items i ON oi.item_id = i.id\nWHERE \n    o.location_id = 62\n    AND o.status = 7\n    AND (o.updated_at - INTERVAL '7 hours')::date = TO_DATE('2/21/2025', 'MM/DD/YYYY')\nORDER BY \n    o.updated_at;",
+    "response_fragment": "",
+    "expected_values": {
+      "unknown_field": "Could not determine expected value"
+    },
+    "component": "ResponseGenerator",
+    "assigned_to": "",
+    "due_date": "",
+    "tags": [
+      "ai_response",
+      "data_accuracy",
+      "critique_agent"
+    ]
+  },
+  {
+    "id": "819854e8-4eeb-4397-ad56-3ea15c6efe33",
+    "title": "Fix response accuracy issue",
+    "description": "\n# Response Accuracy Issue\n\n## Issue Details\nThe response contains information that does not match the SQL results.\n\n### Response Fragment with Issue\n```\n\n```\n\n### Reason for Mismatch\nValue not mentioned in response\n\n### Expected Values from SQL Data\n- unknown_field: Could not determine expected value\n\n## SQL Query\n```sql\nSELECT\n    o.id AS order_id,\n    u.first_name || ' ' || u.last_name AS customer_name,\n    o.total AS order_total,\n    to_char((o.updated_at - INTERVAL '7 hours'), 'YYYY-MM-DD HH24:MI:SS') AS updated_at,\n    o.status AS order_status,\n    i.name AS item_name,\n    oi.quantity AS item_quantity,\n    (i.price * oi.quantity) AS item_total\nFROM \n    orders o\nJOIN \n    users u ON o.customer_id = u.id\nJOIN \n    order_items oi ON o.id = oi.order_id\nJOIN \n    items i ON oi.item_id = i.id\nWHERE \n    o.location_id = 62\n    AND o.status = 7\n    AND (o.updated_at - INTERVAL '7 hours')::date = TO_DATE('2/21/2025', 'MM/DD/YYYY')\nORDER BY \n    o.updated_at;\n```\n\n## SQL Results (Sample)\n```json\n[\n  {\n    \"order_id\": 31533,\n    \"customer_name\": \"MATT AGOSTO\",\n    \"order_total\": \"$22.66\",\n    \"updated_at\": \"2025-02-21 02:57:04\",\n    \"order_status\": 7,\n    \"item_name\": \"Fruit Platter\",\n    \"item_quantity\": 1,\n    \"item_total\": 19.0\n  },\n  {\n    \"order_id\": 31778,\n    \"customer_name\": \"Alex Solis II\",\n    \"order_total\": \"$118.06\",\n    \"updated_at\": \"2025-02-21 07:47:31\",\n    \"order_status\": 7,\n    \"item_name\": \"Mardi Gras Shrimp Boil\",\n    \"item_quantity\": 1,\n    \"item_total\": 32.0\n  }\n]\n```\n\n## Full Response Text\n```\nOn February 21st, three customers placed orders:\n\n1. Matt Agosto placed an order (Order ID: 31533) for a Fruit Platter. The total for this order was $22.66.\n\n2. Alex Solis II placed an order (Order ID: 31778) with multiple items:\n   - Mardi Gras Shrimp Boil (1)\n   - Crisp French Fries (3)\n   - IHCC 8oz Burger (2)\n   - Petite Burger (1)\n   - Rotini Pasta (1)\n   - Chicken Tenders (1)\n   The total for this order was $118.06.\n\n3. Michael Russell placed an order (Order ID: 31782) for a Petite Burger. The total for this order was $112.10.\n\nPlease note that this is a summary of 10 out of 18 total results.\n```\n\n## Remediation Steps\n1. Analyze the mismatch between the response and SQL results\n2. Update the response generation logic to ensure data accuracy\n3. Add specific checks for this type of data in the validation service\n4. Verify the fix with the SQL validation service\n",
+    "severity": "MEDIUM",
+    "status": "OPEN",
+    "created_at": "2025-03-13T06:38:40.064355",
+    "validation_id": "1741873120.064355",
+    "sql_query": "SELECT\n    o.id AS order_id,\n    u.first_name || ' ' || u.last_name AS customer_name,\n    o.total AS order_total,\n    to_char((o.updated_at - INTERVAL '7 hours'), 'YYYY-MM-DD HH24:MI:SS') AS updated_at,\n    o.status AS order_status,\n    i.name AS item_name,\n    oi.quantity AS item_quantity,\n    (i.price * oi.quantity) AS item_total\nFROM \n    orders o\nJOIN \n    users u ON o.customer_id = u.id\nJOIN \n    order_items oi ON o.id = oi.order_id\nJOIN \n    items i ON oi.item_id = i.id\nWHERE \n    o.location_id = 62\n    AND o.status = 7\n    AND (o.updated_at - INTERVAL '7 hours')::date = TO_DATE('2/21/2025', 'MM/DD/YYYY')\nORDER BY \n    o.updated_at;",
+    "response_fragment": "",
+    "expected_values": {
+      "unknown_field": "Could not determine expected value"
+    },
+    "component": "ResponseGenerator",
+    "assigned_to": "",
+    "due_date": "",
+    "tags": [
+      "ai_response",
+      "data_accuracy",
+      "critique_agent"
+    ]
+  },
+  {
+    "id": "5de66f92-a568-4278-8680-c0488e5a3917",
+    "title": "Fix response accuracy issue",
+    "description": "\n# Response Accuracy Issue\n\n## Issue Details\nThe response contains information that does not match the SQL results.\n\n### Response Fragment with Issue\n```\n\n```\n\n### Reason for Mismatch\nValue not mentioned in response\n\n### Expected Values from SQL Data\n- unknown_field: Could not determine expected value\n\n## SQL Query\n```sql\nSELECT\n    o.id AS order_id,\n    u.first_name || ' ' || u.last_name AS customer_name,\n    o.total AS order_total,\n    to_char((o.updated_at - INTERVAL '7 hours'), 'YYYY-MM-DD HH24:MI:SS') AS updated_at,\n    o.status AS order_status,\n    i.name AS item_name,\n    oi.quantity AS item_quantity,\n    (i.price * oi.quantity) AS item_total\nFROM \n    orders o\nJOIN \n    users u ON o.customer_id = u.id\nJOIN \n    order_items oi ON o.id = oi.order_id\nJOIN \n    items i ON oi.item_id = i.id\nWHERE \n    o.location_id = 62\n    AND o.status = 7\n    AND (o.updated_at - INTERVAL '7 hours')::date = TO_DATE('2/21/2025', 'MM/DD/YYYY')\nORDER BY \n    o.updated_at;\n```\n\n## SQL Results (Sample)\n```json\n[\n  {\n    \"order_id\": 31533,\n    \"customer_name\": \"MATT AGOSTO\",\n    \"order_total\": \"$22.66\",\n    \"updated_at\": \"2025-02-21 02:57:04\",\n    \"order_status\": 7,\n    \"item_name\": \"Fruit Platter\",\n    \"item_quantity\": 1,\n    \"item_total\": 19.0\n  },\n  {\n    \"order_id\": 31778,\n    \"customer_name\": \"Alex Solis II\",\n    \"order_total\": \"$118.06\",\n    \"updated_at\": \"2025-02-21 07:47:31\",\n    \"order_status\": 7,\n    \"item_name\": \"Mardi Gras Shrimp Boil\",\n    \"item_quantity\": 1,\n    \"item_total\": 32.0\n  }\n]\n```\n\n## Full Response Text\n```\nOn February 21st, three customers placed orders:\n\n1. Matt Agosto placed an order (Order ID: 31533) for a Fruit Platter. The total for this order was $22.66.\n\n2. Alex Solis II placed an order (Order ID: 31778) with multiple items:\n   - Mardi Gras Shrimp Boil (1)\n   - Crisp French Fries (3)\n   - IHCC 8oz Burger (2)\n   - Petite Burger (1)\n   - Rotini Pasta (1)\n   - Chicken Tenders (1)\n   The total for this order was $118.06.\n\n3. Michael Russell placed an order (Order ID: 31782) for a Petite Burger. The total for this order was $112.10.\n\nPlease note that this is a summary of 10 out of 18 total results.\n```\n\n## Remediation Steps\n1. Analyze the mismatch between the response and SQL results\n2. Update the response generation logic to ensure data accuracy\n3. Add specific checks for this type of data in the validation service\n4. Verify the fix with the SQL validation service\n",
+    "severity": "MEDIUM",
+    "status": "OPEN",
+    "created_at": "2025-03-13T06:38:40.064355",
+    "validation_id": "1741873120.064355",
+    "sql_query": "SELECT\n    o.id AS order_id,\n    u.first_name || ' ' || u.last_name AS customer_name,\n    o.total AS order_total,\n    to_char((o.updated_at - INTERVAL '7 hours'), 'YYYY-MM-DD HH24:MI:SS') AS updated_at,\n    o.status AS order_status,\n    i.name AS item_name,\n    oi.quantity AS item_quantity,\n    (i.price * oi.quantity) AS item_total\nFROM \n    orders o\nJOIN \n    users u ON o.customer_id = u.id\nJOIN \n    order_items oi ON o.id = oi.order_id\nJOIN \n    items i ON oi.item_id = i.id\nWHERE \n    o.location_id = 62\n    AND o.status = 7\n    AND (o.updated_at - INTERVAL '7 hours')::date = TO_DATE('2/21/2025', 'MM/DD/YYYY')\nORDER BY \n    o.updated_at;",
+    "response_fragment": "",
+    "expected_values": {
+      "unknown_field": "Could not determine expected value"
+    },
+    "component": "ResponseGenerator",
+    "assigned_to": "",
+    "due_date": "",
+    "tags": [
+      "ai_response",
+      "data_accuracy",
+      "critique_agent"
+    ]
+  },
+  {
+    "id": "f619eaea-7578-4d6b-a1d3-aaf2f4323c30",
+    "title": "Fix response accuracy issue",
+    "description": "\n# Response Accuracy Issue\n\n## Issue Details\nThe response contains information that does not match the SQL results.\n\n### Response Fragment with Issue\n```\n\n```\n\n### Reason for Mismatch\nValue not mentioned in response\n\n### Expected Values from SQL Data\n- unknown_field: Could not determine expected value\n\n## SQL Query\n```sql\nSELECT\n    o.id AS order_id,\n    u.first_name || ' ' || u.last_name AS customer_name,\n    o.total AS order_total,\n    to_char((o.updated_at - INTERVAL '7 hours'), 'YYYY-MM-DD HH24:MI:SS') AS updated_at,\n    o.status AS order_status,\n    i.name AS item_name,\n    oi.quantity AS item_quantity,\n    (i.price * oi.quantity) AS item_total\nFROM \n    orders o\nJOIN \n    users u ON o.customer_id = u.id\nJOIN \n    order_items oi ON o.id = oi.order_id\nJOIN \n    items i ON oi.item_id = i.id\nWHERE \n    o.location_id = 62\n    AND o.status = 7\n    AND (o.updated_at - INTERVAL '7 hours')::date = TO_DATE('2/21/2025', 'MM/DD/YYYY')\nORDER BY \n    o.updated_at;\n```\n\n## SQL Results (Sample)\n```json\n[\n  {\n    \"order_id\": 31533,\n    \"customer_name\": \"MATT AGOSTO\",\n    \"order_total\": \"$22.66\",\n    \"updated_at\": \"2025-02-21 02:57:04\",\n    \"order_status\": 7,\n    \"item_name\": \"Fruit Platter\",\n    \"item_quantity\": 1,\n    \"item_total\": 19.0\n  },\n  {\n    \"order_id\": 31778,\n    \"customer_name\": \"Alex Solis II\",\n    \"order_total\": \"$118.06\",\n    \"updated_at\": \"2025-02-21 07:47:31\",\n    \"order_status\": 7,\n    \"item_name\": \"Mardi Gras Shrimp Boil\",\n    \"item_quantity\": 1,\n    \"item_total\": 32.0\n  }\n]\n```\n\n## Full Response Text\n```\nOn February 21st, three customers placed orders:\n\n1. Matt Agosto placed an order (Order ID: 31533) for a Fruit Platter. The total for this order was $22.66.\n\n2. Alex Solis II placed an order (Order ID: 31778) with multiple items:\n   - Mardi Gras Shrimp Boil (1)\n   - Crisp French Fries (3)\n   - IHCC 8oz Burger (2)\n   - Petite Burger (1)\n   - Rotini Pasta (1)\n   - Chicken Tenders (1)\n   The total for this order was $118.06.\n\n3. Michael Russell placed an order (Order ID: 31782) for a Petite Burger. The total for this order was $112.10.\n\nPlease note that this is a summary of 10 out of 18 total results.\n```\n\n## Remediation Steps\n1. Analyze the mismatch between the response and SQL results\n2. Update the response generation logic to ensure data accuracy\n3. Add specific checks for this type of data in the validation service\n4. Verify the fix with the SQL validation service\n",
+    "severity": "MEDIUM",
+    "status": "OPEN",
+    "created_at": "2025-03-13T06:38:40.064355",
+    "validation_id": "1741873120.064355",
+    "sql_query": "SELECT\n    o.id AS order_id,\n    u.first_name || ' ' || u.last_name AS customer_name,\n    o.total AS order_total,\n    to_char((o.updated_at - INTERVAL '7 hours'), 'YYYY-MM-DD HH24:MI:SS') AS updated_at,\n    o.status AS order_status,\n    i.name AS item_name,\n    oi.quantity AS item_quantity,\n    (i.price * oi.quantity) AS item_total\nFROM \n    orders o\nJOIN \n    users u ON o.customer_id = u.id\nJOIN \n    order_items oi ON o.id = oi.order_id\nJOIN \n    items i ON oi.item_id = i.id\nWHERE \n    o.location_id = 62\n    AND o.status = 7\n    AND (o.updated_at - INTERVAL '7 hours')::date = TO_DATE('2/21/2025', 'MM/DD/YYYY')\nORDER BY \n    o.updated_at;",
+    "response_fragment": "",
+    "expected_values": {
+      "unknown_field": "Could not determine expected value"
+    },
+    "component": "ResponseGenerator",
+    "assigned_to": "",
+    "due_date": "",
+    "tags": [
+      "ai_response",
+      "data_accuracy",
+      "critique_agent"
+    ]
+  },
+  {
+    "id": "1fe55ff9-9bdd-47c6-a6f0-b6b09038f3b5",
+    "title": "Fix response accuracy issue",
+    "description": "\n# Response Accuracy Issue\n\n## Issue Details\nThe response contains information that does not match the SQL results.\n\n### Response Fragment with Issue\n```\n\n```\n\n### Reason for Mismatch\nValue not mentioned in response\n\n### Expected Values from SQL Data\n- unknown_field: Could not determine expected value\n\n## SQL Query\n```sql\nSELECT\n    o.id AS order_id,\n    u.first_name || ' ' || u.last_name AS customer_name,\n    o.total AS order_total,\n    to_char((o.updated_at - INTERVAL '7 hours'), 'YYYY-MM-DD HH24:MI:SS') AS updated_at,\n    o.status AS order_status,\n    i.name AS item_name,\n    oi.quantity AS item_quantity,\n    (i.price * oi.quantity) AS item_total\nFROM \n    orders o\nJOIN \n    users u ON o.customer_id = u.id\nJOIN \n    order_items oi ON o.id = oi.order_id\nJOIN \n    items i ON oi.item_id = i.id\nWHERE \n    o.location_id = 62\n    AND o.status = 7\n    AND (o.updated_at - INTERVAL '7 hours')::date = TO_DATE('2/21/2025', 'MM/DD/YYYY')\nORDER BY \n    o.updated_at;\n```\n\n## SQL Results (Sample)\n```json\n[\n  {\n    \"order_id\": 31533,\n    \"customer_name\": \"MATT AGOSTO\",\n    \"order_total\": \"$22.66\",\n    \"updated_at\": \"2025-02-21 02:57:04\",\n    \"order_status\": 7,\n    \"item_name\": \"Fruit Platter\",\n    \"item_quantity\": 1,\n    \"item_total\": 19.0\n  },\n  {\n    \"order_id\": 31778,\n    \"customer_name\": \"Alex Solis II\",\n    \"order_total\": \"$118.06\",\n    \"updated_at\": \"2025-02-21 07:47:31\",\n    \"order_status\": 7,\n    \"item_name\": \"Mardi Gras Shrimp Boil\",\n    \"item_quantity\": 1,\n    \"item_total\": 32.0\n  }\n]\n```\n\n## Full Response Text\n```\nOn February 21st, three customers placed orders:\n\n1. Matt Agosto placed an order (Order ID: 31533) for a Fruit Platter. The total for this order was $22.66.\n\n2. Alex Solis II placed an order (Order ID: 31778) with multiple items:\n   - Mardi Gras Shrimp Boil (1)\n   - Crisp French Fries (3)\n   - IHCC 8oz Burger (2)\n   - Petite Burger (1)\n   - Rotini Pasta (1)\n   - Chicken Tenders (1)\n   The total for this order was $118.06.\n\n3. Michael Russell placed an order (Order ID: 31782) for a Petite Burger. The total for this order was $112.10.\n\nPlease note that this is a summary of 10 out of 18 total results.\n```\n\n## Remediation Steps\n1. Analyze the mismatch between the response and SQL results\n2. Update the response generation logic to ensure data accuracy\n3. Add specific checks for this type of data in the validation service\n4. Verify the fix with the SQL validation service\n",
+    "severity": "MEDIUM",
+    "status": "OPEN",
+    "created_at": "2025-03-13T06:38:40.064355",
+    "validation_id": "1741873120.064355",
+    "sql_query": "SELECT\n    o.id AS order_id,\n    u.first_name || ' ' || u.last_name AS customer_name,\n    o.total AS order_total,\n    to_char((o.updated_at - INTERVAL '7 hours'), 'YYYY-MM-DD HH24:MI:SS') AS updated_at,\n    o.status AS order_status,\n    i.name AS item_name,\n    oi.quantity AS item_quantity,\n    (i.price * oi.quantity) AS item_total\nFROM \n    orders o\nJOIN \n    users u ON o.customer_id = u.id\nJOIN \n    order_items oi ON o.id = oi.order_id\nJOIN \n    items i ON oi.item_id = i.id\nWHERE \n    o.location_id = 62\n    AND o.status = 7\n    AND (o.updated_at - INTERVAL '7 hours')::date = TO_DATE('2/21/2025', 'MM/DD/YYYY')\nORDER BY \n    o.updated_at;",
+    "response_fragment": "",
+    "expected_values": {
+      "unknown_field": "Could not determine expected value"
+    },
+    "component": "ResponseGenerator",
+    "assigned_to": "",
+    "due_date": "",
+    "tags": [
+      "ai_response",
+      "data_accuracy",
+      "critique_agent"
+    ]
+  }
+]

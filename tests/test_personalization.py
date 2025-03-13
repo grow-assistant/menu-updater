@@ -376,8 +376,8 @@ class TestPersonalizationIntegration(unittest.TestCase):
         _, _, personalization = mock_build_message.call_args[0]
         
         # Check that personalization contains key elements
-        self.assertEqual(personalization["detail_level"], "concise")
-        self.assertEqual(personalization["tone"], "friendly")
+        self.assertEqual(personalization["preferences"]["detail_level"], "concise")
+        self.assertEqual(personalization["preferences"]["response_tone"], "friendly")
 
 
 if __name__ == '__main__':

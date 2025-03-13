@@ -19,22 +19,31 @@ class SQLExampleLoader:
     A class for loading SQL examples from files and providing them to the SQL Generator.
     """
     
-    def __init__(self, examples_dir: str = "./services/sql_generator/sql_files"):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
         Initialize the SQL Example Loader.
         
         Args:
-            examples_dir: Directory path where SQL examples are stored
+            config: Configuration dictionary (optional)
         """
-        self.examples_dir = examples_dir
+        # Default examples directory
+        default_examples_dir = "./services/sql_generator/sql_files"
+        
+        # Get examples directory from config if available
+        if config and isinstance(config, dict):
+            self.examples_dir = config.get("services", {}).get("sql_generator", {}).get("examples_dir", default_examples_dir)
+        else:
+            self.examples_dir = default_examples_dir
+            
         self._examples_cache: Dict[str, List[Dict[str, str]]] = {}
-        logger.info(f"SQLExampleLoader initialized with examples directory: {examples_dir}")
+        logger.info(f"SQLExampleLoader initialized with examples directory: {self.examples_dir}")
+        
         # Verify the directory exists
-        if not os.path.exists(examples_dir):
-            logger.warning(f"Examples directory does not exist: {examples_dir}")
+        if not os.path.exists(self.examples_dir):
+            logger.warning(f"Examples directory does not exist: {self.examples_dir}")
         else:
             # Log available directories for debugging
-            logger.info(f"Available query types: {', '.join(os.listdir(examples_dir))}")
+            logger.info(f"Available query types: {', '.join(os.listdir(self.examples_dir))}")
     
     def load_examples_for_query_type(self, query_type: str) -> List[Dict[str, str]]:
         """
@@ -143,6 +152,5 @@ class SQLExampleLoader:
         self._examples_cache = {}
         logger.info("Cleared SQL examples cache")
 
-
-# Singleton instance
-sql_example_loader = SQLExampleLoader() 
+# Don't create a singleton instance here as it causes initialization issues
+# Instead, let the factory or adapter create instances as needed 

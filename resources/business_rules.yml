@@ -51,4 +51,42 @@ rules:
     - "All queries should be scoped to a specific location_id"
   menu:
     - "Price changes should be logged for audit purposes"
-    - "Menu categories should be displayed in their configured order" 
+    - "Menu categories should be displayed in their configured order"
+
+# Business-specific rules for query processing
+rules:
+  - name: sensitive_data_restriction
+    description: Restrict access to sensitive user data
+    condition: category in ["customer_info", "user_data"]
+    action: apply_function
+    parameters:
+      function: restrict_sensitive_fields
+      arguments:
+        restricted_fields: ["phone", "email", "address", "credit_card"]
+
+  - name: business_hours_filter
+    description: Apply business hours filter for operational queries
+    condition: category in ["operational_status", "current_menu"]
+    action: apply_function
+    parameters:
+      function: add_business_hours_filter
+      arguments:
+        open_hour: 9
+        close_hour: 22
+
+  - name: menu_item_availability
+    description: Check menu item availability
+    condition: category == "menu_inquiry"
+    action: apply_function
+    parameters:
+      function: check_item_availability
+      arguments:
+        availability_field: "available"
+
+  - name: completed_orders_only
+    description: Filter for completed orders by default
+    condition: category == "order_history" and status is None
+    action: set_value
+    parameters:
+      field: status
+      value: 7 

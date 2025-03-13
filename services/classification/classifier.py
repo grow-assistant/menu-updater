@@ -628,40 +628,40 @@ class ClassificationService:
     
     def _generate_time_period_clause(self, time_period: str) -> str:
         """
-        Generate a SQL WHERE clause for the given time period.
+        Generate a SQL time period clause for the given time period.
         
         Args:
             time_period: The time period description (e.g., 'last month', 'between January and March')
             
         Returns:
-            A SQL WHERE clause for the time period
+            A SQL time period clause (without the WHERE keyword)
         """
         time_period = time_period.lower().strip()
         
         # Handle common time period patterns
         if time_period == "today":
-            return "WHERE updated_at >= CURRENT_DATE"
+            return "updated_at >= CURRENT_DATE"
         elif time_period == "yesterday":
-            return "WHERE updated_at >= CURRENT_DATE - INTERVAL '1 day' AND updated_at < CURRENT_DATE"
+            return "updated_at >= CURRENT_DATE - INTERVAL '1 day' AND updated_at < CURRENT_DATE"
         elif time_period == "last week":
-            return "WHERE updated_at >= CURRENT_DATE - INTERVAL '7 days'"
+            return "updated_at >= CURRENT_DATE - INTERVAL '7 days'"
         elif time_period == "last month":
-            return "WHERE updated_at >= CURRENT_DATE - INTERVAL '1 month'"
+            return "updated_at >= CURRENT_DATE - INTERVAL '1 month'"
         elif time_period == "last year":
-            return "WHERE updated_at >= CURRENT_DATE - INTERVAL '1 year'"
+            return "updated_at >= CURRENT_DATE - INTERVAL '1 year'"
         elif re.match(r"^\d{4}-\d{2}-\d{2}$", time_period):
             # Date in YYYY-MM-DD format
-            return f"WHERE updated_at = '{time_period}'"
+            return f"updated_at::date = '{time_period}'"
         elif re.match(r"^\d{2}/\d{2}/\d{4}$", time_period):
             # Date in MM/DD/YYYY format
             date_match = re.match(r"^(\d{2})/(\d{2})/(\d{4})$", time_period)
             if date_match:
                 month, day, year = date_match.groups()
-                return f"WHERE updated_at = '{year}-{month}-{day}'"
+                return f"updated_at::date = '{year}-{month}-{day}'"
         
         # Default to a generic time_period_clause for the orchestrator
         # This ensures the orchestrator gets a string, not None
-        return f"WHERE updated_at LIKE '%{time_period}%'"
+        return f"updated_at LIKE '%{time_period}%'"
 
     def set_database_schema(self, schema: Dict[str, List[str]]) -> None:
         """

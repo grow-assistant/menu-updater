@@ -1,298 +1,297 @@
 """
-Critique Agent for AI Testing
+Critique Agent for Restaurant Assistant
 
-This module provides the CritiqueAgent class, which analyzes system responses
-and terminal logs to generate developer-focused critiques and recommendations.
+This module provides a Critique Agent that analyzes responses from the AI assistant
+to ensure they comply with business requirements and accurately reflect the SQL results.
 """
 
-import os
-import re
 import logging
-from typing import Dict, List, Any, Optional
-from dotenv import load_dotenv
-from openai import OpenAI
-
-from database_validator import DatabaseValidator
+import json
+from typing import Dict, Any, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
 class CritiqueAgent:
-    """Generates developer-focused critiques of system responses and implementation."""
+    """
+    The Critique Agent serves as an independent quality controller that analyzes
+    each response before delivery to ensure compliance with SQL and business rules.
+    """
     
-    def __init__(self, openai_client=None, db_validator: Optional[DatabaseValidator]=None):
-        """Initialize the critique agent.
-        
-        Args:
-            openai_client: The OpenAI client to use for generating critiques.
-                If None, a new client will be created using the OPENAI_API_KEY env var.
-            db_validator: A DatabaseValidator instance to validate responses against the database.
+    def __init__(self, config=None):
+        """Initialize the critique agent with optional configuration."""
+        self.config = config or {}
+        self.required_phrases = {
+            "menu": ["our current menu includes", "on our menu", "we offer"],
+            "sales": ["your sales", "sales performance", "revenue"],
+            "performance": ["performing", "performance", "compared to"],
+            "busiest": ["your busiest", "highest traffic", "most customers"],
+            "ambiguous": ["clarify", "more specific", "more information", "specify", "what would you like to know"]
+        }
+        logger.info("Critique Agent initialized")
+    
+    def critique_response(self, query: str, response: str, sql_query: str, 
+                         sql_result: Dict[str, Any], is_ambiguous: bool = False) -> Dict[str, Any]:
         """
-        load_dotenv()
-        self.openai_client = openai_client or OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.db_validator = db_validator
-        logger.info("Initialized CritiqueAgent")
-        
-    def generate_critiques(self, query: str, response: str, 
-                          conversation_history: List[Dict[str, str]], 
-                          terminal_logs: Optional[str]=None) -> Dict[str, List[Dict[str, Any]]]:
-        """Generate critiques for a specific interaction.
+        Analyze a response to ensure it's accurate and meets business requirements.
         
         Args:
-            query: The user query that prompted the response
-            response: The system's response to critique
-            conversation_history: List of conversation turns
-            terminal_logs: Terminal logs from processing the query (optional)
+            query: The original user query
+            response: The generated response text
+            sql_query: The SQL query used to generate the response
+            sql_result: The results returned from the SQL query
+            is_ambiguous: Flag indicating if the query is ambiguous
             
         Returns:
-            Dict containing "critiques" and "recommendations" lists
+            A dictionary containing critique results
         """
-        # Build a prompt that asks for developer-focused critiques
-        prompt = self._build_critique_prompt(query, response, conversation_history, terminal_logs)
+        # Handle None response
+        response = response or ""
+        sql_query = sql_query or ""
+        sql_result = sql_result or {}
         
-        logger.debug(f"Generating critiques for response: {response[:50]}...")
+        critique = {
+            "query": query,
+            "response_length": len(response),
+            "sql_query_length": len(sql_query),
+            "issues": [],
+            "passed": True,
+            "summary": ""
+        }
         
-        # Get critiques from OpenAI
-        try:
-            ai_response = self.openai_client.chat.completions.create(
-                model="gpt-4o",
-                messages=prompt,
-                temperature=0.7
+        # Check if response is empty
+        if not response:
+            critique["issues"].append("Empty response")
+            critique["passed"] = False
+        
+        # Handle ambiguous queries differently
+        if is_ambiguous:
+            # For ambiguous queries, we should check for clarification request
+            ambiguous_check = self._check_ambiguous_query(query, response)
+            if not ambiguous_check["passed"]:
+                critique["issues"].extend(ambiguous_check["issues"])
+                critique["passed"] = False
+            
+            # Early return for ambiguous queries - we don't need to check SQL or other aspects
+            if critique["passed"]:
+                critique["summary"] = "Response appropriately requests clarification for ambiguous query"
+            else:
+                critique["summary"] = f"Response fails to properly handle ambiguous query ({len(critique['issues'])} issues)"
+            
+            return critique
+        
+        # Processing for non-ambiguous queries continues below
+        
+        # Check SQL query was generated (if needed)
+        query_keywords = ["menu", "sales", "order", "inventory", "performance", "busiest"]
+        needs_sql = any(keyword in query.lower() for keyword in query_keywords)
+        
+        if needs_sql and not sql_query:
+            critique["issues"].append("Missing SQL query for data-dependent question")
+            critique["passed"] = False
+        
+        # Check required phrases based on query type
+        required_phrases_found = self._check_required_phrases(query, response)
+        if not required_phrases_found["passed"]:
+            critique["issues"].extend(required_phrases_found["issues"])
+            critique["passed"] = False
+        
+        # Check data consistency between SQL results and response
+        if sql_result and "rows" in sql_result:
+            data_consistency = self._check_data_consistency(response, sql_result)
+            if not data_consistency["passed"]:
+                critique["issues"].extend(data_consistency["issues"])
+                critique["passed"] = False
+        
+        # Check if response addresses the query
+        addresses_query = self._check_addresses_query(query, response)
+        if not addresses_query["passed"]:
+            critique["issues"].extend(addresses_query["issues"])
+            critique["passed"] = False
+        
+        # Generate summary
+        if critique["passed"]:
+            critique["summary"] = "Response meets quality standards"
+        else:
+            critique["summary"] = f"Response has {len(critique['issues'])} issues"
+        
+        return critique
+    
+    def _check_ambiguous_query(self, query: str, response: str) -> Dict[str, Any]:
+        """
+        Check if the response appropriately asks for clarification for an ambiguous query.
+        
+        Args:
+            query: The original user query
+            response: The generated response text
+            
+        Returns:
+            A dictionary containing check results
+        """
+        result = {"passed": False, "issues": []}
+        
+        # Check for clarification request phrases
+        clarification_phrases = self.required_phrases.get("ambiguous", [])
+        
+        # Check if any clarification phrases are in the response
+        found_phrases = []
+        for phrase in clarification_phrases:
+            if phrase.lower() in response.lower():
+                found_phrases.append(phrase)
+        
+        # Check if response has a question mark (likely asking a question back)
+        has_question = "?" in response
+        
+        # Pass if we have clarification phrases and the response is asking a question
+        if found_phrases and has_question:
+            result["passed"] = True
+        elif not found_phrases:
+            result["issues"].append("Response doesn't ask for clarification on ambiguous query")
+        elif not has_question:
+            result["issues"].append("Response doesn't pose a clarification question to the user")
+        
+        return result
+    
+    def _check_required_phrases(self, query: str, response: str) -> Dict[str, Any]:
+        """Check if response contains required phrases based on query type."""
+        result = {"passed": True, "issues": []}
+        
+        for query_type, phrases in self.required_phrases.items():
+            if query_type in query.lower():
+                found = False
+                for phrase in phrases:
+                    if phrase in response.lower():
+                        found = True
+                        break
+                
+                if not found:
+                    result["passed"] = False
+                    result["issues"].append(f"Missing required phrase for {query_type} query")
+        
+        return result
+    
+    def _check_data_consistency(self, response: str, sql_result: Dict[str, Any]) -> Dict[str, Any]:
+        """Check if response data is consistent with SQL results."""
+        result = {"passed": True, "issues": []}
+        
+        # Get values from SQL results
+        values = []
+        if "rows" in sql_result and sql_result["rows"]:
+            # Extract all values from all rows
+            for row in sql_result["rows"]:
+                if isinstance(row, dict):
+                    values.extend(str(v) for v in row.values())
+                elif isinstance(row, (list, tuple)):
+                    values.extend(str(v) for v in row)
+        
+        # Check if any numeric values from SQL appear in the response
+        numeric_values_found = 0
+        numeric_values_total = 0
+        
+        for value in values:
+            # Check if value appears to be numeric
+            if isinstance(value, str) and value.replace('.', '', 1).isdigit():
+                numeric_values_total += 1
+                # Check if this value or a rounded version appears in the response
+                if value in response:
+                    numeric_values_found += 1
+                elif '.' in value:
+                    # Try rounded versions
+                    try:
+                        float_val = float(value)
+                        rounded = str(round(float_val))
+                        if rounded in response:
+                            numeric_values_found += 1
+                    except ValueError:
+                        pass
+        
+        # If we found SQL numeric values but none appear in the response, that's an issue
+        if numeric_values_total > 0 and numeric_values_found == 0:
+            result["passed"] = False
+            result["issues"].append("Response doesn't contain any numeric values from SQL results")
+        
+        return result
+    
+    def _check_addresses_query(self, query: str, response: str) -> Dict[str, Any]:
+        """Check if the response addresses the user's query."""
+        result = {"passed": True, "issues": []}
+        
+        # Extract key terms from query
+        query = query.lower()
+        key_terms = []
+        
+        # Check for question terms
+        question_terms = ["what", "how", "when", "why", "where", "which", "who"]
+        for term in question_terms:
+            if term in query.split():
+                key_terms.append(term)
+        
+        # Check for business terms
+        business_terms = ["menu", "order", "sales", "revenue", "customer", "item", "price"]
+        for term in business_terms:
+            if term in query:
+                key_terms.append(term)
+        
+        # Check if at least some key terms are addressed in the response
+        terms_addressed = 0
+        for term in key_terms:
+            if term in response.lower():
+                terms_addressed += 1
+        
+        if key_terms and terms_addressed < len(key_terms) / 2:
+            result["passed"] = False
+            result["issues"].append("Response doesn't adequately address the query")
+        
+        return result
+    
+    def critique_conversation(self, scenario: Dict[str, Any], 
+                            conversation_history: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Analyze a full conversation to ensure it meets the requirements.
+        
+        Args:
+            scenario: The test scenario details
+            conversation_history: List of query/response pairs
+            
+        Returns:
+            A dictionary containing overall critique results
+        """
+        result = {
+            "scenario": scenario.get("name", "Unknown"),
+            "turns": len(conversation_history),
+            "turn_critiques": [],
+            "overall_passed": True,
+            "summary": ""
+        }
+        
+        # Check if this is an ambiguous scenario
+        is_ambiguous = scenario.get("is_ambiguous", False) or any(tag.lower() == "ambiguous" for tag in scenario.get("tags", []))
+        
+        # Analyze each turn
+        for i, turn in enumerate(conversation_history):
+            query = turn.get("query", "")
+            response = turn.get("response", "")
+            sql_query = turn.get("sql", "")
+            sql_result = turn.get("sql_results", {})
+            
+            turn_critique = self.critique_response(
+                query, 
+                response, 
+                sql_query, 
+                sql_result, 
+                is_ambiguous=is_ambiguous
             )
+            turn_critique["turn"] = i + 1
             
-            # Parse critiques and recommendations from the response
-            response_text = ai_response.choices[0].message.content
-            critiques = self._parse_critiques(response_text)
-            recommendations = self._parse_recommendations(response_text)
+            result["turn_critiques"].append(turn_critique)
             
-            # Add database validation results if available
-            if self.db_validator:
-                validation_result = self.db_validator.validate_response(response, "general")
-                if validation_result.get("valid") is False and validation_result.get("validation_results"):
-                    explanation = validation_result["validation_results"][0].get("explanation", "Unknown error")
-                    critiques.append({
-                        "type": "factual_error",
-                        "severity": "high",
-                        "message": f"CRITIQUE: Response contains factual inaccuracies. {explanation}",
-                        "suggestion": "Verify data against the database before responding."
-                    })
-                    
-            logger.info(f"Generated {len(critiques)} critiques and {len(recommendations)} recommendations")
-            return {
-                "critiques": critiques,
-                "recommendations": recommendations
-            }
-            
-        except Exception as e:
-            logger.error(f"Error generating critiques: {str(e)}", exc_info=True)
-            return {
-                "critiques": [],
-                "recommendations": []
-            }
+            if not turn_critique["passed"]:
+                result["overall_passed"] = False
         
-    def _build_critique_prompt(self, query: str, response: str, 
-                              conversation_history: List[Dict[str, str]], 
-                              terminal_logs: Optional[str]=None) -> List[Dict[str, str]]:
-        """Build a prompt for generating critiques.
-        
-        Args:
-            query: The user query that prompted the response
-            response: The system's response to critique
-            conversation_history: List of conversation turns
-            terminal_logs: Terminal logs from processing the query (optional)
-            
-        Returns:
-            List of message dictionaries forming the prompt
-        """
-        system_content = """You are an expert critique agent and developer advisor for conversational AI systems.
-Your job is to identify issues with the system's responses and provide actionable feedback to developers.
-
-For user experience issues, format your critiques as "CRITIQUE: [critique message]" followed by suggestions for improvement.
-Focus on clarity, factual correctness, helpfulness, UI/UX issues, and conversation flow.
-
-As an expert developer, also analyze terminal logs (if provided) and implementation details to provide development recommendations.
-Format these as "RECOMMENDATION: [recommendation]" with specific, actionable guidance on:
-- Code architecture improvements
-- Performance optimizations
-- Bug fixes with implementation details
-- API design enhancements
-- Developer workflow improvements
-- Refactoring opportunities
-
-Be specific and technical in your recommendations, as these will be used directly by developers."""
-
-        user_content = f"""Analyze the following conversation and provide critiques:
-
-Conversation History:
-{self._format_conversation_history(conversation_history)}
-
-Latest User Query: {query}
-
-System Response: {response}
-"""
-
-        if terminal_logs:
-            user_content += f"""
-Terminal Logs:
-```
-{terminal_logs}
-```
-"""
-
-        user_content += """
-Provide both user-facing critiques (CRITIQUE:) and developer-focused recommendations (RECOMMENDATION:) based on the above information.
-"""
-
-        return [
-            {"role": "system", "content": system_content},
-            {"role": "user", "content": user_content}
-        ]
-        
-    def _parse_critiques(self, critique_text: str) -> List[Dict[str, Any]]:
-        """Parse critiques from the OpenAI response.
-        
-        Args:
-            critique_text: The text containing critiques to parse
-            
-        Returns:
-            List of parsed critiques as dictionaries
-        """
-        critiques = []
-        
-        # Extract critiques using regex
-        critique_pattern = r"CRITIQUE:\s*(.*?)(?=CRITIQUE:|RECOMMENDATION:|$)"
-        matches = re.finditer(critique_pattern, critique_text, re.DOTALL)
-        
-        for i, match in enumerate(matches):
-            critique_content = match.group(1).strip()
-            
-            # Determine severity (this could be more sophisticated)
-            severity = "medium"  # Default
-            if "critical" in critique_content.lower():
-                severity = "critical"
-            elif "serious" in critique_content.lower() or "significant" in critique_content.lower():
-                severity = "high"
-            elif "minor" in critique_content.lower() or "small" in critique_content.lower():
-                severity = "low"
-                
-            # Extract suggestion if present
-            suggestion = ""
-            if "suggestion:" in critique_content.lower():
-                parts = critique_content.split("Suggestion:", 1)
-                if len(parts) == 2:
-                    critique_content = parts[0].strip()
-                    suggestion = parts[1].strip()
-                
-            critiques.append({
-                "id": f"critique_{i+1}",
-                "type": self._determine_critique_type(critique_content),
-                "severity": severity,
-                "message": f"CRITIQUE: {critique_content}",
-                "suggestion": suggestion
-            })
-            
-        return critiques
-        
-    def _parse_recommendations(self, text: str) -> List[Dict[str, Any]]:
-        """Parse developer recommendations from the OpenAI response.
-        
-        Args:
-            text: The text containing recommendations to parse
-            
-        Returns:
-            List of parsed recommendations as dictionaries
-        """
-        recommendations = []
-        
-        # Extract recommendations using regex
-        recommendation_pattern = r"RECOMMENDATION:\s*(.*?)(?=CRITIQUE:|RECOMMENDATION:|$)"
-        matches = re.finditer(recommendation_pattern, text, re.DOTALL)
-        
-        for i, match in enumerate(matches):
-            recommendation_content = match.group(1).strip()
-            
-            # Determine category based on content
-            category = self._determine_recommendation_category(recommendation_content)
-            
-            # Determine priority
-            priority = "medium"  # Default
-            if "high priority" in recommendation_content.lower() or "critical" in recommendation_content.lower():
-                priority = "high"
-            elif "low priority" in recommendation_content.lower() or "minor" in recommendation_content.lower():
-                priority = "low"
-            
-            recommendations.append({
-                "id": f"recommendation_{i+1}",
-                "category": category,
-                "priority": priority,
-                "message": f"RECOMMENDATION: {recommendation_content}"
-            })
-            
-        return recommendations
-        
-    def _determine_recommendation_category(self, content: str) -> str:
-        """Categorize the recommendation based on its content.
-        
-        Args:
-            content: The recommendation text to categorize
-            
-        Returns:
-            Category string
-        """
-        content_lower = content.lower()
-        
-        if any(term in content_lower for term in ["architecture", "structure", "design pattern", "component"]):
-            return "architecture"
-        elif any(term in content_lower for term in ["performance", "optimization", "speed", "memory", "resource"]):
-            return "performance"
-        elif any(term in content_lower for term in ["bug", "fix", "issue", "error", "exception"]):
-            return "bug_fix"
-        elif any(term in content_lower for term in ["api", "interface", "endpoint", "contract"]):
-            return "api_design"
-        elif any(term in content_lower for term in ["workflow", "process", "development", "testing"]):
-            return "workflow"
-        elif any(term in content_lower for term in ["refactor", "clean", "improve", "simplify"]) and not "make improvements" in content_lower:
-            return "refactoring"
+        # Generate overall summary
+        passed_count = sum(1 for tc in result["turn_critiques"] if tc["passed"])
+        if result["overall_passed"]:
+            result["summary"] = f"All {len(result['turn_critiques'])} turns passed quality checks"
         else:
-            return "general"
+            result["summary"] = f"{passed_count}/{len(result['turn_critiques'])} turns passed quality checks"
         
-    def _determine_critique_type(self, critique_content: str) -> str:
-        """Determine the type of critique based on content.
-        
-        Args:
-            critique_content: The critique text to categorize
-            
-        Returns:
-            Critique type string
-        """
-        content_lower = critique_content.lower()
-        
-        if any(term in content_lower for term in ["incorrect", "wrong", "inaccurate", "fact", "untrue"]):
-            return "factual_error"
-        elif any(term in content_lower for term in ["unclear", "confusing", "ambiguous"]):
-            return "clarity_issue"
-        elif any(term in content_lower for term in ["ui", "interface", "display", "button", "input"]):
-            return "ui_issue"
-        elif any(term in content_lower for term in ["slow", "performance", "lag", "time"]):
-            return "performance_issue"
-        elif any(term in content_lower for term in ["context", "history", "previous", "earlier"]):
-            return "context_issue"
-        elif any(term in content_lower for term in ["grammar", "spelling", "typo", "language"]):
-            return "language_issue"
-        else:
-            return "general_issue"
-            
-    def _format_conversation_history(self, conversation_history: List[Dict[str, str]]) -> str:
-        """Format the conversation history for the prompt.
-        
-        Args:
-            conversation_history: List of conversation message dictionaries
-            
-        Returns:
-            Formatted conversation history string
-        """
-        formatted = []
-        for message in conversation_history:
-            role = message["role"].upper()
-            content = message["content"]
-            formatted.append(f"{role}: {content}")
-        return "\n".join(formatted) 
+        return result 

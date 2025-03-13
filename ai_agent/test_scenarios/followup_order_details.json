@@ -1,0 +1,60 @@
+{
+  "name": "followup_order_details",
+  "category": "order_history",
+  "description": "Testing handling of a follow-up query about order details after asking about orders on a specific date",
+  "priority": "high",
+  "is_ambiguous": false,
+  "tags": [
+    "order_history",
+    "follow_up_query",
+    "customer_query",
+    "order_details"
+  ],
+  "context": {
+    "user_persona": "business_manager",
+    "business_context": "Manager looking for information about orders on a specific date and their details"
+  },
+  "test_steps": [
+    {
+      "step": 1,
+      "input": "Who placed orders on February 21st?",
+      "expected_type": "response",
+      "required_phrases": [
+        "February 21st",
+        "orders",
+        "placed"
+      ]
+    },
+    {
+      "step": 2,
+      "input": "Can you tell me their order details?",
+      "expected_type": "response",
+      "required_phrases": [
+        "order details",
+        "customer",
+        "Brandon Devers"
+      ]
+    }
+  ],
+  "user_input": "Who placed orders on February 21st?",
+  "required_phrases": [
+    "February 21st",
+    "orders",
+    "placed"
+  ],
+  "max_turns": 3,
+  "expected_entities": ["customer", "order", "date", "order_details"],
+  "validation_requirements": {
+    "sql_validation": true,
+    "phrase_validation": true,
+    "response_time_threshold": 5.0
+  },
+  "expected_tables": ["orders", "users", "order_items"],
+  "performance_target": 5000,
+  "verification_checks": {
+    "completed_orders_count": 4,
+    "should_include_customer": "Brandon Devers"
+  },
+  "created_at": "2025-03-12T00:00:00.000000",
+  "last_modified": "2025-03-12T00:00:00.000000"
+} 

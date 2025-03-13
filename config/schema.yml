@@ -1,0 +1,253 @@
+# Database Schema for Restaurant Management System
+# Used for SQL Generator to validate and generate SQL queries
+
+# Tables in the database
+tables:
+  # Menu items table
+  menu_items:
+    description: "Contains all menu items with their details"
+    columns:
+      - name: item_id
+        type: INTEGER
+        primary_key: true
+        description: "Unique identifier for menu items"
+      - name: name
+        type: VARCHAR(100)
+        description: "Name of the menu item"
+      - name: description
+        type: TEXT
+        description: "Full description of the menu item"
+      - name: price
+        type: DECIMAL(10,2)
+        description: "Current price of the menu item"
+      - name: category_id
+        type: INTEGER
+        foreign_key: categories.category_id
+        description: "Category this item belongs to"
+      - name: is_active
+        type: BOOLEAN
+        description: "Whether the item is currently active on the menu"
+      - name: created_at
+        type: TIMESTAMP
+        description: "When the item was created"
+      - name: updated_at
+        type: TIMESTAMP
+        description: "When the item was last updated"
+  
+  # Categories table
+  categories:
+    description: "Menu item categories (appetizers, entrees, desserts, etc.)"
+    columns:
+      - name: category_id
+        type: INTEGER
+        primary_key: true
+        description: "Unique identifier for categories"
+      - name: name
+        type: VARCHAR(50)
+        description: "Name of the category"
+      - name: display_order
+        type: INTEGER
+        description: "Order in which categories should be displayed"
+      - name: is_active
+        type: BOOLEAN
+        description: "Whether the category is currently active"
+  
+  # Sales table
+  sales:
+    description: "All sales transactions"
+    columns:
+      - name: sale_id
+        type: INTEGER
+        primary_key: true
+        description: "Unique identifier for sales"
+      - name: order_id
+        type: INTEGER
+        foreign_key: orders.order_id
+        description: "Order this sale belongs to"
+      - name: item_id
+        type: INTEGER
+        foreign_key: menu_items.item_id
+        description: "Menu item that was sold"
+      - name: quantity
+        type: INTEGER
+        description: "Quantity of items sold"
+      - name: price_at_sale
+        type: DECIMAL(10,2)
+        description: "Price of the item at the time of sale"
+      - name: subtotal
+        type: DECIMAL(10,2)
+        description: "Subtotal for this line item (quantity * price)"
+      - name: sale_date
+        type: DATE
+        description: "Date of the sale"
+      - name: sale_time
+        type: TIME
+        description: "Time of the sale"
+  
+  # Orders table
+  orders:
+    description: "Customer orders"
+    columns:
+      - name: order_id
+        type: INTEGER
+        primary_key: true
+        description: "Unique identifier for orders"
+      - name: customer_id
+        type: INTEGER
+        foreign_key: customers.customer_id
+        description: "Customer who placed the order"
+      - name: order_date
+        type: DATE
+        description: "Date the order was placed"
+      - name: order_time
+        type: TIME
+        description: "Time the order was placed"
+      - name: status
+        type: VARCHAR(20)
+        description: "Current status of the order (pending, completed, cancelled)"
+      - name: total_amount
+        type: DECIMAL(10,2)
+        description: "Total amount of the order"
+      - name: payment_method
+        type: VARCHAR(50)
+        description: "Method of payment used"
+  
+  # Customers table
+  customers:
+    description: "Customer information"
+    columns:
+      - name: customer_id
+        type: INTEGER
+        primary_key: true
+        description: "Unique identifier for customers"
+      - name: name
+        type: VARCHAR(100)
+        description: "Customer's full name"
+      - name: email
+        type: VARCHAR(100)
+        description: "Customer's email address"
+      - name: phone
+        type: VARCHAR(20)
+        description: "Customer's phone number"
+      - name: first_visit
+        type: DATE
+        description: "Date of customer's first visit"
+      - name: last_visit
+        type: DATE
+        description: "Date of customer's most recent visit"
+      - name: visit_count
+        type: INTEGER
+        description: "Number of times the customer has visited"
+  
+  # Inventory table
+  inventory:
+    description: "Inventory levels of ingredients and supplies"
+    columns:
+      - name: inventory_id
+        type: INTEGER
+        primary_key: true
+        description: "Unique identifier for inventory items"
+      - name: item_name
+        type: VARCHAR(100)
+        description: "Name of the inventory item"
+      - name: category
+        type: VARCHAR(50)
+        description: "Category of the inventory item (ingredient, supply, etc.)"
+      - name: quantity
+        type: DECIMAL(10,2)
+        description: "Current quantity available"
+      - name: unit
+        type: VARCHAR(20)
+        description: "Unit of measurement (kg, liter, piece, etc.)"
+      - name: reorder_level
+        type: DECIMAL(10,2)
+        description: "Quantity at which reordering is suggested"
+      - name: last_restocked
+        type: DATE
+        description: "Date when the item was last restocked"
+  
+  # Staff table
+  staff:
+    description: "Staff members information"
+    columns:
+      - name: staff_id
+        type: INTEGER
+        primary_key: true
+        description: "Unique identifier for staff members"
+      - name: name
+        type: VARCHAR(100)
+        description: "Staff member's full name"
+      - name: position
+        type: VARCHAR(50)
+        description: "Staff member's position (manager, chef, server, etc.)"
+      - name: hire_date
+        type: DATE
+        description: "Date when the staff member was hired"
+      - name: salary
+        type: DECIMAL(10,2)
+        description: "Staff member's current salary"
+      - name: is_active
+        type: BOOLEAN
+        description: "Whether the staff member is currently employed"
+
+# Relationships between tables
+relationships:
+  - name: menu_items_categories
+    type: many_to_one
+    from_table: menu_items
+    from_column: category_id
+    to_table: categories
+    to_column: category_id
+    description: "Each menu item belongs to a category"
+  
+  - name: sales_menu_items
+    type: many_to_one
+    from_table: sales
+    from_column: item_id
+    to_table: menu_items
+    to_column: item_id
+    description: "Each sale line item references a menu item"
+  
+  - name: sales_orders
+    type: many_to_one
+    from_table: sales
+    from_column: order_id
+    to_table: orders
+    to_column: order_id
+    description: "Each sale belongs to an order"
+  
+  - name: orders_customers
+    type: many_to_one
+    from_table: orders
+    from_column: customer_id
+    to_table: customers
+    to_column: customer_id
+    description: "Each order is placed by a customer"
+
+# Common queries used in the application
+common_queries:
+  - name: active_menu_items
+    query: >
+      SELECT m.item_id, m.name, m.description, m.price, c.name as category
+      FROM menu_items m
+      JOIN categories c ON m.category_id = c.category_id
+      WHERE m.is_active = true AND c.is_active = true
+      ORDER BY c.display_order, m.name
+  
+  - name: daily_sales
+    query: >
+      SELECT s.sale_date, SUM(s.subtotal) as total_sales
+      FROM sales s
+      WHERE s.sale_date BETWEEN :start_date AND :end_date
+      GROUP BY s.sale_date
+      ORDER BY s.sale_date
+  
+  - name: category_performance
+    query: >
+      SELECT c.name as category, SUM(s.subtotal) as total_sales, COUNT(s.sale_id) as items_sold
+      FROM sales s
+      JOIN menu_items m ON s.item_id = m.item_id
+      JOIN categories c ON m.category_id = c.category_id
+      WHERE s.sale_date BETWEEN :start_date AND :end_date
+      GROUP BY c.name
+      ORDER BY total_sales DESC 

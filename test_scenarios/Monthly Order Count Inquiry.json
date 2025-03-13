@@ -1,0 +1,53 @@
+{
+    "name": "Monthly Order Count Inquiry",
+    "category": "analytics_query",
+    "description": "Questions about total order count in the past month",
+    "priority": "high",
+    "tags": [
+      "orders",
+      "analytics",
+      "volume",
+      "monthly_metrics"
+    ],
+    "context": {
+      "user_persona": "restaurant_manager",
+      "business_context": "Manager checking monthly order volume"
+    },
+    "initial_query_hints": [
+      "How many orders did we have last month?",
+      "What was our total order count last month?",
+      "Show me our monthly order volume"
+    ],
+    "expected_entities": [
+      "order_count",
+      "time_period"
+    ],
+    "success_conditions": [
+      {
+        "type": "response_contains",
+        "phrase": "49 orders"
+      },
+      {
+        "type": "response_contains",
+        "phrase": "last month"
+      }
+    ],
+    "max_turns": 3,
+    "termination_phrases": [],
+    "validation_requirements": {
+      "database_validation": true,
+      "sentiment_analysis": false,
+      "response_time_threshold": 0.8
+    },
+    "required_sql": "SELECT COUNT(*) AS total_orders FROM orders WHERE updated_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AND updated_at < DATE_TRUNC('month', CURRENT_DATE) AND location_id = 62 AND deleted_at IS NULL AND status = 7;",
+    "sql_validation": "Total order count must be exactly 49",
+    "created_at": "2025-03-15T11:15:00.000000",
+    "last_modified": "2025-03-15T11:15:00.000000",
+    "test_history": [],
+    "result_data": {
+      "total_orders": 49,
+      "time_period": "previous month",
+      "location_id": 62,
+      "order_status": 7
+    }
+} 

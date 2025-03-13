@@ -132,7 +132,7 @@ class AIUserSimulator:
         
         try:
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=prompt,
                 temperature=0.7
             )
@@ -163,7 +163,7 @@ class AIUserSimulator:
         
         try:
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=prompt,
                 temperature=0.7
             )

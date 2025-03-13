@@ -27,7 +27,7 @@ def mock_config():
     """Create a mock configuration for testing."""
     return {
         "api": {
-            "openai": {"api_key": "test-key", "model": "gpt-4o"},
+            "openai": {"api_key": "test-key", "model": "gpt-4o-mini"},
             "gemini": {"api_key": "test-key", "model": "gemini-pro"}
         },
         "database": {

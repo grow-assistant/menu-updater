@@ -18,7 +18,7 @@ class TestUpdatedClassificationService:
             "api": {
                 "openai": {
                     "api_key": "test_api_key",
-                    "model": "gpt-4o"
+                    "model": "gpt-4o-mini"
                 }
             }
         }
@@ -42,7 +42,7 @@ class TestUpdatedClassificationService:
             
             # Check that the API key was set
             assert service.api_key == "test_api_key"
-            assert service.model == "gpt-4o"
+            assert service.model == "gpt-4o-mini"
             
             # Check that we're getting categories from the prompt builder
             assert service.categories == [
@@ -73,7 +73,7 @@ class TestUpdatedClassificationService:
         
         # Create a mock client and replace the real one
         mock_client = MagicMock()
-        mock_client.models.list.return_value = ["gpt-4o", "gpt-3.5-turbo"]
+        mock_client.models.list.return_value = ["gpt-4o-mini", "gpt-3.5-turbo"]
         service.client = mock_client
         
         # Call health check

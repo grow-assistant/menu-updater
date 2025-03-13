@@ -40,7 +40,7 @@ def test_config() -> Dict[str, Any]:
     """Fixture that provides a test configuration with all required sections."""
     return {
         "api": {
-            "openai": {"api_key": "test-key", "model": "gpt-4o"},
+            "openai": {"api_key": "test-key", "model": "gpt-4o-mini"},
             "gemini": {"api_key": "test-key", "model": "gemini-pro"},
             "elevenlabs": {"api_key": "test-key"}
         },

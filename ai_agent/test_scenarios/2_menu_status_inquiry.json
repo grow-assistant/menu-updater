@@ -3,6 +3,7 @@
   "category": "menu_query",
   "description": "Questions about current active menu items",
   "priority": "high",
+  "is_ambiguous": false,
   "tags": [
     "menu",
     "status",
@@ -12,32 +13,34 @@
     "user_persona": "restaurant_manager",
     "business_context": "Manager checking current menu offerings"
   },
-  "initial_query_hints": [
-    "What's our current active menu?",
-    "What items are on our menu right now?",
-    "Show me our current menu offerings"
+  "test_steps": [
+    {
+      "step": 1,
+      "input": "What's our current active menu?",
+      "expected_type": "response",
+      "required_phrases": [
+        "our current menu includes"
+      ]
+    }
   ],
+  "user_input": "What's our current active menu?",
+  "required_phrases": [
+    "our current menu includes"
+  ],
+  "max_turns": 3,
   "expected_entities": [
     "menu_items",
     "item_status",
     "availability"
   ],
-  "success_conditions": [
-    {
-      "type": "response_contains",
-      "phrase": "our current menu includes"
-    }
-  ],
-  "max_turns": 3,
-  "termination_phrases": [],
   "validation_requirements": {
     "database_validation": true,
-    "sentiment_analysis": false,
+    "sql_validation": true,
+    "phrase_validation": true,
     "response_time_threshold": 0.8
   },
-  "required_sql": "Retrieve active menu items with their status and availability",
-  "sql_validation": "Menu items must exactly match the database",
+  "expected_tables": ["menu_items", "availability"],
+  "performance_target": 4000,
   "created_at": "2025-03-12T09:01:00.000000",
-  "last_modified": "2025-03-12T09:01:00.000000",
-  "test_history": []
+  "last_modified": "2025-03-12T09:01:00.000000"
 } 

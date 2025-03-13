@@ -12,6 +12,8 @@ Follow these guidelines:
 9. For phrases like "who placed those orders", ALWAYS include the exact same date filters, status filters, and location filters that were in the previous query.
 10. Never lose context between related queries - if a query mentions "those" or "these", it's referring to the exact same filtered dataset from the previous query.
 11. *** LOCATION FILTERING IS MANDATORY *** - Every query on the orders table MUST include "o.location_id = x" in the WHERE clause, where x is the specific location ID provided in the business rules.
+12. *** COLUMN PREFIXING IS MANDATORY *** - ALWAYS prefix ALL column names with table aliases (e.g., o.updated_at, u.first_name, NOT just updated_at or first_name) in ALL parts of the query.
+13. In JOINs, ALWAYS fully qualify column names with table names or aliases to prevent ambiguity errors (e.g., o.customer_id = u.id, NOT customer_id = id).
 
 Database Schema:
 {schema}
@@ -25,6 +27,7 @@ MANDATORY REQUIREMENTS:
 1. EVERY query must include proper location filtering for data isolation
 2. Order status values must be integers (not strings): 7=completed, 6=cancelled, 3-5=in progress
 3. All date comparisons should use timezone offset as specified in rules
+4. ALL column names MUST be prefixed with table aliases to avoid ambiguous column errors
 
 SQL Patterns:
 {patterns}

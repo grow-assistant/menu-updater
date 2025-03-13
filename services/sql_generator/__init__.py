@@ -7,7 +7,7 @@ using either OpenAI or Gemini APIs with example-based prompting techniques.
 
 from services.sql_generator.sql_generator import SQLGenerator, sql_generator
 from services.sql_generator.gemini_prompt_builder import GeminiPromptBuilder
-from services.sql_generator.sql_example_loader import SQLExampleLoader, sql_example_loader
+from services.sql_generator.sql_example_loader import SQLExampleLoader
 from services.sql_generator.prompt_builder import SQLPromptBuilder, sql_prompt_builder
 from services.sql_generator.openai_sql_generator import OpenAISQLGenerator
 from services.sql_generator.gemini_sql_generator import GeminiSQLGenerator
@@ -18,7 +18,6 @@ __all__ = [
     "sql_generator", 
     "GeminiPromptBuilder", 
     "SQLExampleLoader", 
-    "sql_example_loader", 
     "SQLPromptBuilder", 
     "sql_prompt_builder",
     "OpenAISQLGenerator",

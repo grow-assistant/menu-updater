@@ -3,6 +3,7 @@
   "category": "edge_cases",
   "description": "Handling ambiguous or vague business inquiries",
   "priority": "high",
+  "is_ambiguous": true,
   "tags": [
     "edge",
     "ambiguous",
@@ -13,28 +14,30 @@
     "user_persona": "business_manager",
     "business_context": "Manager asking a vague question about business performance"
   },
-  "initial_query_hints": [
-    "How are we doing?",
-    "What's our status?",
-    "How's business?"
-  ],
-  "success_conditions": [
+  "test_steps": [
     {
-      "type": "response_contains",
-      "phrase": "clarification"
+      "step": 1,
+      "input": "How are we doing?",
+      "expected_type": "response",
+      "required_phrases": [
+        "clarification"
+      ]
     }
+  ],
+  "user_input": "How are we doing?",
+  "required_phrases": [
+    "clarification"
   ],
   "max_turns": 3,
   "expected_entities": [],
-  "termination_phrases": [],
   "validation_requirements": {
     "database_validation": true,
-    "sentiment_analysis": false,
+    "sql_validation": true,
+    "phrase_validation": true,
     "response_time_threshold": 0.5
   },
-  "required_sql": "Query sales summaries, inventory status, and staff performance metrics",
-  "sql_validation": "Ensure clarification options directly correspond to existing data categories",
+  "expected_tables": ["sales", "inventory", "staff"],
+  "performance_target": 3000,
   "created_at": "2025-03-12T09:00:00.000000",
-  "last_modified": "2025-03-12T09:00:00.000000",
-  "test_history": []
+  "last_modified": "2025-03-12T09:00:00.000000"
 } 

@@ -1,0 +1,71 @@
+{
+    "name": "Hourly Order Distribution Inquiry",
+    "category": "analytics_query",
+    "description": "Questions about order distribution by hour of day",
+    "priority": "high",
+    "tags": [
+      "orders",
+      "analytics",
+      "hourly_trends",
+      "peak_hours"
+    ],
+    "context": {
+      "user_persona": "restaurant_manager",
+      "business_context": "Manager analyzing peak order hours"
+    },
+    "initial_query_hints": [
+      "What time of day do we get the most orders?",
+      "When are our peak ordering hours?",
+      "Show me our order distribution by hour"
+    ],
+    "expected_entities": [
+      "hour_of_day",
+      "order_counts",
+      "percentages"
+    ],
+    "success_conditions": [
+      {
+        "type": "response_contains",
+        "phrase": "4 PM"
+      },
+      {
+        "type": "response_contains",
+        "phrase": "36.73%"
+      },
+      {
+        "type": "response_contains",
+        "phrase": "3 PM"
+      }
+    ],
+    "max_turns": 3,
+    "termination_phrases": [],
+    "validation_requirements": {
+      "database_validation": true,
+      "sentiment_analysis": false,
+      "response_time_threshold": 0.8
+    },
+    "required_sql": "SELECT EXTRACT(HOUR FROM updated_at) AS hour_of_day, COUNT(*) AS order_count, ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) AS percentage_of_orders FROM orders WHERE updated_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AND updated_at < DATE_TRUNC('month', CURRENT_DATE) AND location_id = 62 AND status = 7 AND deleted_at IS NULL GROUP BY hour_of_day ORDER BY order_count DESC;",
+    "sql_validation": "Hourly distribution must match: 4 PM (36.73%), 3 PM (34.69%), 5 PM (8.16%), 2 PM (6.12%), 9 AM (6.12%), 10 AM (4.08%), 1 PM (2.04%), 11 AM (2.04%)",
+    "created_at": "2025-03-15T12:00:00.000000",
+    "last_modified": "2025-03-15T12:00:00.000000",
+    "test_history": [],
+    "result_data": {
+      "hour_distribution": [
+        {"hour": 16, "display_hour": "4 PM", "orders": 18, "percentage": 36.73},
+        {"hour": 15, "display_hour": "3 PM", "orders": 17, "percentage": 34.69},
+        {"hour": 17, "display_hour": "5 PM", "orders": 4, "percentage": 8.16},
+        {"hour": 14, "display_hour": "2 PM", "orders": 3, "percentage": 6.12},
+        {"hour": 9, "display_hour": "9 AM", "orders": 3, "percentage": 6.12},
+        {"hour": 10, "display_hour": "10 AM", "orders": 2, "percentage": 4.08},
+        {"hour": 13, "display_hour": "1 PM", "orders": 1, "percentage": 2.04},
+        {"hour": 11, "display_hour": "11 AM", "orders": 1, "percentage": 2.04}
+      ],
+      "peak_hour": 16,
+      "peak_hour_display": "4 PM",
+      "peak_hour_percentage": 36.73,
+      "second_busiest_hour": 15,
+      "second_busiest_hour_display": "3 PM", 
+      "second_busiest_hour_percentage": 34.69,
+      "total_orders": 49
+    }
+} 

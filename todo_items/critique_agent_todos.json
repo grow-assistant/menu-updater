@@ -1,0 +1,86 @@
+[
+   {
+    "id": "crit-010",
+    "title": "Fix template loading errors",
+    "description": "Logs show an error loading template default.txt: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte. This may affect response generation quality. Fix the template file encoding or loading mechanism.",
+    "severity": "LOW",
+    "status": "CLOSED",
+    "created_at": "2025-03-13T18:45:00",
+    "resolved_at": "2025-03-13T19:10:00",
+    "resolution": "Created a new properly UTF-8 encoded default.txt template file with comprehensive guidelines for response generation. Verified that the file can be successfully loaded with UTF-8 encoding.",
+    "component": "ResponseGenerator",
+    "tags": ["templates", "bug", "encoding"]
+  },
+  {
+    "id": "crit-012",
+    "title": "Fix missing rules configuration paths",
+    "description": "Logs show warnings about missing rules paths: 'Rules path does not exist: /c:/Python/GIT/swoop-ai/services/rules' and missing system rules files. Create the necessary directory structure and rules files to eliminate these warnings and ensure proper rules enforcement.",
+    "severity": "MEDIUM",
+    "status": "CLOSED",
+    "created_at": "2025-03-13T18:45:00",
+    "resolved_at": "2025-03-13T19:20:00",
+    "resolution": "Created the necessary directory structure for the rules service and added properly formatted system_rules.yml and business_rules.yml files to eliminate the warnings and ensure proper rules enforcement.",
+    "component": "RulesService",
+    "tags": ["configuration", "rules", "improvement"]
+  },
+  {
+    "id": "crit-013",
+    "title": "Enhance validation feedback for improved debugging",
+    "description": "While the validation service is working, the feedback could be more detailed to help developers pinpoint exact issues. Enhance the validation feedback to include more context, such as specific sections of the response that failed validation and suggestions for how to fix them.",
+    "severity": "LOW",
+    "status": "CLOSED",
+    "created_at": "2025-03-13T18:45:00",
+    "resolved_at": "2025-03-13T19:30:00",
+    "resolution": "Enhanced the validation feedback mechanism to provide more detailed information about mismatches, including context from the response, recommendations for fixing issues, and better classification of query types. Added sample information about correct matches and created more useful todo items.",
+    "component": "SQLValidationService",
+    "tags": ["validation", "debugging", "improvement"]
+  },
+  {
+    "id": "crit-014",
+    "title": "Fix SQL error in discount field reference",
+    "description": "SQL execution fails with error 'missing FROM-clause entry for table \"d\"' in the COALESCE(d.amount, 0) statement. The SQL generator is trying to reference a discount table that isn't properly joined in the query, causing the query to fail.",
+    "severity": "HIGH",
+    "status": "CLOSED",
+    "created_at": "2025-03-13T19:35:00",
+    "resolved_at": "2025-03-13T19:50:00",
+    "resolution": "Updated the SQL generator to add specific warnings about the discount table reference in the prompt template. Added additional rules specifically for order detail queries to prevent improper discount table references.",
+    "component": "SQLGenerator",
+    "tags": ["sql", "bug", "query_generation"]
+  },
+  {
+    "id": "crit-015",
+    "title": "Implement proper data formatting in validation checks",
+    "description": "Validation is failing to recognize values that are formatted differently in the response compared to the database (e.g., $10.00 vs 10). Improve the validation service to better handle various formatting styles for different data types.",
+    "severity": "MEDIUM",
+    "status": "CLOSED",
+    "created_at": "2025-03-13T19:40:00",
+    "resolved_at": "2025-03-13T20:15:00",
+    "resolution": "Enhanced the validation service with column-specific formatting patterns for different data types (monetary values, quantities, order IDs, etc.). Implemented a comprehensive system that tests multiple formatting variations and provides detailed feedback on mismatches with specific formatting suggestions.",
+    "component": "SQLValidationService",
+    "tags": ["validation", "formatting", "improvement"]
+  },
+  {
+    "id": "crit-016",
+    "title": "Fix encoding issues in test script",
+    "description": "Test script fails with UnicodeEncodeError when attempting to print Unicode characters (checkmarks and X marks) to the console. Replace Unicode symbols with ASCII equivalents that work across all terminal environments.",
+    "severity": "LOW",
+    "status": "CLOSED",
+    "created_at": "2025-03-13T20:00:00",
+    "resolved_at": "2025-03-13T20:05:00",
+    "resolution": "Replaced Unicode symbols with ASCII text ('PASS'/'FAIL') to ensure compatibility across different terminal environments and character encodings.",
+    "component": "TestFramework",
+    "tags": ["encoding", "bug", "test_script"]
+  },
+  {
+    "id": "crit-017",
+    "title": "Add more test scenarios for SQL validation",
+    "description": "Current test coverage for SQL validation is limited. Create more test scenarios specifically designed to test the validation service with various data formats and edge cases.",
+    "severity": "LOW",
+    "status": "OPEN",
+    "created_at": "2025-03-13T20:20:00",
+    "resolved_at": null,
+    "resolution": null,
+    "component": "TestFramework",
+    "tags": ["testing", "validation", "improvement"]
+  }
+] 

@@ -35,7 +35,7 @@ def mock_config():
         "api": {
             "openai": {
                 "api_key": "test_openai_key",
-                "model": "gpt-4o"
+                "model": "gpt-4o-mini"
             },
             "gemini": {
                 "api_key": "test_gemini_key"
@@ -116,7 +116,7 @@ class TestUpdatedServiceFlow:
         mock_response_generator = MagicMock()
         mock_response_generator.generate.return_value = {
             "response": "You have 1 order with 2 pizzas in the last week.",
-            "model": "gpt-4o"
+            "model": "gpt-4o-mini"
         }
         
         # Set up the mock registry to return our mock services
@@ -206,7 +206,7 @@ class TestUpdatedServiceFlow:
         mock_response_generator = MagicMock()
         mock_response_generator.generate.return_value = {
             "response": "You have 2 orders this month: 2 pizzas and 1 pasta.",
-            "model": "gpt-4o"
+            "model": "gpt-4o-mini"
         }
         
         # Set up the mock registry to return our mock services
@@ -306,7 +306,7 @@ class TestUpdatedServiceFlow:
         mock_response_generator = MagicMock()
         mock_response_generator.generate.return_value = {
             "response": "You have 1 order with 2 pizzas in the last month.",
-            "model": "gpt-4o"
+            "model": "gpt-4o-mini"
         }
         
         # Set up the mock registry to return our mock services

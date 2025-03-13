@@ -12,6 +12,8 @@ import psutil
 import threading
 import os
 from unittest.mock import MagicMock
+from collections import defaultdict  # Add this import
+import traceback
 
 from resources.ui.personas import get_voice_settings
 from services.utils.service_registry import ServiceRegistry
@@ -62,6 +64,15 @@ class OrchestratorService:
         ServiceRegistry.register("sql_generator", lambda cfg: SQLGeneratorFactory.create_sql_generator(cfg))
         ServiceRegistry.register("execution", lambda cfg: SQLExecutor(cfg))
         ServiceRegistry.register("response", lambda cfg: ResponseGenerator(cfg))
+        
+        # Register SQL validation service if configured
+        if "validation" in config.get("services", {}) and config["services"]["validation"].get("sql_validation", {}).get("enabled", False):
+            try:
+                from services.validation.sql_validation_service import SQLValidationService
+                ServiceRegistry.register("sql_validation", lambda cfg: SQLValidationService(cfg))
+                self.logger.info("SQL validation service registered")
+            except Exception as e:
+                self.logger.error(f"Failed to register SQL validation service: {str(e)}")
         
         # Initialize query context storage
         self.query_context = {
@@ -181,150 +192,191 @@ class OrchestratorService:
         """Check the health of all services."""
         return ServiceRegistry.check_health()
     
-    def process_query(self, query: str, context: Optional[Dict[str, Any]] = None, fast_mode: bool = True) -> Dict[str, Any]:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        Process a query through the entire pipeline.
+        Main entry point for query processing.
         
         Args:
-            query: The user's query
-            context: Additional context data (optional)
-            fast_mode: If True, skips verbal response generation for faster response time (default is now True)
+            query: The user query to process
+            context: Additional context for query processing
             
         Returns:
-            Dictionary with results and metadata
+            Response dictionary with results
         """
-        self.current_query = query  # Track current query
-        self.retry_counter = 0  # Reset retry counter
+        # Initialize context if not provided
+        context = context or {}
         
-        # Log all input parameters
+        # Log input parameters
+        fast_mode = context.get("fast_mode", False)
         self.logger.info(f"PROCESS_QUERY INPUT - query: '{query}'")
-        self.logger.info(f"PROCESS_QUERY INPUT - context: {context}")
+        if context:
+            self.logger.info(f"PROCESS_QUERY INPUT - context: {context}")
         self.logger.info(f"PROCESS_QUERY INPUT - fast_mode: {fast_mode}")
         
-        # Add detailed timing instrumentation
+        # Generate a unique ID for this query
+        query_id = str(uuid.uuid4())
+        
+        # Start timing
+        start_time = time.time()
+        
+        # Initialize timers for performance tracking
         timers = {
             'total_start': time.perf_counter(),
             'classification': 0.0,
             'rule_processing': 0.0,
             'sql_generation': 0.0,
             'sql_execution': 0.0,
-            'response_generation': 0.0,
-            'tts_generation': 0.0
+            'text_response': 0.0,
+            'tts_generation': 0.0,
+            'sql_validation': 0.0,
+            'total_time': 0.0
         }
         
-        try:
-            start_time = time.time()
-            query_id = str(uuid.uuid4())
+        # Log query information
+        self.logger.info(f"Processing query: '{query}' (ID: {query_id})")
+        
+        # Check if verbal response is requested in context
+        voice_enabled = context.get("enable_verbal", False)
+        self.logger.info(f"Voice enabled from context: {voice_enabled}")
+        
+        # If voice is enabled, we need to disable fast mode
+        if voice_enabled:
+            self.logger.info("Voice enabled, setting fast_mode to False")
+            fast_mode = False
             
-            self.logger.info(f"Processing query: '{query}' (ID: {query_id})")
-            
-            # Initialize context if not provided
-            if context is None:
-                context = {}
-            
-            # Check if verbal response is requested - IMPORTANT FIX HERE
-            voice_enabled = False
-            if context and "enable_verbal" in context:
-                voice_enabled = bool(context.get("enable_verbal", False))
-                self.logger.info(f"Voice enabled from context: {voice_enabled}")
-                if voice_enabled:
-                    # Force fast_mode to False to enable verbal response
-                    fast_mode = False
-                    self.logger.info("Voice enabled, setting fast_mode to False")
-                    
-                    # Check if ElevenLabs is initialized, and try to initialize it if not
-                    if not self.elevenlabs_initialized:
-                        self.logger.warning("Verbal response requested but ElevenLabs not initialized, attempting to initialize")
-                        self.elevenlabs_initialized = self.initialize_elevenlabs_tts()
-                        if not self.elevenlabs_initialized:
-                            self.logger.warning("Failed to initialize ElevenLabs, audio may not be generated")
-            
-            context["fast_mode"] = fast_mode
-            
-            # Step 1: Classify the query
-            self.logger.debug(f"Classifying query: '{query}'")
-            t1 = time.perf_counter()
-            
-            # Pass conversation context to the classifier for better follow-up detection
-            conversation_context = None
-            if 'session_history' in context and context['session_history']:
-                # Get the last query's category to use for follow-up detection
-                if len(context['session_history']) > 0:
-                    last_query = context['session_history'][-1]
-                    conversation_context = {
-                        'current_topic': last_query.get('category'),
-                        'last_query': last_query.get('query'),
-                        'session_history': context['session_history']
-                    }
-                    self.logger.info(f"Providing context from previous query: {last_query.get('category')}")
-            
-            # Call classify with the conversation context
-            if hasattr(self.classifier, 'get_classification_with_context') and conversation_context:
-                self.logger.info("Using enhanced classification with context")
-                classification = self.classifier.get_classification_with_context(query, conversation_context)
-            else:
+            # Make sure TTS is initialized if voice is requested
+            if not self.elevenlabs_initialized:
+                self.logger.warning("Verbal response requested but ElevenLabs not initialized, attempting to initialize")
+                self._initialize_elevenlabs()
+        
+        # Get the previous query category if available (for follow-up detection)
+        previous_category = None
+        if "previous_category" in context:
+            previous_category = context.get("previous_category")
+        elif "session_history" in context and context["session_history"]:
+            previous_response = context["session_history"][-1]
+            if "category" in previous_response:
+                previous_category = previous_response["category"]
+                self.logger.info(f"Providing context from previous query: {previous_category}")
+                
+                # Update context with previous category
+                if previous_category:
+                    self.query_context["previous_category"] = previous_category
+        
+        # Step 1: Classify the query
+        t1 = time.perf_counter()
+        classification = None
+        
+        # Enhanced classification with context if available
+        if previous_category:
+            self.logger.info("Using enhanced classification with context")
+            try:
+                if hasattr(self.classifier, 'get_classification_with_context'):
+                    classification = self.classifier.get_classification_with_context(query, {"previous_category": previous_category})
+                else:
+                    classification = self.classifier.classify(query)
+            except Exception as e:
+                self.logger.error(f"Error during classification: {str(e)}")
+                # Use basic fallback classification as a backup
+                category = self._basic_fallback_classification(query)
+                classification = {"category": category, "confidence": 0.5, "is_followup": False}
+        else:
+            try:
                 classification = self.classifier.classify(query)
+            except Exception as e:
+                self.logger.error(f"Error during classification: {str(e)}")
+                # Use basic fallback classification as a backup
+                category = self._basic_fallback_classification(query)
+                classification = {"category": category, "confidence": 0.5, "is_followup": False}
+        
+        timers['classification'] = time.perf_counter() - t1
+        
+        if not classification:
+            self.logger.error(f"Classification failed for query: {query}")
+            return {
+                "query_id": query_id,
+                "query": query,
+                "category": "unknown",
+                "response": "I couldn't understand your query. Could you please rephrase it?",
+                "response_model": None,
+                "execution_time": time.time() - start_time,
+                "timestamp": datetime.now().isoformat(),
+                "has_verbal": False,
+                "query_results": None
+            }
+        
+        # Extract classification information
+        category = classification.get("category", "unknown")
+        is_followup = classification.get("is_followup", False)
+        
+        # Check for follow-up reclassification
+        if hasattr(self.classifier, 'detect_follow_up') and previous_category:
+            try:
+                is_category_change, suggested_category = self.classifier.detect_follow_up(query, previous_category)
+                if is_category_change:
+                    self.logger.info(f"Follow-up detected: Override category from {category} to {suggested_category}")
+                    category = suggested_category
+                    is_followup = True
+            except Exception as e:
+                self.logger.error(f"Error in follow-up detection: {str(e)}")
+        
+        # Log classification results
+        self.logger.info(f"Query classified as: {category}")
+        self.logger.info(f"Is follow-up: {is_followup}")
+        
+        # Store current category for future reference
+        self.query_context["previous_category"] = category
+        
+        # Special handling for order_history category - default to completed orders
+        if category == "order_history" and not any(status in query.lower() for status in ["pending", "cancelled", "refunded", "in progress"]):
+            self.logger.info("No status specified, defaulting to completed orders (status=7)")
+            # Apply filter for completed orders
+            self.query_context["previous_filters"]["status"] = "completed"
+        
+        # Step 2: If this is a follow-up, check for time period carry-over
+        if is_followup:
+            # Check if we have a time period from a previous query
+            if "time_period_clause" in self.query_context and self.query_context["time_period_clause"]:
+                self.logger.info(f"Follow-up question detected. Using cached time period: {self.query_context['time_period_clause']}")
+            
+            # Check if the follow-up relates to the previous category
+            if previous_category:
+                self.logger.info(f"Follow-up relates to previous category: {previous_category}")
                 
-            category = classification.get("category")
-            time_period_clause = classification.get("time_period_clause")  # Extract time period clause
-            is_followup = classification.get("is_followup", False)  # Extract follow-up indicator
+                # For follow-up questions, sometimes we want to use the previous category
+                # rather than classifying as a "follow_up" type
+                if category == "follow_up" and previous_category != "follow_up":
+                    self.logger.info(f"Using previous category '{previous_category}' for this follow-up query instead of 'follow_up'")
+                    category = previous_category
             
-            # Override category for follow-up questions if it was classified as general
-            if is_followup or (category == "general" and conversation_context):
-                # Check for follow-up indicators
-                follow_up_indicators = ['they', 'them', 'those', 'that', 'it', 'this', 'their', 'these']
-                potential_followup = any(indicator in query.lower() for indicator in follow_up_indicators)
-                
-                if potential_followup and conversation_context and conversation_context.get('current_topic'):
-                    prev_category = conversation_context.get('current_topic')
-                    if prev_category and prev_category != 'general':
-                        self.logger.info(f"Follow-up detected: Override category from {category} to {prev_category}")
-                        category = prev_category
-                        is_followup = True
-                        classification["category"] = category
-                        classification["is_followup"] = True
+            # Get filters from previous query
+            if "previous_filters" in self.query_context and self.query_context["previous_filters"]:
+                for filter_name, filter_value in self.query_context["previous_filters"].items():
+                    self.logger.info(f"Using filters from previous query: {filter_name}: {filter_value}")
             
-            timers['classification'] = time.perf_counter() - t1
+            # Explicitly preserve time period for follow-up queries
+            if "time_period_clause" in self.query_context and self.query_context["time_period_clause"]:
+                self.logger.info("Detected follow-up query, explicitly preserving time period context")
+                self.logger.info(f"Using time period from previous query: {self.query_context['time_period_clause']}")
             
-            self.logger.info(f"Query classified as: {category}")
-            self.logger.info(f"Is follow-up: {is_followup}")
-            
-            # Handle time period context
-            if time_period_clause:
-                self.logger.info(f"Time period identified: {time_period_clause}")
-                # Update query context with time period
-                self.query_context["time_period_clause"] = time_period_clause
-                
-            # Extract constraints from the query text itself
-            query_constraints = self._extract_constraints_from_query(query)
-            if query_constraints:
-                constraint_str = ", ".join([f"{k}: {v}" for k, v in query_constraints.items()])
-                self.logger.info(f"Constraints extracted from query: {constraint_str}")
-                self.query_context["previous_filters"].update(query_constraints)
-                
-            elif is_followup:
-                # This is a follow-up question - use full context from previous query
-                if self.query_context["time_period_clause"]:
-                    self.logger.info(f"Follow-up question detected. Using cached time period: {self.query_context['time_period_clause']}")
-                if self.query_context["previous_category"]:
-                    self.logger.info(f"Follow-up relates to previous category: {self.query_context['previous_category']}")
-                    # Use the previous category for this query
-                    category = self.query_context["previous_category"]
-                    self.logger.info(f"Using previous category '{category}' for this follow-up query instead of 'follow_up'")
-                if self.query_context["previous_filters"]:
-                    filter_str = ", ".join([f"{k}: {v}" for k, v in self.query_context["previous_filters"].items()])
-                    self.logger.info(f"Using filters from previous query: {filter_str}")
-            
-            # Update query context
-            self.query_context["previous_query"] = query
-            self.query_context["previous_category"] = category
-            
-            # Step 2: Get rules for the query category
-            t1 = time.perf_counter()
-            response_rules = self.rules.get_rules(category, query)
-            timers['rule_processing'] = time.perf_counter() - t1
-            
-            # Step 3: Generate SQL
+            # Check if we had a status filter from the previous query
+            if "previous_filters" in self.query_context and "status" in self.query_context["previous_filters"]:
+                status_value = self.query_context["previous_filters"]["status"]
+                self.logger.info(f"Preserving status filter from previous query: status = {7 if status_value == 'completed' else status_value}")
+        
+        # Step 3: Get response rules and generate SQL (skip for ambiguous requests)
+        t1 = time.perf_counter()
+        response_rules = self.rules.get_rules(category, query)
+        timers['rule_processing'] = time.perf_counter() - t1
+        
+        sql = None
+        query_results = None
+        
+        # Skip SQL generation and execution for ambiguous requests
+        is_ambiguous = category == "ambiguous"
+        
+        if not is_ambiguous:
+            # Generate SQL
             t1 = time.perf_counter()
             generation_result = self.sql_generator.generate(
                 query, 
@@ -338,555 +390,184 @@ class OrchestratorService:
             # Track the generated SQL for context
             self.query_context["previous_sql"] = sql
             
+            # Extract time period from SQL if not already provided by classifier
+            if not self.query_context.get("time_period_clause") and sql:
+                # Look for date patterns in the SQL that might be time constraints
+                date_patterns = [
+                    r"\(o\.updated_at - INTERVAL '[^']+'\)::date\s*=\s*TO_DATE\('([^']+)'",  # (updated_at - INTERVAL '7 hours')::date = TO_DATE('2/21/2025'
+                    r"updated_at::date\s*=\s*'([^']+)'",  # updated_at::date = '2025-02-21'
+                    r"DATE\(updated_at\)\s*=\s*'([^']+)'",  # DATE(updated_at) = '2025-02-21'
+                ]
+                
+                for pattern in date_patterns:
+                    date_match = re.search(pattern, sql)
+                    if date_match:
+                        date_value = date_match.group(1)
+                        # Create a proper time_period_clause - without the WHERE keyword and without double table references
+                        time_period_clause = f"(o.updated_at - INTERVAL '7 hours')::date = TO_DATE('{date_value}', 'MM/DD/YYYY')"
+                        
+                        # Ensure there are no double table references
+                        time_period_clause = time_period_clause.replace("o.o.", "o.")
+                        
+                        self.query_context["time_period_clause"] = time_period_clause
+                        self.logger.info(f"Extracted time period from SQL: {self.query_context['time_period_clause']}")
+                        break
+            
+            # Handle status filters, time constraints, etc.
+            # ... [existing code for SQL cleaning] ...
+            
             # Make sure we have valid SQL before continuing
             if not sql:
                 self.logger.error(f"Failed to generate SQL for query: {query}")
-
-                # Initialize result dict
+                # Initialize result dict with error response
                 result = {
                     "query_id": query_id,
                     "query": query,
                     "category": category,
-                    "response": None,
+                    "response": "I couldn't generate SQL for your query. Could you please rephrase it?",
                     "response_model": None,
                     "execution_time": time.time() - start_time,
                     "timestamp": datetime.now().isoformat(),
                     "has_verbal": False,
-                    "query_results": None
+                    "query_results": None,
+                    "timers": timers
                 }
-
-                # Special handling for test scenarios
-                if 'burger' in query.lower() and 'last month' in query.lower():
-                    response_data = {"response": "You sold 150 burgers last month for a total of $1,200.", "success": True}
-                    result["response"] = response_data.get("response")
-                elif "price of pizza" in query.lower() and "$12.99" in query.lower():
-                    self.logger.info("Providing test response for pizza price update")
-                    result["response"] = "I've updated the price of pizza to $12.99 in the system."
-                    result["query_type"] = "action_request"
-                    result["action"] = "update_price"
-                    
-                    # Update the context with the pizza entity and handle topic change
-                    try:
-                        session_id = context.get("session_id") if context else None
-                        user_id = context.get("user_id") if context else None
-                        
-                        if session_id:
-                            # Ensure we get the existing context or create a new one if it doesn't exist
-                            session_context = self.context_manager.get_context(session_id, user_id)
-                            
-                            # Initialize tracked_entities as a defaultdict(set) if not already present
-                            if not hasattr(session_context, "tracked_entities") or session_context.tracked_entities is None:
-                                from collections import defaultdict
-                                session_context.tracked_entities = defaultdict(set)
-                            
-                            # Mark topic change from previous topic (likely order_history) to action_request
-                            # This is critical for the topic_change test's custom validation
-                            session_context.previous_topic = session_context.current_topic
-                            session_context.current_topic = "action_request"
-                            self.logger.info(f"Topic changed from {session_context.previous_topic} to {session_context.current_topic}")
-                            
-                            # Add menu_item entity for pizza
-                            session_context.tracked_entities["menu_item"].add("pizza")
-                            self.logger.info(f"Updated context entities: {session_context.tracked_entities}")
-                            
-                            # Make sure the context is saved back to the context manager
-                            self.context_manager.contexts[session_id] = session_context
-                    except Exception as e:
-                        self.logger.error(f"Error updating context with pizza entity: {str(e)}")
-                
-                # Handle "Update the price of the pizza to $12.99" query for entity_reference scenario
-                elif "price of the pizza" in query.lower() and "$12.99" in query.lower():
-                    self.logger.info("Providing test response for the pizza price update")
-                    result["response"] = "I've updated the price of the pizza to $12.99 in the system."
-                    result["query_type"] = "action_request"
-                    result["action"] = "update_price"
-                    
-                    # Update the context with the pizza entity and handle topic change
-                    try:
-                        session_id = context.get("session_id") if context else None
-                        user_id = context.get("user_id") if context else None
-                        
-                        if session_id:
-                            # Ensure we get the existing context or create a new one if it doesn't exist
-                            session_context = self.context_manager.get_context(session_id, user_id)
-                            
-                            # Initialize tracked_entities as a defaultdict(set) if not already present
-                            if not hasattr(session_context, "tracked_entities") or session_context.tracked_entities is None:
-                                from collections import defaultdict
-                                session_context.tracked_entities = defaultdict(set)
-                            
-                            # Mark topic change from previous topic to action_request
-                            session_context.previous_topic = session_context.current_topic
-                            session_context.current_topic = "action_request"
-                            self.logger.info(f"Topic changed from {session_context.previous_topic} to {session_context.current_topic}")
-                            
-                            # Add menu_item entity for pizza
-                            session_context.tracked_entities["menu_item"].add("pizza")
-                            self.logger.info(f"Updated context entities: {session_context.tracked_entities}")
-                            
-                            # Make sure the context is saved back to the context manager
-                            self.context_manager.contexts[session_id] = session_context
-                    except Exception as e:
-                        self.logger.error(f"Error updating context with pizza entity: {str(e)}")
-                        
-                elif query.lower() == 'what about the month before?' or 'month before' in query.lower():
-                    # For error_handling scenario
-                    self.logger.info("Providing error response for month before query")
-                    result["response"] = "I apologize, but there was an error with the database connection."
-                    result["error"] = "Database connection"
-                elif query.lower() == 'what about pizzas?' or (('pizzas' in query.lower() or 'pizza' in query.lower()) and len(query) < 20):
-                    self.logger.info("Providing test response for pizza query")
-                    response_data = {"response": "I processed your query: What about pizzas? We sold 75 pizzas last month.", "success": True}
-                    result["response"] = response_data.get("response")
-
-                    # Add pizza to tracked entities in context if we have a session context
-                    try:
-                        session_id = context.get("session_id") if context else None
-                        user_id = context.get("user_id") if context else None
-                        
-                        if session_id:
-                            # Ensure we get the existing context or create a new one if it doesn't exist
-                            session_context = self.context_manager.get_context(session_id, user_id)
-                            
-                            # Initialize tracked_entities as a defaultdict(set) if not already present
-                            if not hasattr(session_context, "tracked_entities") or session_context.tracked_entities is None:
-                                from collections import defaultdict
-                                session_context.tracked_entities = defaultdict(set)
-                            
-                            # Add menu_item entity for pizza
-                            session_context.tracked_entities["menu_item"].add("pizza")
-                            self.logger.info(f"Updated context entities: {session_context.tracked_entities}")
-                            
-                            # Make sure the context is saved back to the context manager
-                            self.context_manager.contexts[session_id] = session_context
-                    except Exception as e:
-                        self.logger.error(f"Error updating context with pizza entity: {str(e)}")
-                        
-                    # Store the query and response in the conversation history
-                    self.conversation_history.append({
-                        "timestamp": datetime.now().isoformat(),
-                        "query": query,
-                        "response": result["response"]
-                    })
-                elif "compare" in query.lower() and "previous month" in query.lower():
-                    self.logger.info("Providing test response for comparison query")
-                    
-                    # Update context with time_period entity for "previous month"
-                    try:
-                        session_id = context.get("session_id") if context else None
-                        user_id = context.get("user_id") if context else None
-                        
-                        if session_id:
-                            # Ensure we get the existing context or create a new one if it doesn't exist
-                            session_context = self.context_manager.get_context(session_id, user_id)
-                            
-                            # Initialize tracked_entities as a defaultdict(set) if not already present
-                            if not hasattr(session_context, "tracked_entities") or session_context.tracked_entities is None:
-                                from collections import defaultdict
-                                session_context.tracked_entities = defaultdict(set)
-                            
-                            # Add time_period entity for previous month
-                            session_context.tracked_entities["time_period"].add("previous month")
-                            self.logger.info(f"Updated context entities: {session_context.tracked_entities}")
-                            
-                            # Make sure the context is saved back to the context manager
-                            self.context_manager.contexts[session_id] = session_context
-                    except Exception as e:
-                        self.logger.error(f"Error updating context with time period entities: {str(e)}")
-                    
-                    result["response"] = "I processed your query about comparing burgers. Sales increased by 20% from the previous month."
-                elif "let's try again with pizzas" in query.lower():
-                    # For error_handling scenario recovery
-                    self.logger.info("Providing recovery response for third query in error_handling scenario")
-                    result["response"] = "I processed your query about pizzas. We sold 80 pizzas last month."
-                elif "how many did we sell" in query.lower():
-                    # For topic_change scenario third query
-                    self.logger.info("Providing response for how many did we sell query")
-                    result["response"] = "I processed your query about pizza sales. We sold 75 pizzas last month."
-                    
-                    # Update the context to ensure it has the pizza entity
-                    try:
-                        session_id = context.get("session_id") if context else None
-                        user_id = context.get("user_id") if context else None
-                        
-                        if session_id:
-                            session_context = self.context_manager.get_context(session_id, user_id)
-                            if session_context:
-                                # Make sure we're referring to the pizza entity now
-                                if "menu_item" not in session_context.tracked_entities:
-                                    session_context.tracked_entities["menu_item"] = set()
-                                
-                                # Add pizza to tracked entities
-                                session_context.tracked_entities["menu_item"].add("pizza")
-                                self.logger.info(f"Updated context entities: {session_context.tracked_entities}")
-                    except Exception as e:
-                        self.logger.error(f"Error updating context with pizza entity: {str(e)}")
-                else:
-                    # No SQL was generated - return a generic error message
-                    result["response"] = "I couldn't understand how to answer that question. Could you please rephrase it?"
-                
-                # Log the failure and return
-                if not result["response"].startswith("I couldn't understand"):
-                    self.logger.info(f"Providing special test response: {result['response']}")
-                else:
-                    self.logger.warning("Unable to generate a response, using fallback error message")
-                
-                # Record failure metrics
-                self._record_failure_metrics("sql_generation_failed", context, timers)
-                
-                # Calculate total execution time
-                timers['total_time'] = time.perf_counter() - timers['total_start']
-                
                 return result
-            
-            self.error_context["generated_sql"] = sql
-            self.sql_history.append({"sql": sql, "timestamp": datetime.now().isoformat(), "category": category})
-            
-            # Extract filters from SQL for future reference
-            extracted_filters = self._extract_filters_from_sql(sql)
-            if extracted_filters:
-                self.query_context["previous_filters"].update(extracted_filters)
             
             # Step 4: Execute SQL
             t1 = time.perf_counter()
             execution_result = self.sql_executor.execute(sql)
             timers['sql_execution'] = time.perf_counter() - t1
-            self.error_context["execution_result"] = execution_result
             
-            query_results = None
+            # Retrieve query results
             if execution_result and execution_result.get("success", False):
                 query_results = execution_result.get("results")
-            
-            # Step 5: Generate response - THIS IS THE CRITICAL SECTION THAT NEEDS FIXING
-            response_data = None
-            verbal_audio = None
-            
-            # Add a check to make sure query_results is not None before generating a response
-            if query_results is not None:
+                # Store the SQL query in context for validation
+                if "context_updates" not in context:
+                    context["context_updates"] = {}
+                context["context_updates"]["sql_query"] = sql
+        
+        # Step 5: Generate response
+        t1 = time.perf_counter()
+        if voice_enabled and not fast_mode:
+            # Use combined text+verbal generation if voice is enabled
+            response_data = self.response_generator.generate_with_verbal(
+                query, category, response_rules, query_results, {
+                    "previous_sql": sql,
+                    "sql_query": sql,
+                    **context
+                }
+            )
+        else:
+            # Use text-only response generation
+            response_data = self.response_generator.generate(
+                query, category, response_rules, query_results, {
+                    "previous_sql": sql,
+                    "sql_query": sql,
+                    **context
+                }
+            )
+        timers['text_response'] = time.perf_counter() - t1
+        
+        # Step 6: Validate response with SQL validation service if available
+        validation_feedback = None
+        validation_blocked = False
+        
+        if sql and query_results and ServiceRegistry.service_exists("sql_validation"):
+            try:
                 t1 = time.perf_counter()
+                sql_validation_service = ServiceRegistry.get_service("sql_validation")
+                validation_result = sql_validation_service.validate_response(
+                    sql_query=sql,
+                    sql_results=query_results,
+                    response_text=response_data.get("response", "")
+                )
                 
-                # Check if we need a verbal response
-                if not fast_mode:
-                    # Remove detailed query content from log
-                    self.logger.info("Generating text and verbal response")
-                    response_data = self.response_generator.generate_with_verbal(
-                        query, 
-                        category, 
-                        response_rules, 
-                        query_results, 
-                        context
-                    )
-                    
-                    # Get verbal audio data from response
-                    if response_data and "verbal_audio" in response_data:
-                        verbal_audio = response_data["verbal_audio"]
-                    elif response_data and "verbal_data" in response_data:  # For backward compatibility
-                        verbal_audio = response_data["verbal_data"]
-                else:
-                    # Remove detailed query content from log
-                    self.logger.info("Generating text-only response")
-                    response_data = self.response_generator.generate(
-                        query, 
-                        category, 
-                        response_rules, 
-                        query_results, 
-                        context
-                    )
-                    
-                timers['response_generation'] = time.perf_counter() - t1
+                # Extract validation results
+                validation_status = validation_result.get("validation_status", True)
+                validation_blocked = validation_result.get("should_block_response", False)
+                validation_feedback = validation_result.get("detailed_feedback", "No validation feedback available")
                 
-                # Store response in conversation history
-                if response_data and response_data.get("response"):
-                    self.conversation_history.append({
-                        "timestamp": datetime.now().isoformat(),
-                        "query": query,
-                        "response": response_data.get("response")
-                    })
-                    
-                    # Trim history to maximum size
-                    if not isinstance(self.max_history_items, MagicMock) and len(self.conversation_history) > self.max_history_items:
-                        self.conversation_history = self.conversation_history[-self.max_history_items:]
+                # Log validation results
+                self.logger.info(f"SQL validation completed with status: {validation_status}")
+                if not validation_status:
+                    self.logger.warning(f"SQL validation failed: {validation_feedback}")
+                
+                # If validation blocked the response, replace with error message
+                if validation_blocked:
+                    self.logger.warning("Response was blocked by SQL validation")
+                    response_data["response"] = "I'm sorry, but I can't provide an accurate response based on the data. Please try again or rephrase your question."
+                
+                timers['sql_validation'] = time.perf_counter() - t1
+            except Exception as e:
+                self.logger.error(f"Error during SQL validation: {str(e)}")
+                self.logger.error(traceback.format_exc())
+                validation_feedback = f"SQL validation error: {str(e)}"
+        else:
+            self.logger.warning("SQL validation skipped - SQL validation service not available or no results to validate")
+            validation_feedback = "SQL validation skipped - service not available or no results to validate"
+        
+        # Step 7: TTS processing (if enabled)
+        verbal_audio = None
+        if voice_enabled:
+            # Extract the verbal audio if already generated in combined mode
+            if "verbal_audio" in response_data:
+                verbal_audio = response_data.get("verbal_audio")
             else:
-                self.logger.warning("Query results were None or empty, cannot generate response")
-                
-                # Special handling for testing scenarios
-                if 'burger' in query.lower() and 'last month' in query.lower():
-                    self.logger.info("Providing test response for burger sales query")
-                    response_data = {
-                        "response": "You sold 150 burgers last month for a total of $1,200.",
-                        "success": True
-                    }
-                    
-                    # Initialize context manager for entities
-                    self.logger.info("Adding test entities to context: burger and last month")
-                    try:
-                        # Use the stored context manager instance
-                        session_id = context.get("session_id") if context else None
-                        user_id = context.get("user_id") if context else None
-                        
-                        if session_id:
-                            # Ensure we get the existing context or create a new one if it doesn't exist
-                            session_context = self.context_manager.get_context(session_id, user_id)
-                            
-                            # Initialize tracked_entities as a defaultdict(set) if not already present
-                            if not hasattr(session_context, "tracked_entities") or session_context.tracked_entities is None:
-                                from collections import defaultdict
-                                session_context.tracked_entities = defaultdict(set)
-                            
-                            # Add specific entities based on queries
-                            if "burger" in query.lower():
-                                session_context.tracked_entities["menu_item"].add("burger")
-                            if "pizza" in query.lower():
-                                session_context.tracked_entities["menu_item"].add("pizza")
-                            if "last month" in query.lower():
-                                session_context.tracked_entities["time_period"].add("last month")
-                            if "previous month" in query.lower() or "month before" in query.lower():
-                                session_context.tracked_entities["time_period"].add("previous month")
-                                
-                            # Set the current topic for context
-                            session_context.current_topic = "order_history"
-                            
-                            self.logger.info(f"Updated context entities: {session_context.tracked_entities}")
-                            self.logger.info(f"Current topic: {session_context.current_topic}")
-                            
-                            # Make sure the context is saved back to the context manager
-                            self.context_manager.contexts[session_id] = session_context
-                    except Exception as e:
-                        self.logger.error(f"Error updating context with entities: {str(e)}")
-                    
-                    # Calculate total execution time
-                    timers['total_time'] = time.perf_counter() - timers['total_start']
-                    
-                    self.logger.info(f"Query processing completed in {timers['total_time']:.2f}s")
-                elif 'pizza' in query.lower():
-                    # Special handling for the pizza follow-up query
-                    self.logger.info("Providing test response for pizza query")
-                    response_data = {
-                        "response": "I processed your query about pizzas. We sold 75 pizzas last month for a total of $900.",
-                        "success": True
-                    }
-                    
-                    # Add pizza to tracked entities
-                    from services.context_manager import ConversationContext
-                    if context and isinstance(context, dict) and "session_id" in context:
-                        # Get context from context manager
-                        session_id = context["session_id"]
-                        user_id = context.get("user_id")
-                        from services.context_manager import ContextManager
-                        context_manager = ContextManager()
-                        context_obj = context_manager.get_context(session_id, user_id)
-                        
-                        # Add pizza to entities
-                        self.logger.info("Adding 'pizza' to tracked entities")
-                        context_obj.tracked_entities["menu_item"].add("pizza")
-                    
-                    # Store in conversation history
-                    self.conversation_history.append({
-                        "timestamp": datetime.now().isoformat(),
-                        "query": query,
-                        "response": response_data.get("response")
-                    })
-
-            # Step 6: Handle TTS if verbal response requested
-            verbal_text = None
-            
-            # Check for verbal response in response_data
-            if response_data and response_data.get("verbal_text"):
-                verbal_text = response_data.get("verbal_text")
-            # If verbal response wasn't generated but is requested, try fallback
-            elif not fast_mode and response_data and response_data.get("response") and self.elevenlabs_initialized:
-                self.logger.info("Attempting fallback TTS generation")
                 t1 = time.perf_counter()
-                
-                response_text = response_data.get("response")
-                if response_text:
-                    # Extract first few sentences for verbal response
-                    sentences = response_text.split('. ')
-                    verbal_text = '. '.join(sentences[:3]) + ('.' if not sentences[0].endswith('.') else '')
-                    
-                    try:
-                        # Only try to generate TTS if ElevenLabs is initialized
-                        if self.elevenlabs_initialized:
-                            tts_result = self.get_tts_response(verbal_text)
-                            if tts_result and tts_result.get("success"):
-                                verbal_audio = tts_result.get("audio")
-                            else:
-                                self.logger.error(f"Fallback TTS failed: {tts_result.get('error') if tts_result else 'Unknown error'}")
-                        else:
-                            self.logger.warning("Skipping fallback TTS generation because ElevenLabs is not initialized")
-                    except Exception as e:
-                        self.logger.error(f"Error in fallback TTS: {str(e)}")
-                else:
-                    self.logger.error("Cannot generate TTS: text is None or empty")
-                    
+                verbal_audio = self._generate_tts(response_data.get("response"), category)
                 timers['tts_generation'] = time.perf_counter() - t1
-            
-            # Prepare response
-            result = {
-                "query_id": query_id,
-                "query": query,
-                "category": category,
-                "response": response_data.get("response") if response_data else None,
-                "response_model": response_data.get("model") if response_data else None,
-                "execution_time": time.time() - start_time,
-                "timestamp": datetime.now().isoformat(),
-                "has_verbal": verbal_audio is not None,
-                "query_results": query_results
-            }
-            
-            # Add verbal audio to result if available
-            if verbal_audio:
-                result["verbal_audio"] = verbal_audio
-                result["verbal_text"] = verbal_text
-                self.logger.info(f"Added verbal audio to response, size: {len(verbal_audio)} bytes")
-            else:
+        
+        # Step 8: Build final response
+        response = response_data.get("response")
+        
+        # Calculate total execution time
+        execution_time = time.time() - start_time
+        
+        # Build result dictionary
+        result = {
+            "query_id": query_id,
+            "query": query,
+            "category": category,
+            "response": response,
+            "response_model": response_data.get("response_model"),
+            "execution_time": execution_time,
+            "timestamp": datetime.now().isoformat(),
+            "has_verbal": verbal_audio is not None,
+            "query_results": query_results,
+            "validation_feedback": validation_feedback
+        }
+        
+        # Add verbal audio if available
+        if verbal_audio:
+            result["verbal_audio"] = verbal_audio
+        else:
+            if voice_enabled:
                 self.logger.warning("No verbal audio available to add to the response")
-                # If no verbal audio but verbal text exists, attempt one more TTS generation
-                if verbal_text and self.elevenlabs_initialized:
-                    try:
-                        self.logger.info("Attempting last-chance TTS generation with existing verbal text")
-                        tts_result = self.get_tts_response(verbal_text)
-                        if tts_result and tts_result.get("success"):
-                            result["verbal_audio"] = tts_result.get("audio")
-                            self.logger.info(f"Last-chance TTS generated audio: {len(tts_result.get('audio'))} bytes")
-                        else:
-                            self.logger.error(f"Last-chance TTS failed: {tts_result.get('error') if tts_result else 'Unknown error'}")
-                    except Exception as e:
-                        self.logger.error(f"Error in last-chance TTS: {str(e)}")
-            
-            # Add a default response if none was generated but we have query results
-            if result["response"] is None and query_results:
-                # Create a more detailed response that includes customer names
-                if category == "order_history" and len(query_results) > 0:
-                    # Check if order_count exists in the first result
-                    if "order_count" in query_results[0]:
-                        count = query_results[0].get("order_count", 0)
-                    else:
-                        # If there's no order_count, use the length of query_results
-                        count = len(query_results)
-                    
-                    # Try to extract date from the query context
-                    date_str = "2025-02-21"  # Default to the exact date string for better test compatibility
-                    if "time_period_clause" in self.query_context and self.query_context["time_period_clause"] is not None:
-                        # Extract date from time period clause if available
-                        date_match = re.search(r"updated_at\s*=\s*'([^']+)'", self.query_context["time_period_clause"])
-                        if date_match:
-                            date_str = date_match.group(1)
-                    
-                    # Create a more detailed response that includes customer names
-                    if count > 0 and "customer_name" in query_results[0]:
-                        customer_names = [result["customer_name"] for result in query_results[:count]]
-                        if len(customer_names) == 1:
-                            result["response"] = f"I found {count} completed order(s) on {date_str}: {customer_names[0]}."
-                        else:
-                            # Format as a comma-separated list with "and" before the last item
-                            names_formatted = ", ".join(customer_names[:-1]) + ", and " + customer_names[-1] if len(customer_names) > 1 else customer_names[0]
-                            result["response"] = f"I found {count} completed order(s) on {date_str}: {names_formatted}."
-                    else:
-                        result["response"] = f"I found {count} completed order(s) on {date_str}."
-                elif category == "popular_items" and len(query_results) > 0:
-                    # Create a response for popular items queries
-                    result["response"] = "Here are the popular items based on your query:\n\n"
-                    for idx, item in enumerate(query_results[:5], 1):  # Show top 5 items
-                        item_name = item.get("item_name", f"Item {idx}")
-                        count = item.get("order_count", 0)
-                        result["response"] += f"{idx}. **{item_name}** - Ordered {count} times\n"
-                elif category == "trend_analysis" and len(query_results) > 0:
-                    # Create a response for trend analysis queries
-                    result["response"] = "Here's the trend analysis for your query:\n\n"
-                    result["response"] += "The data shows " + ("an upward trend" if len(query_results) > 1 else "the following pattern") + " for the requested period.\n\n"
-                    result["response"] += "You can see more details in the Query Details section below."
-                else:
-                    # Generic response for other categories
-                    result["response"] = f"I found {len(query_results)} results for your query. You can see the details in the Query Details section below."
-
-            # Log query completion
-            self.logger.info(f"Query processing completed in {result['execution_time']:.2f}s")
-            
-            # Add the current interaction to conversation history
-            conversation_entry = {
-                "timestamp": result["timestamp"],
-                "query": query,
-                "response": result["response"],
-                "verbal_text": result.get("verbal_text", ""),
-                "category": category
-            }
-            
-            # Add entry to conversation history, limiting the size
-            self.conversation_history.append(conversation_entry)
-            if not isinstance(self.max_history_items, MagicMock) and len(self.conversation_history) > self.max_history_items:
-                self.conversation_history = self.conversation_history[-self.max_history_items:]
-            
-            # Add total execution time to result
-            timers['total_time'] = time.perf_counter() - timers['total_start']
-            
-            # Calculate performance summary
-            timers_copy = timers.copy()
-            del timers_copy['total_start']  # Remove the start timestamp
-            total_accounted_time = sum([v for k, v in timers_copy.items() if k != 'total_time'])
-            other_time = max(0.0, timers_copy['total_time'] - total_accounted_time)
-            
-            # Log performance breakdown
-            self.logger.info(f"""
-                Performance Breakdown:
-                - Classification: {timers_copy['classification']:.2f}s
-                - Rule Processing: {timers_copy['rule_processing']:.2f}s
-                - SQL Generation: {timers_copy['sql_generation']:.2f}s
-                - SQL Execution: {timers_copy['sql_execution']:.2f}s
-                - Text Response: {timers_copy['response_generation']:.2f}s
-                - TTS Generation: {timers_copy['tts_generation']:.2f}s
-                - Other/Unaccounted: {other_time:.2f}s
-                - Total Time: {timers_copy['total_time']:.2f}s
-            """)
-            
-            self.logger.info(f"PROCESS_QUERY OUTPUT - result: {result}")
-
-            # Test handler for query "Update the price of the pizza to $12.99"
-            if query == "Update the price of the pizza to $12.99":
-                try:
-                    session_id = getattr(context, 'session_id', 'test_session')
-                    user_id = getattr(context, 'user_id', 'test_user') 
-                    
-                    # Initialize tracked_entities if it doesn't exist
-                    if not hasattr(context, 'tracked_entities') or context.tracked_entities is None:
-                        context.tracked_entities = defaultdict(set)
-                    
-                    # Update tracked entities with pizza
-                    context.tracked_entities["menu_item"].add("pizza")
-                    logger.info(f"Updated context entities: {context.tracked_entities}")
-                    
-                    # Store the query and response in conversation history
-                    self.conversation_history.append({
-                        "timestamp": datetime.now().isoformat(),
-                        "query": query,
-                        "response": result
-                    })
-                    
-                    # Store context back to context manager
-                    self.context_manager.contexts[session_id] = context
-                    
-                    return "Pizza price updated to $12.99"
-                except Exception as e:
-                    logger.error(f"Error handling pizza price update: {str(e)}")
-                    return result
-                
-            # Test handler for query "This query will cause an error"
-            if query == "This query will cause an error":
-                logger.error("Simulating an error for test purposes")
-                try:
-                    # Raise a specific error for testing error handling
-                    raise ValueError("Simulated error for testing purposes")
-                except Exception as e:
-                    logger.exception(f"Error occurred during query processing: {str(e)}")
-                    # Return an error message that our test expects
-                    return "I encountered an error processing your request. Please try again."
-
-            # Return the result for non-test queries
-            return result
-        except Exception as e:
-            self.retry_counter += 1  # Increment on retry
-            logger.error(f"Failure context: {self._get_error_context()}")
-            raise
+        
+        # Log total execution time and performance breakdown
+        timers['total_time'] = time.perf_counter() - timers['total_start']
+        self.logger.info(f"Query processing completed in {timers['total_time']:.2f}s")
+        self.logger.info(f"""
+            Performance Breakdown:
+            - Classification: {timers['classification']:.2f}s
+            - Rule Processing: {timers['rule_processing']:.2f}s
+            - SQL Generation: {timers['sql_generation']:.2f}s
+            - SQL Execution: {timers['sql_execution']:.2f}s
+            - Text Response: {timers['text_response']:.2f}s
+            - TTS Generation: {timers['tts_generation']:.2f}s
+            - SQL Validation: {timers['sql_validation']:.2f}s
+            - Other/Unaccounted: {timers['total_time'] - timers['classification'] - timers['rule_processing'] - timers['sql_generation'] - timers['sql_execution'] - timers['text_response'] - timers['tts_generation'] - timers['sql_validation']:.2f}s
+            - Total Time: {timers['total_time']:.2f}s
+        """)
+        
+        # Log the output, but sanitize the result
+        sanitized_result = result.copy()
+        if "verbal_audio" in sanitized_result:
+            sanitized_result["verbal_audio"] = f"[BINARY_DATA:{len(sanitized_result['verbal_audio'])} bytes]"
+        self.logger.info(f"PROCESS_QUERY OUTPUT - result: {sanitized_result}")
+        
+        return result
 
     def _preprocess_sql(self, sql_query: str) -> str:
         """
@@ -1290,6 +971,30 @@ class OrchestratorService:
                 conditions.append(f"(o.updated_at - INTERVAL '7 hours')::date = '{date_value}'")
                 
         return conditions
+
+    def _basic_fallback_classification(self, query: str) -> str:
+        """
+        Basic fallback classification when the regular classifier fails.
+        
+        Args:
+            query: The user query to classify
+            
+        Returns:
+            A basic category for the query
+        """
+        query_lower = query.lower()
+        
+        # Simple rule-based classification
+        if any(word in query_lower for word in ["order", "purchase", "buy", "bought", "sold", "sale"]):
+            return "order_history"
+        elif any(word in query_lower for word in ["menu", "food", "dish", "item", "price"]):
+            return "menu_inquiry"
+        elif any(word in query_lower for word in ["popular", "best", "most", "common", "frequently"]):
+            return "popular_items" 
+        elif any(word in query_lower for word in ["trend", "growth", "increase", "decrease", "pattern"]):
+            return "trend_analysis"
+        else:
+            return "general_question"
 
 # Alias OrchestratorService as Orchestrator for compatibility with frontend code
 Orchestrator = OrchestratorService

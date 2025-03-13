@@ -14,6 +14,8 @@ from dotenv import load_dotenv
 
 from services.rules.rules_service import RulesService
 from services.utils.service_registry import ServiceRegistry
+from services.sql_generator.sql_example_loader import SQLExampleLoader
+from services.sql_generator.prompt_builder import SQLPromptBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +84,22 @@ class OpenAISQLGenerator:
         # Configuration options
         self.max_retries = config["services"]["sql_generator"].get("max_retries", 2)
         
+        # Initialize example loader and prompt builder
+        self.example_loader = SQLExampleLoader(config)
+        self.prompt_builder = SQLPromptBuilder(config)
+        
+        # Store config for later use 
+        self.config = config
+        
+        # Use specified model or fall back to gpt-4o-mini
+        self.model_name = config.get("api", {}).get("openai", {}).get("model", "gpt-4o-mini")
+        
+        # Get temperature setting (controls randomness - default 0.2)
+        self.temperature = float(config.get("api", {}).get("openai", {}).get("temperature", 0.2))
+        
+        # Max tokens to generate (default 2000)
+        self.max_tokens = int(config.get("api", {}).get("openai", {}).get("max_tokens", 2000))
+        
     def _get_default_prompt_template(self) -> str:
         """Get default prompt template if file is not found."""
         return """
@@ -95,12 +113,19 @@ class OpenAISQLGenerator:
         5. Format your SQL query properly with line breaks and indentation for readability.
         6. Do not include any explanations outside of comments within the SQL.
         7. Only return the SQL query, nothing else.
+        8. CRITICALLY IMPORTANT: ALWAYS prefix ALL column names with table aliases (e.g., o.updated_at, u.first_name, NOT just updated_at or first_name).
         
         CRITICAL REQUIREMENTS:
         1. FORBIDDEN: DO NOT USE o.order_date - this column does not exist in the database!
         2. The orders table does NOT have an 'order_date' column. ALWAYS use (o.updated_at - INTERVAL '7 hours')::date for date filtering.
         3. NEVER reference o.order_date as it does not exist and will cause database errors!
         4. Every query MUST include proper location filtering via the o.location_id field.
+        5. ALWAYS fully qualify column names with table aliases in ALL parts of the query (SELECT, WHERE, GROUP BY, ORDER BY, etc.).
+        6. In JOIN queries, ALWAYS prefix column names with table names or aliases to prevent ambiguity errors.
+        7. CRITICAL: Do NOT reference the discounts table with alias 'd' unless it is properly included in the FROM or JOIN clauses.
+        8. Never use COALESCE(d.amount, 0) unless the discounts table is joined with an alias of 'd' in the query.
+        9. When including discount information, always use LEFT JOIN discounts d ON o.discount_id = d.id.
+        10. To safely handle cases where discount information isn't needed, omit the discounts table entirely from the query.
 
         Database Schema:
         {schema}
@@ -212,7 +237,17 @@ class OpenAISQLGenerator:
             if rules_service:
                 # Get rules for the category
                 category = context.get("category", "")
-                rules = rules_service.get_rules_for_category(category) if category else {}
+                # Use a method that's available in RulesService
+                if hasattr(rules_service, "get_rules_for_query_type"):
+                    rules = rules_service.get_rules_for_query_type(category) if category else {}
+                else:
+                    # Fallback to what's available in the service
+                    logger.warning("RulesService does not have get_rules_for_category method, trying alternate methods")
+                    if hasattr(rules_service, "get_rules"):
+                        rules = rules_service.get_rules(category) if category else {}
+                    else:
+                        rules = {}
+                        logger.warning("No suitable method found in RulesService to get rules")
             else:
                 rules = {}
                 logger.warning("Rules service not found in registry, no rules will be applied")
@@ -277,6 +312,23 @@ class OpenAISQLGenerator:
             if previous_sql:
                 conversation_context += f"SQL for previous question: {previous_sql}\n"
                 
+                # Extract key filters from previous SQL to maintain context
+                # Extract status filter
+                status_match = re.search(r"o\.status\s*=\s*(\d+)", previous_sql)
+                if status_match:
+                    status_value = status_match.group(1)
+                    conversation_context += f"IMPORTANT - Previous status filter: o.status = {status_value} - You MUST use this same status filter.\n"
+                
+                # Extract location filter
+                location_match = re.search(r"(?:o\.location_id|l\.id)\s*=\s*(\d+)", previous_sql)
+                if location_match:
+                    location_value = location_match.group(1)
+                    conversation_context += f"IMPORTANT - Previous location filter: location_id = {location_value} - You MUST use this same location filter.\n"
+                
+                # Extract date range filter - warn about not adding additional date constraints
+                if "CURRENT_TIMESTAMP" in previous_sql or "CURRENT_DATE" in previous_sql:
+                    conversation_context += "IMPORTANT: Do NOT add any additional time constraints like 'CURRENT_TIMESTAMP - INTERVAL' unless they were in the previous query.\n"
+                
                 # Extract filters from previous SQL
                 where_clause = ""
                 where_match = re.search(r'WHERE\s+(.*?)(?:GROUP BY|ORDER BY|LIMIT|$)', previous_sql, re.IGNORECASE | re.DOTALL)
@@ -288,7 +340,7 @@ class OpenAISQLGenerator:
             time_period_clause = context.get("time_period_clause", "")
             if time_period_clause:
                 conversation_context += f"Time period from previous query: {time_period_clause}\n"
-            
+        
             # Add previous filters explicitly
             if "previous_filters" in context and context["previous_filters"]:
                 conversation_context += "Filters from previous query:\n"
@@ -296,7 +348,7 @@ class OpenAISQLGenerator:
                     conversation_context += f"- {filter_name}: {filter_value}\n"
             
             # Special handling for references to "those orders"
-            if any(term in query.lower() for term in ["those orders", "these orders", "the orders"]):
+            if any(term in query.lower() for term in ["those orders", "these orders", "the orders", "their", "them"]):
                 conversation_context += "\nIMPORTANT: The current query refers to the same orders from the previous query. " \
                                       "You MUST maintain the same WHERE conditions when showing order information.\n"
                 # Add more explicit instructions
@@ -384,54 +436,54 @@ ORDER BY
         is_who_query = False
         if context.get("is_followup", False) and "who" in query.lower() and any(term in query.lower() for term in ["placed", "those orders", "these orders", "the orders"]):
             is_who_query = True
-            logger.info("Detected 'who placed those orders' follow-up query - applying special handling")
+            logger.info("Detected 'who placed orders' follow-up query, applying special handling")
             
-            # Get the time period from the previous query context
-            time_period = context.get("time_period_clause", "")
-            # Get status filter from previous query
-            status_filter = None
-            if "previous_filters" in context and "status" in context["previous_filters"]:
-                status = context["previous_filters"]["status"]
-                if status.lower() == "completed":
-                    status_filter = "o.status = 7"
-                elif status.lower() == "cancelled" or status.lower() == "canceled":
-                    status_filter = "o.status = 6"
-                elif status.lower() == "pending":
-                    status_filter = "o.status IN (3, 4, 5)"
-            
-            # Check if we can directly build the SQL query rather than going through the AI
-            if time_period:
-                # If we have the time period, we can construct the SQL directly
-                sql = f"""
-SELECT 
-    u.first_name || ' ' || u.last_name AS customer_name,
-    COUNT(o.id) AS order_count
-FROM 
-    orders o
-JOIN 
-    users u ON o.customer_id = u.id
-WHERE 
-    o.location_id = 62
-    {f"AND {status_filter}" if status_filter else ""}
-    AND {time_period}
-GROUP BY 
-    u.first_name, u.last_name
-ORDER BY 
-    order_count DESC;
-"""
-                logger.info("Generated direct SQL for 'who placed orders' query using context information")
-                return {
-                    "sql": sql,
-                    "error": None,
-                    "generation_time": 0.01,
-                    "model": "direct_template",
-                    "tokens": 0
-                }
+        # Special handling for "order details" type of follow-up queries
+        is_order_details_query = False
+        if context.get("is_followup", False) and any(term in query.lower() for term in ["order details", "items", "ordered", "contents", "what did they order"]):
+            is_order_details_query = True
+            logger.info("Detected order details follow-up query, applying special handling")
         
-        prompt = self._build_prompt(query, examples, context)
+        # Basic prompt creation
+        prompt = self._get_default_prompt_template()
         
-        # Add schema information to the prompt
+        # Get schema
         schema = get_database_schema()
+        
+        # Try to get examples from the specified query type, fall back to generic examples
+        example_texts = self._format_examples(examples)
+        prompt = prompt.replace("{examples}", example_texts)
+        
+        # Get rules for this query type
+        if self.rules_service and hasattr(self.rules_service, "get_rules_for_category"):
+            rules_text = self.rules_service.get_rules_for_category(context.get("category", ""))
+        elif self.rules_service and hasattr(self.rules_service, "get_rules"):
+            rules_text = self.rules_service.get_rules()
+        else:
+            logger.warning("RulesService does not have get_rules_for_category method, trying alternate methods")
+            rules_text = "No rules available from the rules service."
+        
+        prompt = prompt.replace("{rules}", rules_text)
+        
+        # Add time period from context if available
+        if context and "time_period_clause" in context:
+            time_period = context.get("time_period_clause", "")
+            prompt += f"\n\nIMPORTANT: Use this exact time period filter: {time_period}"
+            logger.info(f"Using time period from context: {time_period}")
+        
+        # Add additional context for order details queries
+        if is_order_details_query:
+            prompt += "\n\nFor this order details query, follow these additional guidelines:"
+            prompt += "\n1. Join to order_items and items tables to get item details"
+            prompt += "\n2. Include fields like item_name, quantity, and price"
+            prompt += "\n3. DO NOT include the discounts table unless specifically requested"
+            prompt += "\n4. Maintain all location_id and status filters from the previous query"
+            prompt += "\n5. NEVER use 'COALESCE(d.amount, 0)' without first joining the discounts table with 'LEFT JOIN discounts d ON o.discount_id = d.id'"
+        
+        # Replace query placeholder
+        prompt = prompt.replace("{query}", query)
+        
+        # Get schema hints
         schema_hints = get_schema_hints()
         
         # Replace placeholders with actual schema
@@ -441,13 +493,6 @@ ORDER BY
         # Fill in any remaining placeholders with empty strings
         prompt = prompt.replace("{patterns}", "")
         prompt = prompt.replace("{conversation_context}", context.get("conversation_context", ""))
-        
-        # If this is a followup query about who placed orders, add extra emphasis in the prompt
-        if is_who_query:
-            prompt += "\n\nIMPORTANT REMINDER: When retrieving customer information for orders:\n"
-            prompt += "1. ALWAYS join orders to users using: orders o JOIN users u ON o.customer_id = u.id\n"
-            prompt += "2. NEVER use 'user_id' for the join condition, ALWAYS use 'customer_id'\n"
-            prompt += "3. ALWAYS maintain all time period and status filters from the previous query\n"
         
         # Debug log
         logger.debug(f"Generated SQL prompt:\n{prompt}")
@@ -482,6 +527,22 @@ ORDER BY
                 sql = self._extract_sql(sql_text)
                 
                 logger.info(f"Successfully generated SQL query in {generation_time:.2f} seconds")
+                
+                # Apply preserved filters from context if they exist
+                if context and "preserve_filters" in context:
+                    preserved_filters = context.get("preserve_filters", {})
+                    
+                    # Apply status filter if it exists and we need to replace it
+                    if "status" in preserved_filters:
+                        status_value = preserved_filters["status"]
+                        # Check if the SQL already has a status filter but with a different value
+                        status_match = re.search(r"o\.status\s*=\s*(\d+)", sql)
+                        if status_match:
+                            current_status = status_match.group(1)
+                            if current_status != status_value:
+                                # Replace the incorrect status with the preserved one
+                                sql = re.sub(r"o\.status\s*=\s*\d+", f"o.status = {status_value}", sql)
+                                logger.info(f"Replaced status filter in SQL from {current_status} to {status_value}")
                 
                 return {
                     "sql": sql,
@@ -577,39 +638,235 @@ ORDER BY
             logger.error(f"Health check failed: {e}")
             return False
 
-    def generate(self, query: str, category: str, rules_and_examples: Dict[str, Any], 
-                additional_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def _generate_sql(self, prompt: str) -> str:
         """
-        Generate SQL for a given query (interface method for OrchestratorService).
-        This method adapts the parameters from the orchestrator to the format expected by generate_sql.
+        Generate SQL query from a prompt using OpenAI API.
+        
+        Args:
+            prompt: The formatted prompt text
+            
+        Returns:
+            Generated SQL query
+        """
+        logger.info("Generating SQL using OpenAI API")
+        
+        try:
+            # Create a completion
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a SQL expert that translates natural language into PostgreSQL queries."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=self.temperature,
+                max_tokens=self.max_tokens
+            )
+            
+            # Update API call metrics
+            self.api_calls += 1
+            self.total_tokens += response.usage.total_tokens
+            
+            # Extract SQL from response
+            sql_text = response.choices[0].message.content
+            
+            # Process the SQL to extract it from any surrounding text
+            sql = self._extract_sql(sql_text)
+            
+            return sql
+            
+        except Exception as e:
+            logger.error(f"Error in _generate_sql: {str(e)}")
+            self.retry_count += 1
+            raise e
+
+    def generate(self, query: str, category: str, rules: Dict[str, Any] = None, context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Generate SQL for a user query.
         
         Args:
             query: The user's natural language query
-            category: The query category as determined by the classifier
-            rules_and_examples: Dictionary containing rules and examples for this query type
-            additional_context: Optional additional context like previous SQL queries
+            category: Query category (e.g., 'menu_inquiry', 'order_history')
+            rules: Optional rules to apply to SQL generation (deprecated, but maintained for API compatibility)
+            context: Optional context information for the query
             
         Returns:
-            Dictionary with generated SQL and metadata
+            Dictionary with SQL query and metadata
         """
-        logger.debug(f"Generate called with query: '{query}', category: '{category}'")
+        if context is None:
+            context = {}
         
-        # Extract examples from rules_and_examples
-        examples = rules_and_examples.get("sql_examples", rules_and_examples.get("examples", []))
-        logger.info(f"Found {len(examples)} examples for category '{category}'")
+        # Start generation timer
+        generation_start = time.perf_counter()
         
-        # Create context dictionary from category and rules
-        context = {
-            "query_type": category,
-            "rules": rules_and_examples.get("query_rules", {})
+        # Handle follow-up queries with context
+        is_followup = False
+        time_period_clause = None
+        
+        if context:
+            # Check if this is explicitly a follow-up according to context
+            is_followup = context.get("is_followup", False)
+            
+            # Check if we have a time period constraint from context
+            if "time_period_clause" in context and context["time_period_clause"]:
+                time_period_clause = context["time_period_clause"]
+                logger.info(f"Using time period from context: {time_period_clause}")
+        
+        # Find examples for this query category
+        try:
+            # Use the correct method name: load_examples_for_query_type instead of get_examples_for_category
+            examples = self.example_loader.load_examples_for_query_type(category)
+            logger.info(f"Found {len(examples)} examples for category '{category}'")
+        except Exception as e:
+            logger.error(f"Error loading examples: {str(e)}")
+            examples = []
+        
+        # Build a simple prompt for SQL generation since the prompt_builder might not have the expected method
+        try:
+            # Create a context dictionary for building the prompt
+            prompt_context = {
+                "category": category,
+                "is_followup": is_followup,
+                "time_period_clause": time_period_clause
+            }
+            
+            # Build the prompt directly instead of using the prompt_builder
+            prompt_text = self._build_prompt(query, examples, prompt_context)
+        except Exception as e:
+            logger.error(f"Error building prompt: {str(e)}")
+            return {"sql": None, "success": False, "error": f"Error building prompt: {str(e)}"}
+        
+        # Call the LLM to generate SQL
+        try:
+            sql_query = self._generate_sql(prompt_text)
+            
+            # For follow-up queries, remove unnecessary time constraints if we already have a time period
+            if context.get("is_followup", False) and context.get("time_period_clause"):
+                # Remove "AND o.updated_at > CURRENT_TIMESTAMP - INTERVAL 'X day'" if it exists
+                old_sql = sql_query
+                sql_query = re.sub(r"AND\s+o\.updated_at\s*>\s*CURRENT_TIMESTAMP\s*-\s*INTERVAL\s*'[^']+'", "", sql_query)
+                if old_sql != sql_query:
+                    logger.info("Removed unnecessary time constraints in follow-up query")
+            
+            # Apply preserved filters from context if they exist
+            if "preserve_filters" in context:
+                preserved_filters = context.get("preserve_filters", {})
+                
+                # Apply status filter if it exists and we need to replace it
+                if "status" in preserved_filters:
+                    status_value = preserved_filters["status"]
+                    # Check if the SQL already has a status filter but with a different value
+                    status_match = re.search(r"o\.status\s*=\s*(\d+)", sql_query)
+                    if status_match:
+                        current_status = status_match.group(1)
+                        if current_status != status_value:
+                            # Replace the incorrect status with the preserved one
+                            sql_query = re.sub(r"o\.status\s*=\s*\d+", f"o.status = {status_value}", sql_query)
+                            logger.info(f"Replaced status filter in SQL from {current_status} to {status_value}")
+                    else:
+                        # No status filter found, add one
+                        if "WHERE" in sql_query:
+                            # Add to existing WHERE clause
+                            sql_query = sql_query.replace("WHERE", f"WHERE o.status = {status_value} AND ")
+                            logger.info(f"Added missing status filter: o.status = {status_value}")
+        except Exception as e:
+            logger.error(f"Error generating SQL: {str(e)}")
+            return {"sql": None, "success": False, "error": f"Error generating SQL: {str(e)}"}
+        
+        # Check if we have a time period clause and it's not already in the SQL
+        if time_period_clause and sql_query and "WHERE" in sql_query.upper():
+            # If the SQL doesn't already include the time period, add it
+            if time_period_clause not in sql_query:
+                # Check for ambiguous column references and add table alias
+                # First, find any unqualified column references and add table aliases
+                column_pattern = r'\b(updated_at|created_at|status|customer_id|id|location_id|total|tip|discount_amount)\b(?!\s*\()'
+                
+                # Add 'o.' prefix to any unqualified columns that are likely from the orders table
+                if re.search(column_pattern, time_period_clause):
+                    # Replace unqualified column names with qualified ones
+                    time_period_clause = re.sub(column_pattern, r'o.\1', time_period_clause)
+                    logger.info(f"Added table aliases to column references in time period: {time_period_clause}")
+                
+                # If there's a specific reference to updated_at, ensure it's properly qualified
+                if "updated_at" in time_period_clause and not re.search(r'[a-z]\.\s*updated_at', time_period_clause):
+                    time_period_clause = time_period_clause.replace("updated_at", "o.updated_at")
+                    logger.info(f"Fixed ambiguous column in time period: {time_period_clause}")
+                
+                # Remove any "WHERE" keyword from the time period clause to avoid duplication
+                if time_period_clause.upper().startswith("WHERE "):
+                    time_period_clause = time_period_clause[6:].strip()
+                    logger.info(f"Removed WHERE keyword from time period clause: {time_period_clause}")
+                
+                # Fix any double table references (e.g., o.o.updated_at)
+                time_period_clause = re.sub(r'([a-z])\.([a-z])\.([a-z_]+)', r'\1.\3', time_period_clause)
+                time_period_clause = time_period_clause.replace("o.o.", "o.")
+                
+                # Check if there's already a WHERE clause
+                if "WHERE" in sql_query.upper():
+                    # Add as an AND condition
+                    sql_query = sql_query.replace("WHERE", f"WHERE {time_period_clause} AND ")
+                else:
+                    # There's no WHERE clause, check if there's an ORDER BY
+                    before_orderby = sql_query.split("ORDER BY")[0] if "ORDER BY" in sql_query else sql_query
+                    after_orderby = sql_query.split("ORDER BY")[1] if "ORDER BY" in sql_query else ""
+                    
+                    # Add WHERE clause
+                    sql_query = f"{before_orderby} WHERE {time_period_clause}"
+                    
+                    # Re-add ORDER BY if it existed
+                    if after_orderby:
+                        sql_query = f"{sql_query} ORDER BY {after_orderby}"
+                
+                logger.info(f"Added time period to SQL: {time_period_clause}")
+        
+        # Apply preserved status filter if available
+        if context and "preserve_filters" in context and "status" in context["preserve_filters"]:
+            status_value = context["preserve_filters"]["status"]
+            # Check if there's a status filter that needs to be replaced
+            status_match = re.search(r"o\.status\s*=\s*(\d+)", sql_query)
+            if status_match:
+                current_status = status_match.group(1)
+                if current_status != status_value:
+                    # Replace incorrect status with preserved one
+                    sql_query = re.sub(r"o\.status\s*=\s*\d+", f"o.status = {status_value}", sql_query)
+                    logger.info(f"Replaced status filter in SQL from {current_status} to {status_value}")
+        
+        # Remove unnecessary constraints like recent timestamp limits in follow-up queries
+        if context and context.get("is_followup", False) and "time_period_clause" in context:
+            # Remove constraints like "AND o.updated_at > CURRENT_TIMESTAMP - INTERVAL '1 day'"
+            old_sql = sql_query
+            sql_query = re.sub(r"AND\s+o\.updated_at\s*>\s*CURRENT_TIMESTAMP\s*-\s*INTERVAL\s*'[^']+'", "", sql_query)
+            if old_sql != sql_query:
+                logger.info("Removed unnecessary time constraint in follow-up query")
+                
+        # Calculate generation time
+        generation_time = time.perf_counter() - generation_start
+        
+        # Log the generated SQL
+        logger.info(f"GENERATE OUTPUT - sql: '{sql_query}'")
+        logger.info(f"GENERATE OUTPUT - time: {generation_time:.2f}s")
+        
+        # FINAL CHECK - Make absolutely sure status filter is preserved correctly
+        if context and "preserve_filters" in context and "status" in context["preserve_filters"]:
+            status_value = context["preserve_filters"]["status"]
+            # Directly replace any status filter with preserved value
+            old_sql = sql_query
+            sql_query = re.sub(r"o\.status\s*=\s*\d+", f"o.status = {status_value}", sql_query)
+            if old_sql != sql_query:
+                logger.info(f"FINAL CHECK - Fixed status filter to {status_value}")
+        
+        # FINAL CHECK - Remove unnecessary time constraints in follow-up queries
+        if context and context.get("is_followup", False) and "time_period_clause" in context:
+            old_sql = sql_query
+            sql_query = re.sub(r"AND\s+o\.updated_at\s*>\s*CURRENT_TIMESTAMP\s*-\s*INTERVAL\s*'[^']+'", "", sql_query)
+            if old_sql != sql_query:
+                logger.info("FINAL CHECK - Removed unnecessary time constraint in follow-up query")
+        
+        return {
+            "sql": sql_query,
+            "success": sql_query is not None,
+            "generation_time": generation_time,
+            "model": self.model_name
         }
-        
-        # Add additional context if provided (like previous SQL)
-        if additional_context:
-            context.update(additional_context)
-        
-        # Call the actual implementation method
-        return self.generate_sql(query, examples, context)
     
     def get_performance_metrics(self):
         """
@@ -618,14 +875,14 @@ ORDER BY
         Returns:
             Dictionary with metrics
         """
-        avg_latency = self.total_latency / self.api_call_count if self.api_call_count > 0 else 0
+        avg_latency = self.total_latency / self.api_calls if self.api_calls > 0 else 0
         
         return {
-            "api_calls": self.api_call_count,
+            "api_calls": self.api_calls,
             "total_tokens": self.total_tokens,
-            "avg_tokens_per_call": self.total_tokens / self.api_call_count if self.api_call_count > 0 else 0,
+            "avg_tokens_per_call": self.total_tokens / self.api_calls if self.api_calls > 0 else 0,
             "total_latency": self.total_latency,
             "avg_latency": avg_latency,
             "retry_count": self.retry_count,
-            "retry_rate": self.retry_count / self.api_call_count if self.api_call_count > 0 else 0,
+            "retry_rate": self.retry_count / self.api_calls if self.api_calls > 0 else 0,
         } 

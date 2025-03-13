@@ -169,7 +169,7 @@ config = {
     "api": {
         "openai": {
             "api_key": "sk-...",
-            "model": "gpt-4o"
+            "model": "gpt-4o-mini"
         }
     },
     "services": {

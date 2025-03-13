@@ -21,7 +21,7 @@ class TestOrchestratorIntegration:
         """Create a test configuration for the orchestrator."""
         return {
             "api": {
-                "openai": {"api_key": "test-key", "model": "gpt-4o"},
+                "openai": {"api_key": "test-key", "model": "gpt-4o-mini"},
                 "gemini": {"api_key": "test-key"},
                 "elevenlabs": {"api_key": "test-key"}
             },

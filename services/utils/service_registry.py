@@ -66,6 +66,19 @@ class ServiceRegistry:
         return cls.get_service(service_name)
     
     @classmethod
+    def service_exists(cls, service_name: str) -> bool:
+        """
+        Check if a service exists in the registry.
+        
+        Args:
+            service_name: Name of the service to check
+            
+        Returns:
+            True if the service is registered, False otherwise
+        """
+        return service_name in cls._services
+    
+    @classmethod
     def get_service(cls, service_name: str) -> Any:
         """
         Get a service from the registry, instantiating it if necessary.

@@ -20,7 +20,7 @@ class SQLPromptBuilder:
     Builds prompts for SQL generation using templates and SQL patterns.
     """
     
-    def __init__(self, config=None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
         Initialize the SQL Prompt Builder.
         
@@ -28,11 +28,22 @@ class SQLPromptBuilder:
             config: Optional configuration dictionary
         """
         self.config = config or {}
-        self.prompt_loader = PromptLoader()
         
-        # Path configurations - pointing to existing directories
-        self.patterns_path = self.config.get("patterns_path", "services/sql_generator/sql_files")
-        self.examples_path = self.config.get("examples_path", "services/sql_generator/sql_files")
+        # Get the prompt loader from service registry or create a new one
+        try:
+            from services.utils.service_registry import ServiceRegistry
+            if ServiceRegistry.service_exists("prompt_loader"):
+                self.prompt_loader = ServiceRegistry.get_service("prompt_loader")
+            else:
+                self.prompt_loader = get_prompt_loader()
+        except Exception:
+            # Fall back to creating a new prompt loader
+            self.prompt_loader = get_prompt_loader()
+        
+        # Path configurations - get from config or use defaults
+        sql_generator_config = self.config.get("services", {}).get("sql_generator", {})
+        self.patterns_path = sql_generator_config.get("patterns_path", "services/sql_generator/sql_files")
+        self.examples_path = sql_generator_config.get("examples_path", "services/sql_generator/sql_files")
         
         # Load SQL patterns and examples
         self.patterns = self.load_sql_patterns()

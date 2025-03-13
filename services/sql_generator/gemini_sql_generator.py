@@ -13,7 +13,7 @@ from datetime import datetime
 
 from services.rules.rules_service import RulesService
 from services.utils.service_registry import ServiceRegistry
-from services.sql_generator.sql_example_loader import sql_example_loader
+from services.sql_generator.sql_example_loader import SQLExampleLoader
 
 logger = logging.getLogger(__name__)
 
@@ -521,7 +521,9 @@ CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
         try:
             # Import the actual location ID value
             from services.rules.business_rules import DEFAULT_LOCATION_ID
-            from services.sql_generator.sql_example_loader import sql_example_loader
+            
+            # Create an instance of SQLExampleLoader
+            example_loader = SQLExampleLoader(self.config)
             
             # Get rules service from registry
             rules_service = ServiceRegistry.get_service("rules")
@@ -558,7 +560,7 @@ CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
             
             # Get examples directly from SQL files - this is more maintainable than hardcoding examples
             logger.info(f"Loading examples from SQL example loader for: {classification}")
-            file_examples = sql_example_loader.load_examples_for_query_type(classification)
+            file_examples = example_loader.load_examples_for_query_type(classification)
             
             # Add file examples to the list
             if file_examples:
@@ -569,7 +571,7 @@ CRITICAL REQUIREMENTS FOR FOLLOW-UP QUERIES:
                 # Try a fallback for follow_up if it's a different directory structure
                 if classification == "follow_up":
                     logger.info("Trying alternate directory 'query_follow_up' for follow-up examples")
-                    file_examples = sql_example_loader.load_examples_for_query_type("query_follow_up")
+                    file_examples = example_loader.load_examples_for_query_type("query_follow_up")
                     if file_examples:
                         logger.info(f"Found {len(file_examples)} examples from 'query_follow_up' directory")
                         example_list.extend(file_examples)

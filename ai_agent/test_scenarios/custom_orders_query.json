@@ -1,0 +1,54 @@
+{
+  "name": "custom_orders_query",
+  "category": "order_history",
+  "description": "Testing handling of order history queries with specific date",
+  "priority": "high",
+  "is_ambiguous": false,
+  "tags": [
+    "order_history",
+    "date_specific",
+    "customer_query"
+  ],
+  "context": {
+    "user_persona": "business_manager",
+    "business_context": "Manager looking for information about orders on a specific date"
+  },
+  "test_steps": [
+    {
+      "step": 1,
+      "input": "Who completed orders on February 21st, 2025?",
+      "expected_type": "response",
+      "required_phrases": [
+        "February 21st",
+        "orders",
+        "placed"
+      ]
+    },
+    {
+      "step": 2,
+      "input": "Who placed those orders",
+      "expected_type": "response",
+      "required_phrases": [
+        "placed",
+        "orders"
+      ]
+    }
+  ],
+  "user_input": "Who placed orders on February 21st?",
+  "required_phrases": [
+    "February 21st",
+    "orders",
+    "placed"
+  ],
+  "max_turns": 3,
+  "expected_entities": ["customer", "order", "date"],
+  "validation_requirements": {
+    "sql_validation": true,
+    "phrase_validation": true,
+    "response_time_threshold": 5.0
+  },
+  "expected_tables": ["orders", "customers"],
+  "performance_target": 5000,
+  "created_at": "2025-03-12T00:00:00.000000",
+  "last_modified": "2025-03-12T00:00:00.000000"
+} 
